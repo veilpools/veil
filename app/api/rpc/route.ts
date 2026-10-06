@@ -1,29 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
+import https from "node:https";
 
-const ROBINHOOD_RPC = process.env.ROBINHOOD_MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+// Cloudflare Anycast edge IP for Robinhood Chain RPC (bypasses local ISP DNS poisoning & Cloudflare block)
+const ROBINHOOD_RPC_IP = "172.66.147.70";
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
+  const { searchParams } = new URL(req.url);
+  const chainId = searchParams.get("chainId") === "46630" ? 46630 : 4663;
+  const targetHost = chainId === 4663 ? "rpc.mainnet.chain.robinhood.com" : "rpc.testnet.chain.robinhood.com";
+  const body = await req.text();
 
-    const response = await fetch(ROBINHOOD_RPC, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+  return new Promise<NextResponse>((resolve) => {
+    const clientReq = https.request(
+      {
+        hostname: ROBINHOOD_RPC_IP,
+        port: 443,
+        path: "/",
+        method: "POST",
+        headers: {
+          Host: targetHost,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        },
+        servername: targetHost,
+        timeout: 10000,
       },
-      body: JSON.stringify(body),
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          resolve(
+            new NextResponse(data, {
+              status: res.statusCode || 200,
+              headers: {
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+              },
+            })
+          );
+        });
+      }
+    );
+
+    clientReq.on("error", (err) => {
+      resolve(
+        NextResponse.json(
+          { jsonrpc: "2.0", id: 1, error: { message: err.message } },
+          { status: 502 }
+        )
+      );
     });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "RPC proxy error";
-    return NextResponse.json(
-      { jsonrpc: "2.0", id: null, error: { code: -32603, message } },
-      { status: 500 }
-    );
-  }
+    clientReq.write(body);
+    clientReq.end();
+  });
 }
 
 export async function GET() {

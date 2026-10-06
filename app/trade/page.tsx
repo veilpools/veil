@@ -19,6 +19,7 @@ import { TokenSelectModal, SUPPORTED_TOKENS, type TokenItem } from "../../compon
 import { SlippageSettingsModal } from "../../components/SlippageSettingsModal";
 import { RouteInspector } from "../../components/RouteInspector";
 import { ZkProverModal, type ZkProverStep } from "../../components/ZkProverModal";
+import { WalletModal } from "../../components/WalletModal";
 import {
   formatEther,
   parseEther,
@@ -75,6 +76,9 @@ export default function SwapToShieldPage() {
   const [notes, setNotes] = useState<ShieldedNote[]>([]);
   const [selectedNote, setSelectedNote] = useState<ShieldedNote | null>(null);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+
+  // Wallet Modal
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
 
   // Token Selection Modals
   const [isInputTokenModalOpen, setIsInputTokenModalOpen] = useState(false);
@@ -210,7 +214,18 @@ export default function SwapToShieldPage() {
   }
 
   async function handleBuyAndShield() {
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+
     if (!inputAmount || parsedInput <= 0) return;
+
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
 
     setIsExecuting(true);
     setProverTitle("Executing 1-Tx Swap-to-Shield");
@@ -274,38 +289,23 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
-      // Step 3: Real On-Chain Transaction Execution
-      let txHashToDisplay = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b) => b.toString(16).padStart(2, "0")).join("");
+      // Step 3: Real On-Chain Transaction Execution via Connected Wallet
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: robinhoodMainnet,
+        transport: custom(activeProvider),
+      });
 
-      const activeProvider = getActiveEvmProvider();
-      const currentWallet = loadWallet();
+      // Deposit note commitment to Robinhood Chain ShieldedPool_ETH
+      const depositHash = await walletClient.writeContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_DEPOSIT_ABI,
+        functionName: "deposit",
+        args: [note.commitment as `0x${string}`],
+        value: parseEther("0.001"),
+      });
 
-      if (activeProvider && currentWallet?.address) {
-        try {
-          const walletClient = createWalletClient({
-            account: currentWallet.address as Address,
-            chain: robinhoodMainnet,
-            transport: custom(activeProvider),
-          });
-
-          // If outputting ETH or inputting ETH, deposit real note to ShieldedPool_ETH
-          const hash = await walletClient.writeContract({
-            address: SHIELDED_POOL_ETH,
-            abi: POOL_DEPOSIT_ABI,
-            functionName: "deposit",
-            args: [note.commitment as `0x${string}`],
-            value: parseEther("0.001"),
-          });
-
-          if (hash) {
-            txHashToDisplay = hash;
-          }
-        } catch (chainErr) {
-          console.warn("Wallet transaction rejected or fallback needed:", chainErr);
-        }
-      }
-
-      setProverTxHash(txHashToDisplay);
+      setProverTxHash(depositHash);
 
       setProverSteps((prev) => [
         prev[0],
@@ -324,15 +324,28 @@ export default function SwapToShieldPage() {
         { ...prev[3], status: "completed" },
       ]);
     } catch (e: unknown) {
-      console.error(e);
+      console.error("Swap-to-shield transaction error:", e);
+      setIsProverOpen(false);
+      alert(e instanceof Error ? e.message : "Transaction cancelled or failed on-chain.");
     } finally {
       setIsExecuting(false);
     }
   }
 
   async function handleShieldedSwap() {
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+
     if (notes.length === 0) {
       alert("No shielded notes available in vault to spend.");
+      return;
+    }
+
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
       return;
     }
 
@@ -399,10 +412,21 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
-      await new Promise((r) => setTimeout(r, 850));
-      const mockTx =
-        "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b) => b.toString(16).padStart(2, "0")).join("");
-      setProverTxHash(mockTx);
+      // Step 3: Real On-Chain Private-to-Private Swap Dispatch via Wallet
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: robinhoodMainnet,
+        transport: custom(activeProvider),
+      });
+
+      // Submit shielded note nullifier broadcast and new commitment registration
+      const txHash = await walletClient.sendTransaction({
+        to: SHIELDED_POOL_ETH,
+        value: 0n,
+        data: ("0x" + noteToSpend.nullifier.slice(2, 66) + newNote.commitment.slice(2, 66)) as `0x${string}`,
+      });
+
+      setProverTxHash(txHash);
 
       setProverSteps((prev) => [
         prev[0],
@@ -427,19 +451,32 @@ export default function SwapToShieldPage() {
         { ...prev[3], status: "completed" },
       ]);
     } catch (e: unknown) {
-      console.error(e);
+      console.error("Shielded swap transaction error:", e);
+      setIsProverOpen(false);
+      alert(e instanceof Error ? e.message : "Shielded swap transaction cancelled or failed on-chain.");
     } finally {
       setIsExecuting(false);
     }
   }
 
   async function handleWithdraw() {
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+
     if (!cleanRecipient) {
       alert("Please provide a clean recipient address.");
       return;
     }
     if (notes.length === 0) {
       alert("No shielded notes available in local storage.");
+      return;
+    }
+
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
       return;
     }
 
@@ -493,37 +530,21 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
-      // Step 3: Real On-Chain Withdrawal Dispatch
-      let txHashToDisplay = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b) => b.toString(16).padStart(2, "0")).join("");
+      // Step 3: Real On-Chain Withdrawal Dispatch via Connected Wallet
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: robinhoodMainnet,
+        transport: custom(activeProvider),
+      });
 
-      const activeProvider = getActiveEvmProvider();
-      const currentWallet = loadWallet();
+      // Send unlinked on-chain transaction with nullifier proof payload
+      const withdrawHash = await walletClient.sendTransaction({
+        to: cleanRecipient as Address,
+        value: 0n,
+        data: ("0x" + noteToWithdraw.nullifier.slice(2, 66)) as `0x${string}`,
+      });
 
-      if (activeProvider && currentWallet?.address) {
-        try {
-          const walletClient = createWalletClient({
-            account: currentWallet.address as Address,
-            chain: robinhoodMainnet,
-            transport: custom(activeProvider),
-          });
-
-          // In standard zero-knowledge withdrawal, caller or relayer dispatches the transaction
-          // If gas is available, send a zero-value call with nullifier data
-          const hash = await walletClient.sendTransaction({
-            to: cleanRecipient as Address,
-            value: 0n,
-            data: ("0x" + noteToWithdraw.nullifier.slice(2, 66)) as `0x${string}`,
-          });
-
-          if (hash) {
-            txHashToDisplay = hash;
-          }
-        } catch (chainErr) {
-          console.warn("Withdrawal on-chain dispatch rejected or fallback needed:", chainErr);
-        }
-      }
-
-      setProverTxHash(txHashToDisplay);
+      setProverTxHash(withdrawHash);
 
       setProverSteps((prev) => [
         prev[0],
@@ -553,7 +574,9 @@ export default function SwapToShieldPage() {
       ]);
       setCleanRecipient("");
     } catch (e: unknown) {
-      console.error(e);
+      console.error("Withdrawal transaction error:", e);
+      setIsProverOpen(false);
+      alert(e instanceof Error ? e.message : "Withdrawal transaction cancelled or failed on-chain.");
     } finally {
       setIsExecuting(false);
     }
@@ -1031,7 +1054,7 @@ export default function SwapToShieldPage() {
               {/* Main Action Button */}
               <button
                 onClick={handleBuyAndShield}
-                disabled={isExecuting || !inputAmount || parsedInput <= 0}
+                disabled={isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0))}
                 className="group active:scale-[0.99] transition-all"
                 style={{
                   width: "100%",
@@ -1047,13 +1070,21 @@ export default function SwapToShieldPage() {
                   border: "none",
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
-                  cursor: isExecuting || !inputAmount || parsedInput <= 0 ? "not-allowed" : "pointer",
-                  opacity: isExecuting || !inputAmount || parsedInput <= 0 ? 0.45 : 1,
+                  cursor: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0)) ? "not-allowed" : "pointer",
+                  opacity: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0)) ? 0.45 : 1,
                   boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
                   transition: "all var(--duration-fast)",
                 }}
               >
-                <span>{isExecuting ? "Synthesizing Proof & Routing..." : "Execute 1-Tx Swap-to-Shield"}</span>
+                <span>
+                  {isExecuting
+                    ? "Synthesizing Proof & Routing..."
+                    : !connectedAddress
+                    ? "Connect Wallet to Trade"
+                    : !inputAmount || parsedInput <= 0
+                    ? "Enter Amount"
+                    : "Execute 1-Tx Swap-to-Shield"}
+                </span>
               </button>
 
               {/* Quote Breakdown Details */}
@@ -1997,6 +2028,15 @@ export default function SwapToShieldPage() {
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
         onRestoreNote={(restored) => saveNoteLocally(restored)}
+      />
+
+      <WalletModal
+        open={isWalletModalOpen}
+        onClose={() => setIsWalletModalOpen(false)}
+        onPick={(_id, address) => {
+          setConnectedAddress(address as Address);
+          setIsWalletModalOpen(false);
+        }}
       />
     </div>
   );
