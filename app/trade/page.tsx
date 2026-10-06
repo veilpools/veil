@@ -1256,15 +1256,17 @@ export default function SwapToShieldPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                     <div
                       style={{
-                        width: "34px",
-                        height: "34px",
-                        borderRadius: "var(--radius-sm)",
-                        backgroundColor: "rgba(26, 26, 26, 0.04)",
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "var(--radius-full)",
+                        backgroundColor: "#ffffff",
                         border: "1px solid var(--color-border)",
+                        boxShadow: "0 1px 3px rgba(26, 26, 26, 0.05)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
+                        overflow: "hidden",
                       }}
                     >
                       {outputToken.iconSvg}

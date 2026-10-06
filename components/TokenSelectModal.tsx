@@ -32,15 +32,15 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     isPoolSupported: true,
     poolDenomination: "0.001 ETH",
     badge: "Native Gas",
-    iconBg: "rgba(255, 255, 255, 0.1) text-white",
+    iconBg: "rgba(98, 126, 234, 0.1) text-slate-800",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 784.37 1277.39" fill="currentColor">
-        <polygon fill="#fff" points="392.07 0 383.5 29.11 383.5 873.74 392.07 882.29 784.13 650.54 392.07 0" />
-        <polygon fill="#c0c0c0" points="392.07 0 0 650.54 392.07 882.29 392.07 472.33 392.07 0" />
-        <polygon fill="#fff" points="392.07 956.52 387.24 962.41 387.24 1263.28 392.07 1277.38 784.37 724.89 392.07 956.52" />
-        <polygon fill="#c0c0c0" points="392.07 1277.38 392.07 956.52 0 724.89 392.07 1277.38" />
-        <polygon fill="#909090" points="392.07 882.29 784.13 650.54 392.07 472.33 392.07 882.29" />
-        <polygon fill="#606060" points="0 650.54 392.07 882.29 392.07 472.33 0 650.54" />
+      <svg className="w-5 h-5" viewBox="0 0 256 417" fill="none">
+        <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#343434" />
+        <path d="M127.962 0L0 212.32L127.962 287.958V157.252V0Z" fill="#8C8C8C" />
+        <path d="M127.962 312.187L126.386 314.106V413.404L127.962 417L255.998 236.593L127.962 312.187Z" fill="#3C3C3B" />
+        <path d="M127.962 417V312.187L0 236.593L127.962 417Z" fill="#8C8C8C" />
+        <path d="M127.961 287.958L255.922 212.32L127.961 157.253V287.958Z" fill="#141414" />
+        <path d="M0 212.32L127.962 287.958V157.253L0 212.32Z" fill="#393939" />
       </svg>
     ),
   },
@@ -55,13 +55,15 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     isPoolSupported: true,
     poolDenomination: "0.001 ETH",
     badge: "Canonical v4",
-    iconBg: "rgba(255, 140, 0, 0.15) text-[#FF8C00] border border-[rgba(255,140,0,0.3)]",
+    iconBg: "rgba(236, 72, 153, 0.1) text-pink-600",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 784.37 1277.39" fill="currentColor">
-        <polygon points="392.07 0 383.5 29.11 383.5 873.74 392.07 882.29 784.13 650.54 392.07 0" />
-        <polygon points="392.07 0 0 650.54 392.07 882.29 392.07 472.33 392.07 0" />
-        <polygon points="392.07 956.52 387.24 962.41 387.24 1263.28 392.07 1277.38 784.37 724.89 392.07 956.52" />
-        <polygon points="392.07 1277.38 392.07 956.52 0 724.89 392.07 1277.38" />
+      <svg className="w-5 h-5" viewBox="0 0 256 417" fill="none">
+        <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#EC4899" />
+        <path d="M127.962 0L0 212.32L127.962 287.958V157.252V0Z" fill="#F472B6" />
+        <path d="M127.962 312.187L126.386 314.106V413.404L127.962 417L255.998 236.593L127.962 312.187Z" fill="#BE185D" />
+        <path d="M127.962 417V312.187L0 236.593L127.962 417Z" fill="#F472B6" />
+        <path d="M127.961 287.958L255.922 212.32L127.961 157.253V287.958Z" fill="#9D174D" />
+        <path d="M0 212.32L127.962 287.958V157.253L0 212.32Z" fill="#E11D48" />
       </svg>
     ),
   },
@@ -76,9 +78,12 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     isPoolSupported: true,
     poolDenomination: "1,000 VEIL",
     badge: "Protocol Token",
-    iconBg: "rgba(255, 140, 0, 0.2) text-[#FF8C00]",
+    iconBg: "rgba(255, 140, 0, 0.15) text-[#FF8C00]",
     iconSvg: (
-      <span className="font-bold font-mono text-sm tracking-tighter text-[#FF8C00]">V</span>
+      <svg className="w-5 h-5" viewBox="0 0 145 97" fill="none">
+        <polygon points="0,0 26,0 66,74 106,0 132,0 79,97 53,97" fill="#FF8C00" />
+        <circle cx="134" cy="85" r="11" fill="#FF8C00" />
+      </svg>
     ),
   },
   {
@@ -94,9 +99,11 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Pons Launchpad",
     iconBg: "rgba(16, 185, 129, 0.15) text-emerald-600",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#10B981" />
-        <path d="M8.5 17V7H13.5C15.433 7 17 8.567 17 10.5C17 12.433 15.433 14 13.5 14H11V17H8.5Z" fill="white" />
+      <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="16" fill="#10B981" />
+        <path d="M10 23V9H17C19.7614 9 22 11.2386 22 14C22 16.7614 19.7614 19 17 19H13.5V23H10Z" fill="white" />
+        <circle cx="17" cy="14" r="2.2" fill="#10B981" />
+        <circle cx="21" cy="9" r="2" fill="#34D399" />
       </svg>
     ),
   },
@@ -113,9 +120,11 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Robinhood DeFi",
     iconBg: "rgba(99, 102, 241, 0.15) text-indigo-600",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#6366F1" />
-        <path d="M12 7C9.24 7 7 9.24 7 12C7 14.76 9.24 17 12 17C13.25 17 14.39 16.54 15.28 15.78L16.29 16.79C16.49 16.99 16.8 16.99 17 16.79C17.2 16.59 17.2 16.27 17 16.08L15.96 15.04C16.61 14.18 17 13.13 17 12C17 9.24 14.76 7 12 7ZM12 9C13.66 9 15 10.34 15 12C15 13.66 13.66 15 12 15C10.34 15 9 13.66 9 12C9 10.34 10.34 9 12 9Z" fill="white" />
+      <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="16" fill="#6366F1" />
+        <circle cx="16" cy="16" r="6" stroke="white" strokeWidth="2.2" fill="none" />
+        <path d="M16 6V9.5M16 22.5V26M6 16H9.5M22.5 16H26" stroke="white" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="16" cy="16" r="2.2" fill="white" />
       </svg>
     ),
   },
@@ -130,12 +139,13 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     isPoolSupported: true,
     poolDenomination: "100 USDC",
     badge: "Fiat Stable",
-    iconBg: "rgba(37, 99, 235, 0.15) text-blue-600",
+    iconBg: "rgba(39, 117, 202, 0.15) text-[#2775CA]",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#2563EB" />
-        <path d="M12 6.5C8.96 6.5 6.5 8.96 6.5 12C6.5 15.04 8.96 17.5 12 17.5C15.04 17.5 17.5 15.04 17.5 12" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M12 8.5V15.5M10.2 10.2C10.2 9.5 11 9 12 9C13 9 13.8 9.5 13.8 10.4C13.8 11.8 10.2 11.2 10.2 12.8C10.2 13.8 11 14.5 12 14.5C13 14.5 13.8 14 13.8 13.2" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+      <svg className="w-5 h-5" viewBox="0 0 2000 2000" fill="none">
+        <circle cx="1000" cy="1000" r="1000" fill="#2775CA" />
+        <path d="M1275 1158c0-129-77-173-230-192-107-14-129-37-129-87 0-48 37-79 104-79 64 0 99 24 116 71l108-45c-29-73-88-115-171-125V600h-90v100c-112 15-180 84-180 180 0 120 73 167 220 187 113 16 139 37 139 92 0 57-48 93-118 93-84 0-128-36-146-95l-111 43c31 92 98 143 205 156v104h90v-103c115-15 188-82 188-199z" fill="#FFFFFF" />
+        <path d="M783 1485c-270-98-443-356-443-645 0-375 305-680 680-680 202 0 391 88 519 237l76-76C1476 177 1246 72 1000 72 488 72 72 488 72 1000c0 388 238 731 599 865l112-380z" fill="#FFFFFF" fillOpacity="0.4" />
+        <path d="M1217 515c270 98 443 356 443 645 0 375-305 680-680 680-202 0-391-88-519-237l-76 76c139 144 369 249 615 249 512 0 928-416 928-928 0-388-238-731-599-865l-112 380z" fill="#FFFFFF" fillOpacity="0.4" />
       </svg>
     ),
   },
@@ -150,11 +160,11 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     isPoolSupported: true,
     poolDenomination: "100 USDT",
     badge: "Stablecoin",
-    iconBg: "rgba(13, 148, 136, 0.15) text-teal-600",
+    iconBg: "rgba(38, 161, 123, 0.15) text-[#26A17B]",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#0D9488" />
-        <path d="M7.5 9H16.5M12 9V17M9 12.5C9 14 10.3 14.8 12 14.8C13.7 14.8 15 14 15 12.5C15 11 13.7 10.2 12 10.2C10.3 10.2 9 11 9 12.5Z" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <svg className="w-5 h-5" viewBox="0 0 2000 2000" fill="none">
+        <circle cx="1000" cy="1000" r="1000" fill="#26A17B" />
+        <path d="M1150 970v-83h318V733H532v154h318v83c-273 13-477 64-477 125s204 112 477 125v375h300v-375c272-13 475-64 475-125s-203-112-475-125zm0 193c-23 2-98 7-150 7s-127-5-150-7c-214-10-373-45-373-88s159-78 373-88c23-2 98-7 150-7s127 5 150 7c214 10 373 45 373 88s-159 78-373 88z" fill="#FFFFFF" />
       </svg>
     ),
   },
@@ -271,42 +281,6 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
               autoFocus
             />
           </div>
-
-          {/* Quick Select Chips */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-            {SUPPORTED_TOKENS.map((token) => (
-              <button
-                key={token.symbol}
-                onClick={() => {
-                  onSelectToken(token);
-                  onClose();
-                }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "5px 10px",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: "var(--text-caption)",
-                  fontFamily: "monospace",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  transition: "all var(--duration-fast)",
-                  border:
-                    selectedSymbol === token.symbol
-                      ? "1px solid var(--color-accent)"
-                      : "1px solid var(--color-border)",
-                  backgroundColor:
-                    selectedSymbol === token.symbol
-                      ? "rgba(255, 140, 0, 0.15)"
-                      : "rgba(26, 26, 26, 0.04)",
-                  color: selectedSymbol === token.symbol ? "var(--color-accent)" : "var(--color-text)",
-                }}
-              >
-                <span>{token.symbol}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Token List */}
@@ -343,15 +317,17 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                     <div
                       style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "var(--radius-md)",
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "var(--radius-full)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
-                        backgroundColor: "rgba(26, 26, 26, 0.06)",
+                        backgroundColor: "#ffffff",
                         border: "1px solid var(--color-border)",
+                        boxShadow: "0 1px 3px rgba(26, 26, 26, 0.05)",
+                        overflow: "hidden",
                       }}
                     >
                       {token.iconSvg}
