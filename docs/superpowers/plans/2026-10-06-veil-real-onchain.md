@@ -67,6 +67,8 @@ describe("Contract address source", () => {
     expect(CONTRACT_ADDRESSES.router).toBe("0xdce5cf65038f092c283449fda44e23d8820d717f");
     expect(CONTRACT_ADDRESSES.treasury).toBe("0x1b631ab61b99b364e3a880bd43adfe1b665bce16");
     expect(CONTRACT_ADDRESSES.registry).toBe("0x411fb0c695152ea02ef48b96940c2b2fef656b7c");
+    expect(CONTRACT_ADDRESSES.verifier).toBe("0x12b20b346342d2fc5272f0f708bcd5abaac480fb");
+    expect(CONTRACT_ADDRESSES.deployer).toBe("0x3d1613651c366ce53fd64bada154d1b951b9233f");
     for (const addr of Object.values(CONTRACT_ADDRESSES)) {
       expect(addr).toMatch(/^0x[0-9a-fA-F]{40}$/);
     }
@@ -146,7 +148,6 @@ export async function rpcCall(chainId, method, params = []) {
 
 ```js
 // scripts/check-balance.mjs
-import { config } from "node:process";
 import { rpcCall } from "./rpc-helper.mjs";
 import { formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -154,9 +155,15 @@ import fs from "node:fs";
 
 function loadEnvFile(path) {
   try {
-    for (const line of fs.readFileSync(path, "utf8").split("\n")) {
+    for (const rawLine of fs.readFileSync(path, "utf8").split("\n")) {
+      const line = rawLine.split("#")[0].trim();
       const m = line.match(/^\s*([A-Z0-9_]+)=(.*)\s*$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+      if (!m || process.env[m[1]]) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[m[1]] = val;
     }
   } catch {}
 }
@@ -182,7 +189,9 @@ for (const chainId of [46630, 4663]) {
 
 - [ ] **Step 5: Update preflight to use the helper**
 
-Open `scripts/preflight-mainnet.mjs`. Replace every direct `http(rpcUrl)` viem transport or `fetch(rpcUrl)` call with `rpcCall(4663, method, params)` from `./rpc-helper.mjs`. Keep all existing checks (chain id, bytecode presence, balance estimate, hook mining simulation). No behavior change except the transport.
+Open `scripts/preflight-mainnet.mjs`. Replace every direct `http(rpcUrl)` viem transport or `fetch(rpcUrl)` call with `rpcCall(4663, method, params)` from `./rpc-helper.mjs`, using this exact method mapping:
+`getChainId` → `rpcCall(4663, "eth_chainId", [])`, `getBalance` → `rpcCall(4663, "eth_getBalance", [address, "latest"])`, bytecode presence → `rpcCall(4663, "eth_getCode", [address, "latest"])`, `getGasPrice` → `rpcCall(4663, "eth_gasPrice", [])`, `getBlockNumber` → `rpcCall(4663, "eth_blockNumber", [])`.
+Read the key with `process.env.MAINNET_PRIVATE_KEY || process.env.PRIVATE_KEY` (the file currently only reads one of them). Keep all existing checks (chain id, bytecode presence, balance estimate, hook mining simulation). No behavior change except the transport.
 
 - [ ] **Step 6: Fix the address source**
 
@@ -307,9 +316,20 @@ import { waitForTransactionReceipt } from "viem/actions";
 import { publicClient } from "../../lib/balances";
 import { getDenominationForToken } from "../../lib/denomination";
 
+// Top-level imports to add (hoisted, not inside the handler):
+// import { waitForTransactionReceipt } from "viem/actions";
+// import { publicClient } from "../../lib/balances";
+// import { getDenominationForToken } from "../../lib/denomination";
+
 // inside handleBuyAndShield, after setProverSteps running state:
-const denomination = getDenominationForToken(outputToken.symbol, outputToken.decimals);
-const note = createShieldedNote(denomination, outputToken.address as `0x${string}`);
+// Only ShieldedPool_ETH exists onchain, so v1 always targets it with its live
+// denomination. Non-ETH outputs stay selectable for display but deposit as ETH.
+const liveDenomination = await publicClient.readContract({
+  address: SHIELDED_POOL_ETH,
+  abi: POOL_DEPOSIT_ABI_EXT,
+  functionName: "denomination",
+});
+const note = createShieldedNote(liveDenomination, "0x0000000000000000000000000000000000000000");
 setSelectedNote(note);
 setProverCommitment(note.commitment);
 // mark steps 1-2 completed, step 3 running (keep existing setters)
@@ -318,7 +338,7 @@ const depositHash = await walletClient.writeContract({
   abi: POOL_DEPOSIT_ABI,
   functionName: "deposit",
   args: [note.commitment as `0x${string}`],
-  value: outputToken.symbol === "ETH" || outputToken.symbol === "WETH" ? denomination : 0n,
+  value: liveDenomination,
 });
 setProverTxHash(depositHash);
 // mark step 3 completed, step 4 running (keep existing setters)
@@ -328,7 +348,7 @@ saveNoteLocally(note);
 // mark step 4 completed
 ```
 
-Delete the `crypto.getRandomValues` fallback line. In the `catch` block, close the prover modal and surface the message:
+Verify no `crypto.getRandomValues` transaction-hash construction remains in the deposit path (note creation via `createShieldedNote` stays — it uses CSPRNG for secrets, which is correct). In the `catch` block, close the prover modal and surface the message:
 
 ```tsx
 } catch (e: unknown) {
@@ -342,7 +362,20 @@ Delete the `crypto.getRandomValues` fallback line. In the `catch` block, close t
 
 - [ ] **Step 6: Replace the quote panel with denomination truth**
 
-Delete the `parsedInput / inputUsd / exchangeRate / calculatedOutputRaw / calculatedOutput / outputUsd / formatUsd` block. Render instead: `You Pay: {inputAmount} {inputToken.symbol}`, `You Shield: fixed {formatNoteAmount(denomination, outputToken.address)}`, `Slippage: {slippage}%`, note "Direct ShieldedPool deposit — no swap route yet". Remove every `priceUsd` reference in this file.
+Keep `parsedInput` (used by input validation and the Execute disabled state). Delete only the USD-derived vars: `inputUsd`, `exchangeRate`, `calculatedOutputRaw`, `calculatedOutput`, `outputUsd`, `formatUsd`. Render instead: `You Pay: {inputAmount} {inputToken.symbol}`, `You Shield: fixed {formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS)}` where the denomination is read live via `denomination()` (same value as Step 5), `Slippage: {slippage}%`, note "Direct ShieldedPool deposit — no swap route yet". Remove every `priceUsd` reference in this file.
+
+Also extend the deposit ABI with the live read (top-level, next to `POOL_DEPOSIT_ABI`):
+
+```ts
+const POOL_DEPOSIT_ABI_EXT = parseAbi([
+  "function deposit(bytes32 commitment) payable returns (uint32)",
+  "function denomination() view returns (uint256)",
+  "function poolCap() view returns (uint256)",
+  "function depositsPaused() view returns (bool)",
+]);
+```
+
+Before sending, pre-check `depositsPaused == false` and `totalDeposits + liveDenomination <= poolCap`; throw the English message "Pool is paused or the deposit cap is reached." on failure.
 
 - [ ] **Step 7: Run tests and typecheck**
 
@@ -368,10 +401,10 @@ git commit -m "feat(trade): receipt-gated deposit plus honest denomination quote
 - Test: `tests/withdraw-args.test.ts`
 
 **Interfaces:**
-- Consumes: `ShieldedNote` from `lib/note.ts`, `getDenominationForToken` from Task 2.
+- Consumes: `ShieldedNote` from `lib/note.ts`.
 - Produces: nothing new for later tasks.
 
-Withdraw ABI (append next to `POOL_DEPOSIT_ABI`):
+Withdraw ABI (top-level, next to `POOL_DEPOSIT_ABI`):
 
 ```ts
 const POOL_WITHDRAW_ABI = parseAbi([
@@ -379,8 +412,12 @@ const POOL_WITHDRAW_ABI = parseAbi([
   "function rootHistory(uint256 index) view returns (bytes32)",
   "function nextIndex() view returns (uint32)",
   "function isKnownRoot(bytes32 root) view returns (bool)",
+  "function isNullifierSpent(bytes32 n) view returns (bool)",
+  "function associationRoot() view returns (bytes32)",
 ]);
-```
+const VERIFIER_ABI = parseAbi([
+  "function shouldPass() view returns (bool)",
+]);
 
 Provisional proof bytes: `"0x1234"`. Fee: `0n` (self-relay).
 
@@ -428,7 +465,9 @@ import type { ShieldedNote } from "./note";
 
 // Provisional proof accepted by ShieldedVerifierMock while the Groth16
 // verifier (F4) is pending. Labeled as provisional in the UI.
-export const PROVISIONAL_PROOF = "0x1234" as const;
+// 4 bytes so it passes regardless of associationRoot (Mock requires
+// proof.length >= 4 when associationRoot is zero).
+export const PROVISIONAL_PROOF = "0x12345678" as const;
 
 export interface WithdrawArgs {
   proof: `0x${string}`;
@@ -463,8 +502,10 @@ Expected: PASS.
 In `app/trade/page.tsx`, replace the 0-value `sendTransaction` block with:
 
 ```tsx
-import { buildWithdrawArgs } from "../../lib/withdraw-args";
-import { isAddress } from "viem";
+// Top-level imports to add (hoisted, not inside the handler):
+// import { buildWithdrawArgs } from "../../lib/withdraw-args";
+// import { CONTRACT_ADDRESSES } from "../../lib/contracts";
+// import { isAddress } from "viem";
 
 // inside handleWithdraw, after step 2 completes:
 if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
@@ -474,6 +515,20 @@ const idx = await publicClient.readContract({
   functionName: "nextIndex",
 });
 if (idx === 0) throw new Error("Pool is empty, nothing to withdraw against.");
+const verifierAddr = CONTRACT_ADDRESSES.verifier as `0x${string}`;
+const pass = await publicClient.readContract({
+  address: verifierAddr,
+  abi: VERIFIER_ABI,
+  functionName: "shouldPass",
+});
+if (!pass) throw new Error("Provisional verifier is disabled, withdrawals are unavailable.");
+const spent = await publicClient.readContract({
+  address: SHIELDED_POOL_ETH,
+  abi: POOL_WITHDRAW_ABI,
+  functionName: "isNullifierSpent",
+  args: [noteToWithdraw.nullifierHash],
+});
+if (spent) throw new Error("Note already spent.");
 const root = await publicClient.readContract({
   address: SHIELDED_POOL_ETH,
   abi: POOL_WITHDRAW_ABI,
@@ -542,7 +597,7 @@ In `components/TokenSelectModal.tsx`, set every `priceUsd:` value to `0` and add
 // Kept as 0 for type compatibility. Do not use for output math.
 ```
 
-Update the token USD line to render `"—"` when `priceUsd === 0`:
+Known data issue: the VEIL entry currently reuses the treasury address `0x1b63…`. The owner must supply the real Pons token address before any VEIL balance or pool is trusted; until then the VEIL row shows balance "—" and is not selectable as a shield target. Update the token USD line to render `"—"` when `priceUsd === 0`:
 
 ```tsx
 ${((parseFloat(token.balance.replace(/,/g, "")) || 0) * token.priceUsd).toFixed(2)}
@@ -611,7 +666,7 @@ ABIs needed in each file (via `parseAbi`):
 Radar: `nextIndex()`, `totalDeposits()`, `denomination()`, `poolCap()`, `rootHistory(uint256)`, `guardian()`, `depositsPaused()`.
 Hook: `getHookPermissions()` from `CONTRACT_ABIS.VeilHook`.
 Treasury: `totalBurned()`, `totalFeeReceived()`, `veilToken()`, `buybackShareBps()` from `CONTRACT_ABIS.VeilTreasury`.
-Burn events: `event BurnExecuted(address indexed token, uint256 amount, uint256 timestamp)` — verify the exact event name against `VEIL_TREASURY_ABI` first; if the ABI names differ, use the names from the artifact and never invent event names.
+Burn events: the treasury ABI exposes `TokensBurned` and `FeeReceived` — use exactly those names from `CONTRACT_ABIS.VeilTreasury` and never invent event names. `getHookPermissions` returns a struct of permission booleans — render it as a formatted flag list (e.g. `beforeSwap: true`), never raw-render the struct object.
 
 - [ ] **Step 1: Read the three redirect pages**
 
@@ -638,11 +693,15 @@ Replace `app/contracts/page.tsx` with a client component that renders the 7 core
 
 - [ ] **Step 4: Rewrite the burn page as a live ledger**
 
-Replace `app/burn/page.tsx` with a client component reading `totalBurned`, `totalFeeReceived`, `veilToken`, `buybackShareBps` live. Empty state text: `"No burns yet — 0"`. If the treasury ABI exposes burn events, load them with `publicClient.getLogs`; otherwise show totals only. Delete the 12.45M static totals and the 3 static transactions.
+Replace `app/burn/page.tsx` with a client component reading `totalBurned`, `totalFeeReceived`, `veilToken`, `buybackShareBps` live. If `veilToken()` returns the zero address, show "Veil token not set" (no fake address). Load history with `publicClient.getLogs` for `TokensBurned` and `FeeReceived`. Empty state text: `"No burns yet — 0"`. Delete the 12.45M static totals and the 3 static transactions.
 
 - [ ] **Step 5: Rewrite the status page as live chain health**
 
-Replace `app/status/page.tsx` with a client component reading `nextIndex`, `totalDeposits`, `denomination`, `poolCap`, `guardian`, `depositsPaused`, `isKnownRoot(latestRoot)` live, with loading and RPC-error states.
+Replace `app/status/page.tsx` with a client component reading `nextIndex`, `totalDeposits`, `denomination`, `poolCap`, `guardian`, `depositsPaused`, `isKnownRoot(latestRoot)` live, with loading and RPC-error states. Add a vault-rebuild section that replays client-side `getLogs` for `Deposit` and `Withdraw` events so a user can verify local notes against the onchain Merkle root without any server.
+
+- [ ] **Step 5b: Wire the landing flywheel section to the treasury**
+
+In `components/landing/components/FlywheelBurnSection.tsx`, delete the hardcoded `12,450,000 VEIL`, `3.42 ETH`, `0.85 ETH` totals and the 3 static `burnHistory` entries. Read `totalBurned`, `totalFeeReceived`, `buybackShareBps` live from `CONTRACT_ADDRESSES.treasury` via `publicClient` (same ABIs as the burn page). Empty state: `"No burns yet — 0"`. No static transaction hashes remain.
 
 - [ ] **Step 6: Run tests and typecheck**
 
@@ -654,7 +713,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add components/ZkShieldRadar.tsx app/contracts/page.tsx app/burn/page.tsx app/status/page.tsx
+git add components/ZkShieldRadar.tsx app/contracts/page.tsx app/burn/page.tsx app/status/page.tsx components/landing/components/FlywheelBurnSection.tsx
 git commit -m "feat(app): live telemetry plus chain-read contracts burn status pages"
 ```
 
@@ -678,16 +737,24 @@ git commit -m "feat(app): live telemetry plus chain-read contracts burn status p
 // scripts/relay-withdraw.mjs
 // Usage: node scripts/relay-withdraw.mjs <proofHex> <root> <nullifierHash> <recipient> <feeWei>
 // Pays gas from RELAYER_KEY and collects <feeWei>. All params are logged.
-import { createWalletClient, http, parseAbi } from "viem";
+// Transport goes through scripts/rpc-helper.mjs (IP bypass), never direct RPC.
+import { createWalletClient, custom, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { robinhoodMainnet } from "../lib/chains.mjs";
+import { rpcRequest } from "./rpc-helper.mjs";
 import fs from "node:fs";
 
 function loadEnvFile(path) {
   try {
-    for (const line of fs.readFileSync(path, "utf8").split("\n")) {
+    for (const rawLine of fs.readFileSync(path, "utf8").split("\n")) {
+      const line = rawLine.split("#")[0].trim();
       const m = line.match(/^\s*([A-Z0-9_]+)=(.*)\s*$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+      if (!m || process.env[m[1]]) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[m[1]] = val;
     }
   } catch {}
 }
@@ -703,11 +770,18 @@ if (!key) throw new Error("Missing RELAYER_KEY or PRIVATE_KEY in env");
 const pool = process.env.NEXT_PUBLIC_PRIVACY_POOL_ETH;
 if (!pool) throw new Error("Missing NEXT_PUBLIC_PRIVACY_POOL_ETH in env");
 
+const provider = {
+  async request({ method, params }) {
+    const res = await rpcRequest(4663, { jsonrpc: "2.0", id: 1, method, params });
+    if (res.error) throw new Error(`RPC error: ${res.error.message}`);
+    return res.result;
+  },
+};
 const account = privateKeyToAccount(key.startsWith("0x") ? key : `0x${key}`);
 const client = createWalletClient({
   account,
   chain: robinhoodMainnet,
-  transport: http(process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com"),
+  transport: custom(provider),
 });
 const abi = parseAbi(["function withdraw(bytes proof, bytes32 root, bytes32 nullifierHash, address recipient, uint256 fee)"]);
 console.log(JSON.stringify({ pool, root, nullifierHash, recipient, feeWei: feeWei || "0" }));
@@ -724,19 +798,27 @@ console.log("Withdraw hash:", hash);
 
 ```js
 // scripts/mainnet-shield-e2e.mjs
-// Deposit 0.001 ETH then withdraw to a fresh address. Verifies nextIndex+1,
-// nullifierUsed, and totalDeposits - totalWithdrawn == pool balance.
-import { createPublicClient, createWalletClient, http, parseAbi, keccak256 } from "viem";
+// Small-value deposit/withdraw verification. Pre-checks every revert path
+// BEFORE spending gas, persists the note to disk BEFORE depositing so funds
+// are never stranded with a lost note. Transport via rpc-helper (IP bypass).
+import { createPublicClient, createWalletClient, custom, parseAbi, keccak256, concatHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { robinhoodMainnet } from "../lib/chains.mjs";
+import { rpcRequest } from "./rpc-helper.mjs";
 import crypto from "node:crypto";
 import fs from "node:fs";
 
 function loadEnvFile(path) {
   try {
-    for (const line of fs.readFileSync(path, "utf8").split("\n")) {
+    for (const rawLine of fs.readFileSync(path, "utf8").split("\n")) {
+      const line = rawLine.split("#")[0].trim();
       const m = line.match(/^\s*([A-Z0-9_]+)=(.*)\s*$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+      if (!m || process.env[m[1]]) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[m[1]] = val;
     }
   } catch {}
 }
@@ -745,13 +827,20 @@ loadEnvFile(".env.local");
 
 const key = process.env.MAINNET_PRIVATE_KEY || process.env.PRIVATE_KEY;
 if (!key) throw new Error("Missing MAINNET_PRIVATE_KEY or PRIVATE_KEY in env");
-const rpc = process.env.MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
 const pool = process.env.NEXT_PUBLIC_PRIVACY_POOL_ETH;
 if (!pool) throw new Error("Missing NEXT_PUBLIC_PRIVACY_POOL_ETH in env");
 
-const publicClient = createPublicClient({ chain: robinhoodMainnet, transport: http(rpc) });
+const provider = {
+  async request({ method, params }) {
+    const res = await rpcRequest(4663, { jsonrpc: "2.0", id: 1, method, params });
+    if (res.error) throw new Error(`RPC error: ${res.error.message}`);
+    return res.result;
+  },
+};
+const transport = custom(provider);
+const publicClient = createPublicClient({ chain: robinhoodMainnet, transport });
 const account = privateKeyToAccount(key.startsWith("0x") ? key : `0x${key}`);
-const wallet = createWalletClient({ account, chain: robinhoodMainnet, transport: http(rpc) });
+const wallet = createWalletClient({ account, chain: robinhoodMainnet, transport });
 const abi = parseAbi([
   "function deposit(bytes32 commitment) payable returns (uint32)",
   "function withdraw(bytes proof, bytes32 root, bytes32 nullifierHash, address recipient, uint256 fee)",
@@ -761,22 +850,48 @@ const abi = parseAbi([
   "function isNullifierSpent(bytes32 n) view returns (bool)",
   "function totalDeposits() view returns (uint256)",
   "function totalWithdrawn() view returns (uint256)",
+  "function denomination() view returns (uint256)",
+  "function poolCap() view returns (uint256)",
+  "function depositsPaused() view returns (bool)",
+  "function associationRoot() view returns (bytes32)",
 ]);
+const verifierAbi = parseAbi(["function shouldPass() view returns (bool)"]);
+const verifier = process.env.NEXT_PUBLIC_SHIELDED_VERIFIER;
+if (!verifier) throw new Error("Missing NEXT_PUBLIC_SHIELDED_VERIFIER in env");
+
+// Pre-checks before spending any gas.
+const [paused, denom, cap, total, shouldPass] = await Promise.all([
+  publicClient.readContract({ address: pool, abi, functionName: "depositsPaused" }),
+  publicClient.readContract({ address: pool, abi, functionName: "denomination" }),
+  publicClient.readContract({ address: pool, abi, functionName: "poolCap" }),
+  publicClient.readContract({ address: pool, abi, functionName: "totalDeposits" }),
+  publicClient.readContract({ address: verifier, abi: verifierAbi, functionName: "shouldPass" }),
+]);
+if (paused) throw new Error("Pool deposits are paused, aborting E2E.");
+if (!shouldPass) throw new Error("Provisional verifier is disabled, aborting E2E.");
+if (total + denom > cap) throw new Error("Deposit would exceed pool cap, aborting E2E.");
 
 const rand32 = () => `0x${crypto.randomBytes(32).toString("hex")}`;
 const secret = rand32();
 const nullifier = rand32();
 const nullifierHash = keccak256(nullifier);
-const commitment = keccak256(`0x${nullifier.slice(2)}${secret.slice(2)}`);
+const commitment = keccak256(concatHex([nullifier, secret]));
+fs.writeFileSync(
+  "e2e-note-backup.json",
+  JSON.stringify({ asset: "0x0000000000000000000000000000000000000000", denomination: denom.toString(), nullifier, secret }, null, 2)
+);
+console.log("Note persisted to e2e-note-backup.json before deposit.");
 const before = await publicClient.readContract({ address: pool, abi, functionName: "nextIndex" });
-const depHash = await wallet.writeContract({ address: pool, abi, functionName: "deposit", args: [commitment], value: 1000000000000000n });
+const depHash = await wallet.writeContract({ address: pool, abi, functionName: "deposit", args: [commitment], value: denom });
 console.log("Deposit hash:", depHash);
 await publicClient.waitForTransactionReceipt({ hash: depHash });
 const after = await publicClient.readContract({ address: pool, abi, functionName: "nextIndex" });
 if (after !== before + 1) throw new Error("nextIndex did not increment");
 const root = await publicClient.readContract({ address: pool, abi, functionName: "rootHistory", args: [BigInt(after - 1)] });
+const known = await publicClient.readContract({ address: pool, abi, functionName: "isKnownRoot", args: [root] });
+if (!known) throw new Error("Fresh root not known, aborting withdraw.");
 const fresh = `0x${crypto.randomBytes(20).toString("hex")}`;
-const wdHash = await wallet.writeContract({ address: pool, abi, functionName: "withdraw", args: ["0x1234", root, nullifierHash, fresh, 0n] });
+const wdHash = await wallet.writeContract({ address: pool, abi, functionName: "withdraw", args: ["0x12345678", root, nullifierHash, fresh, 0n] });
 console.log("Withdraw hash:", wdHash);
 await publicClient.waitForTransactionReceipt({ hash: wdHash });
 const spent = await publicClient.readContract({ address: pool, abi, functionName: "isNullifierSpent", args: [nullifierHash] });
@@ -825,7 +940,7 @@ git commit -m "feat(ops): relayer script plus small-value mainnet shield E2E"
 
 ## Self-Review
 
-**1. Spec coverage:** §2.1 address source → Task 1. §2.2 honest quotes → Tasks 2 and 4. §2.3 prover lifecycle → Tasks 2 and 3. §2.4 deposit → Task 2. §2.5 provisional withdraw → Task 3. §2.6 swap honesty → Task 4. §2.7 telemetry → Task 5. §2.8 chain-read pages → Task 5. §3 relayer/indexer → Task 6 plus client `getLogs`. §4 English-only errors → enforced in Tasks 2–5. §6 tests → every task. §7 deploy/ops → Tasks 1 and 6. No gaps.
+**1. Spec coverage:** §2.1 address source → Task 1 (all 7 keys asserted). §2.2 honest quotes → Tasks 2 and 4 (VEIL collision flagged, USD removed). §2.3 prover lifecycle → Tasks 2 and 3. §2.4 deposit → Task 2 (live `denomination()`, cap/pause pre-checks). §2.5 provisional withdraw → Task 3 (4-byte proof, `shouldPass`/spent pre-checks). §2.6 swap honesty → Task 4. §2.7 telemetry → Task 5. §2.8 chain-read pages → Task 5 (contracts/burn/status plus landing flywheel, `TokensBurned`/`FeeReceived` events, `veilToken` zero-address state). §3 relayer/indexer → Task 6 (helper-routed relayer) plus status-page client `getLogs` rebuild. §4 English-only errors → enforced in Tasks 1–6. §6 tests → every task. §7 deploy/ops → Tasks 1 and 6 (explicit preflight mapping, E2E pre-checks plus note persistence). No gaps.
 
 **2. Placeholder scan:** no TBD/TODO, no "appropriate handling", no "similar to Task N". Every code step shows exact code, exact run command, exact expected output.
 
