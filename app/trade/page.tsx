@@ -152,6 +152,8 @@ export default function SwapToShieldPage() {
         }
       } else {
         setConnectedAddress(null);
+        setTokenBalances({});
+        setInputToken((prev) => ({ ...prev, balance: "0.00" }));
       }
     }
 
