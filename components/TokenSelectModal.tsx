@@ -165,6 +165,7 @@ interface TokenSelectModalProps {
   onClose: () => void;
   onSelectToken: (token: TokenItem) => void;
   selectedSymbol: string;
+  balances?: Record<string, string>;
 }
 
 export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
@@ -172,10 +173,14 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
   onClose,
   onSelectToken,
   selectedSymbol,
+  balances = {},
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filtered = SUPPORTED_TOKENS.filter(
+  const filtered = SUPPORTED_TOKENS.map((t) => ({
+    ...t,
+    balance: balances[t.symbol] ?? t.balance,
+  })).filter(
     (t) =>
       t.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

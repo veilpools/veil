@@ -1,0 +1,309 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { X, ExternalLink, Check, AlertCircle } from "lucide-react";
+import {
+  EVM_WALLETS,
+  connectEvm,
+  detectEvm,
+  walletLabel,
+  onWalletsChanged,
+  requestEip6963Providers,
+  type EvmWalletId,
+} from "@/lib/wallets";
+
+export function WalletModal({
+  open,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPick: (id: EvmWalletId, address: string) => void;
+}) {
+  const [detected, setDetected] = useState<EvmWalletId[]>([]);
+  const [pending, setPending] = useState<EvmWalletId | null>(null);
+  const [err, setErr] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setErr("");
+    setPending(null);
+
+    const refresh = () => {
+      setDetected(
+        (EVM_WALLETS.map((w) => w.id) as EvmWalletId[]).filter((id) => detectEvm(id) !== null)
+      );
+    };
+
+    refresh();
+    requestEip6963Providers();
+
+    const unsub = onWalletsChanged(refresh);
+    const t1 = setTimeout(refresh, 80);
+    const t2 = setTimeout(refresh, 300);
+
+    return () => {
+      unsub();
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open || !mounted) return null;
+
+  async function pick(id: EvmWalletId) {
+    if (!detectEvm(id)) return;
+    setErr("");
+    setPending(id);
+    try {
+      const { address } = await connectEvm(id);
+      onPick(id, address);
+      onClose();
+    } catch (e: unknown) {
+      setErr(walletLabel(e));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Connect EVM Wallet"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        backgroundColor: "rgba(26, 26, 26, 0.45)",
+        backdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "var(--space-4)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          backgroundColor: "#ffffff",
+          borderRadius: "var(--radius-lg)",
+          border: "1px solid var(--color-border-strong)",
+          boxShadow: "0 20px 48px -12px rgba(26, 26, 26, 0.16)",
+          padding: "var(--space-6)",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+          <div>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "1.25rem",
+                fontFamily: "var(--font-headline)",
+                fontWeight: 600,
+                color: "var(--color-text)",
+              }}
+            >
+              Connect Wallet
+            </h3>
+            <span
+              style={{
+                fontSize: "11px",
+                fontFamily: "monospace",
+                color: "var(--color-muted)",
+              }}
+            >
+              Robinhood Chain Mainnet (4663)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              padding: "6px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--color-border)",
+              backgroundColor: "transparent",
+              color: "var(--color-muted)",
+              cursor: "pointer",
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <p
+          style={{
+            fontSize: "var(--text-body-sm)",
+            color: "var(--color-muted)",
+            margin: "0 0 var(--space-4)",
+            lineHeight: "1.5",
+          }}
+        >
+          Select an installed web3 wallet extension or mobile connector to interact with Robinhood privacy pools.
+        </p>
+
+        {/* Wallet list */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {EVM_WALLETS.map((w) => {
+            const installed = detected.includes(w.id);
+            const busy = pending === w.id;
+
+            return (
+              <div key={w.id}>
+                {installed ? (
+                  <button
+                    type="button"
+                    onClick={() => pick(w.id)}
+                    disabled={busy}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "10px 14px",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "rgba(26, 26, 26, 0.025)",
+                      border: "1px solid var(--color-border)",
+                      cursor: busy ? "wait" : "pointer",
+                      transition: "all var(--duration-fast)",
+                    }}
+                    className="hover:border-[#FF8C00] hover:bg-[rgba(255,140,0,0.04)]"
+                  >
+                    <img
+                      src={w.icon}
+                      alt={w.name}
+                      width={28}
+                      height={28}
+                      style={{ borderRadius: "6px", flexShrink: 0 }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        textAlign: "left",
+                        fontWeight: 600,
+                        fontSize: "var(--text-body-sm)",
+                        color: "var(--color-text)",
+                      }}
+                    >
+                      {w.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontFamily: "monospace",
+                        color: busy ? "var(--color-accent)" : "#16a34a",
+                        backgroundColor: busy ? "rgba(255,140,0,0.1)" : "rgba(22,163,74,0.08)",
+                        padding: "2px 8px",
+                        borderRadius: "var(--radius-sm)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {busy ? "Confirming..." : "Detected"}
+                    </span>
+                  </button>
+                ) : (
+                  <a
+                    href={w.installUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "10px 14px",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "rgba(26, 26, 26, 0.015)",
+                      border: "1px dashed var(--color-border)",
+                      color: "var(--color-muted)",
+                      textDecoration: "none",
+                      boxSizing: "border-box",
+                      transition: "all var(--duration-fast)",
+                    }}
+                    className="hover:border-slate-400"
+                  >
+                    <img
+                      src={w.icon}
+                      alt={w.name}
+                      width={28}
+                      height={28}
+                      style={{ borderRadius: "6px", opacity: 0.6, flexShrink: 0 }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        textAlign: "left",
+                        fontWeight: 500,
+                        fontSize: "var(--text-body-sm)",
+                        color: "var(--color-muted)",
+                      }}
+                    >
+                      {w.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontFamily: "monospace",
+                        color: "var(--color-faint)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      Install <ExternalLink size={11} />
+                    </span>
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {err && (
+          <div
+            style={{
+              marginTop: "var(--space-4)",
+              padding: "10px 12px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              color: "#dc2626",
+              fontSize: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            <span>{err}</span>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
