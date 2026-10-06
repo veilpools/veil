@@ -353,10 +353,7 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                         {token.balance}
                       </div>
                       <div style={{ fontSize: "var(--text-caption)", color: "var(--color-faint)", fontFamily: "monospace" }}>
-                        ${((parseFloat(token.balance.replace(/,/g, "")) || 0) * token.priceUsd).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        ${((parseFloat(token.balance.replace(/,/g, "")) || 0) * token.priceUsd).toFixed(2)}
                       </div>
                     </div>
                     {isSelected && <Check className="w-4 h-4 text-[#FF8C00]" />}

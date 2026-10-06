@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Shield, GitCommit, Lock, Flame, Layers, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
+
+function formatNumber(val: number): string {
+  return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
 
 export const ZkShieldRadar: React.FC = () => {
   const [pulseCount, setPulseCount] = useState(1428);
@@ -101,7 +105,7 @@ export const ZkShieldRadar: React.FC = () => {
             20 Levels
           </div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
-            1,048,576 Capacity · Leaf #{activeLeafIndex}
+            1,048,576 Capacity · Leaf #{formatNumber(activeLeafIndex)}
           </div>
         </div>
 
@@ -121,7 +125,7 @@ export const ZkShieldRadar: React.FC = () => {
             Anonymity Set
           </div>
           <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-text)" }}>
-            {pulseCount.toLocaleString()} Notes
+            {formatNumber(pulseCount)} Notes
           </div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
             ASP-CLEAN-V1 Attested · Zero Link
