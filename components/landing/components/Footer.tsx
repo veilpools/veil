@@ -12,8 +12,8 @@ export const Footer: React.FC = () => {
               <img src="/assets/figma/logo.svg" alt="Veil Protocol" width="360" height="97" />
             </a>
             <p>Zero-Knowledge privacy layer for Uniswap v4 on Robinhood Chain.</p>
-            <a className="landing-footer__email" href="mailto:security@veil.exchange">
-              security@veil.exchange
+            <a className="landing-footer__email" href="https://x.com/veilpools" target="_blank" rel="noopener noreferrer">
+              Follow @veilpools
               <svg
                 aria-hidden="true"
                 width="18"
@@ -47,7 +47,7 @@ export const Footer: React.FC = () => {
               <li><a href="#how">Architecture</a></li>
               <li><a href="#security">CREATE2 Deployer</a></li>
               <li>
-                <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+                <a href="https://github.com/veilpools/veil" target="_blank" rel="noopener noreferrer">
                   GitHub
                 </a>
               </li>
@@ -93,7 +93,7 @@ export const Footer: React.FC = () => {
           <p>© 2026 Veil Protocol. All rights reserved.</p>
           <div className="landing-footer__socials">
             <a
-              href="https://x.com"
+              href="https://x.com/veilpools"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -113,7 +113,7 @@ export const Footer: React.FC = () => {
               </svg>
             </a>
             <a
-              href="https://github.com"
+              href="https://github.com/veilpools/veil"
               target="_blank"
               rel="noopener noreferrer"
             >

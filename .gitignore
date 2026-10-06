@@ -8,3 +8,6 @@ deployments/*.tmp.json
 *.tsbuildinfo
 .DS_Store
 DevBrief-Veil.md
+
+.vercel
+.env*

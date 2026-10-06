@@ -206,7 +206,7 @@ export const codosContent = {
   },
   footer: {
     tagline: "Zero-Knowledge privacy layer for Uniswap v4 on Robinhood Chain.",
-    email: "security@veil.exchange",
+    email: "contact@veilpools.org",
     columns: [
       {
         title: "Protocol",
