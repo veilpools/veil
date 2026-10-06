@@ -442,10 +442,10 @@ export const ComparisonSection: React.FC = () => {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", fontWeight: 600, color: "var(--color-text)" }}>
-                      Shielded Note (LeanIMT 2²⁰)
+                      Shielded Note (Merkle 2²⁰)
                     </div>
                     <div style={{ fontFamily: "var(--font-body)", fontSize: "11px", color: "var(--color-muted)" }}>
-                      Encrypted Client-Side WASM Witness
+                      Client-Side Proof Payload
                     </div>
                   </div>
                 </div>

@@ -182,7 +182,7 @@ export const codosContent = {
     items: [
       {
         q: "How does Veil guarantee privacy on a public blockchain?",
-        a: "Veil uses zero-knowledge SNARK proofs and Poseidon commitments. When you shield assets, your funds enter a fixed-denomination LeanIMT tree. When you swap or withdraw, your browser generates a proof that you own a valid note without revealing which note it is or linking your public address."
+        a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is currently provisional and Groth16 follows in F4."
       },
       {
         q: "Can MEV bots or sandwich searchers front-run my swap?",

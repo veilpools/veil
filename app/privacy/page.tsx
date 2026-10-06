@@ -67,7 +67,7 @@ export default function PrivacyPage() {
               2. Client-Side Proving &amp; Zero Server Logging
             </h2>
             <p style={{ color: "var(--color-muted)", lineHeight: "var(--leading-body)" }}>
-              All cryptographic secrets, nullifiers, and notes are generated locally in your browser using WebAssembly (WASM). At no point are private notes, nullifiers, or secret keys transmitted to any external server or indexer. Proving is computed client-side using Groth16 zero-knowledge SNARK proofs.
+              All cryptographic secrets, nullifiers, and notes are generated locally in your browser using cryptographically secure randomness. At no point are private notes, nullifiers, or secret keys transmitted to any external server or indexer. Proof payloads are assembled client-side; the onchain verifier is currently provisional and Groth16 follows in F4.
             </p>
           </section>
 

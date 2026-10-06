@@ -272,13 +272,13 @@ export default function SwapToShieldPage() {
 
     const initialSteps: ZkProverStep[] = [
       {
-        title: "1. Client-Side WASM Cryptographic Key Derivation",
+        title: "1. Client-Side Cryptographic Key Derivation",
         detail: "Generating cryptographically secure secret & nullifier with CSPRNG entropy",
         status: "running",
       },
       {
-        title: "2. LeanIMT Merkle Tree Commitment Construction",
-        detail: "Computing Poseidon hash commitment for Robinhood privacy pool insertion",
+        title: "2. Merkle Tree Commitment Construction",
+        detail: "Computing keccak256 commitment for Robinhood privacy pool insertion",
         status: "pending",
       },
       {
@@ -300,7 +300,7 @@ export default function SwapToShieldPage() {
       await new Promise((r) => setTimeout(r, 650));
       // Only ShieldedPool_ETH exists onchain, so v1 always targets it with its live
       // denomination. Non-ETH outputs stay selectable for display but deposit as ETH.
-      const liveDenomination = await publicClient.readContract({
+      const onchainDenomination = await publicClient.readContract({
         address: SHIELDED_POOL_ETH,
         abi: POOL_DEPOSIT_ABI_EXT,
         functionName: "denomination",
@@ -320,10 +320,10 @@ export default function SwapToShieldPage() {
         abi: POOL_DEPOSIT_ABI_EXT,
         functionName: "totalDeposits",
       });
-      if (paused || total + liveDenomination > cap) {
+      if (paused || total + onchainDenomination > cap) {
         throw new Error("Pool is paused or the deposit cap is reached.");
       }
-      const note = createShieldedNote(liveDenomination, ETH_ZERO_ADDRESS);
+      const note = createShieldedNote(onchainDenomination, ETH_ZERO_ADDRESS);
       setSelectedNote(note);
       setProverCommitment(note.commitment);
 
@@ -355,7 +355,7 @@ export default function SwapToShieldPage() {
         abi: POOL_DEPOSIT_ABI,
         functionName: "deposit",
         args: [note.commitment as `0x${string}`],
-        value: liveDenomination,
+        value: onchainDenomination,
       });
 
       setProverTxHash(depositHash);
@@ -369,7 +369,7 @@ export default function SwapToShieldPage() {
 
       const receipt = await waitForTransactionReceipt(publicClient, { hash: depositHash });
       if (receipt.status !== "success") throw new Error("Deposit transaction reverted onchain.");
-      setLiveDenomination(liveDenomination);
+      setLiveDenomination(onchainDenomination);
       saveNoteLocally(note);
 
       setProverSteps((prev) => [
@@ -425,29 +425,29 @@ export default function SwapToShieldPage() {
     const noteToWithdraw = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
 
     setIsExecuting(true);
-    setProverTitle("Generating ZK-SNARK Withdrawal Proof");
+    setProverTitle("Preparing Shielded Withdrawal");
     setProverTxHash(null);
     setProverCommitment(null);
 
     const initialSteps: ZkProverStep[] = [
       {
         title: "1. Recovering Note Nullifier & Secret",
-        detail: "Reading client-side note credentials from encrypted local storage",
+        detail: "Reading client-side note credentials from the local vault",
         status: "running",
       },
       {
-        title: "2. Constructing LeanIMT Merkle Membership Proof",
+        title: "2. Constructing Merkle Membership Reference",
         detail: "Validating leaf against the live Robinhood Chain root",
         status: "pending",
       },
       {
-        title: "3. Groth16 zk-SNARK Circuit Witness Synthesis",
-        detail: "Generating zero-knowledge proof binding clean recipient address to proof context",
+        title: "3. Provisional Proof Payload Assembly",
+        detail: "Packing the proof payload for the provisional onchain verifier",
         status: "pending",
       },
       {
-        title: "4. On-Chain Verifier & Unlinkable Dispatch",
-        detail: "Submitting to ShieldedVerifier contract; 0% link to original depositor address. Provisional verifier — Groth16 follows (F4)",
+        title: "4. On-Chain Verifier Dispatch",
+        detail: "Submitting to ShieldedVerifier contract; the withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4)",
         status: "pending",
       },
     ];
@@ -618,7 +618,7 @@ export default function SwapToShieldPage() {
               lineHeight: "1.6",
             }}
           >
-            Atomic 1-Tx Swap-to-Shield into non-custodial LeanIMT privacy pools with zero wallet linkability, sub-second client-side Groth16 witness generation, and verifiable Association Sets.
+            Direct shielded deposits into non-custodial Merkle privacy pools with client-side proof payloads and verifiable Association Sets. Provisional verifier — Groth16 follows (F4).
           </p>
         </div>
 
@@ -1014,7 +1014,7 @@ export default function SwapToShieldPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
                   <span>Direct ShieldedPool deposit — no swap route yet</span>
                   <span style={{ color: "var(--color-muted)", fontSize: "11px" }}>
-                    Groth16 Client Witness
+                    Provisional Proof Payload
                   </span>
                 </div>
               </div>
@@ -1352,7 +1352,7 @@ export default function SwapToShieldPage() {
                     Target Shielded Pool
                   </label>
                   <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                    Poseidon Merkle Mint
+                    Merkle Commitment Mint
                   </span>
                 </div>
 
@@ -1703,7 +1703,7 @@ export default function SwapToShieldPage() {
                   }}
                 />
                 <span style={{ fontSize: "11px", color: "var(--color-muted)" }}>
-                  Groth16 zk-SNARK proof verifies valid note without revealing your original deposit wallet.
+                  The withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4).
                 </span>
               </div>
 

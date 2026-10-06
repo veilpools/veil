@@ -93,7 +93,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
                   color: "var(--color-muted)",
                 }}
               >
-                Client-Side WASM Prover · Cancun EVM
+                Client-Side Prover · Cancun EVM
               </p>
             </div>
           </div>
@@ -200,7 +200,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", color: "var(--color-muted)", fontWeight: 500 }}>
-              <span>Poseidon Commitment:</span>
+              <span>Commitment:</span>
               <span style={{ color: "var(--color-accent)", fontFamily: "monospace", fontWeight: 600 }}>Leaf Inserted</span>
             </div>
             <div

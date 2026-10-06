@@ -351,7 +351,7 @@ export const ContractsSecuritySection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Notes (secret + nullifier) and SNARK proofs are generated in the browser using WebAssembly. Note commitments are never sent to any central server or relayer.
+              Notes (secret + nullifier) are generated in the browser with secure randomness and never sent to any central server or relayer. Proof payloads are assembled client-side against a provisional verifier; Groth16 follows in F4.
             </p>
           </div>
 
