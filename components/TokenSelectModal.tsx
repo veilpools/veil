@@ -89,43 +89,33 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
   {
     symbol: "PONS",
     name: "Pons Robinhood",
-    address: "0x96B21dBc3022933C40a1B7D10d86E3A3e47e8711",
+    address: "0x39dbed3a2bd333467115de45665cc57f813c4571",
     decimals: 18,
-    balance: "38,500.00",
-    priceUsd: 0.042,
+    balance: "12,450.00",
+    priceUsd: 0.384,
     verified: true,
     isPoolSupported: true,
-    poolDenomination: "10,000 PONS",
+    poolDenomination: "1,000 PONS",
     badge: "Pons Launchpad",
-    iconBg: "rgba(16, 185, 129, 0.15) text-emerald-600",
+    iconBg: "#ffffff",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none">
-        <circle cx="16" cy="16" r="16" fill="#10B981" />
-        <path d="M10 23V9H17C19.7614 9 22 11.2386 22 14C22 16.7614 19.7614 19 17 19H13.5V23H10Z" fill="white" />
-        <circle cx="17" cy="14" r="2.2" fill="#10B981" />
-        <circle cx="21" cy="9" r="2" fill="#34D399" />
-      </svg>
+      <img src="/tokens/pons.png" alt="PONS" className="w-5 h-5 object-contain" />
     ),
   },
   {
-    symbol: "QNTA",
-    name: "Quanta Network",
-    address: "0x7F219cD094896e0534C08c1A77519Ac0F9f21d62",
+    symbol: "QUANTA",
+    name: "Quanta Pools",
+    address: "0x1da81ca017949efbe07972776580d04592ba9b63",
     decimals: 18,
-    balance: "920.00",
+    balance: "850.00",
     priceUsd: 1.15,
     verified: true,
     isPoolSupported: true,
-    poolDenomination: "100 QNTA",
+    poolDenomination: "100 QUANTA",
     badge: "Robinhood DeFi",
-    iconBg: "rgba(99, 102, 241, 0.15) text-indigo-600",
+    iconBg: "#ffffff",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none">
-        <circle cx="16" cy="16" r="16" fill="#6366F1" />
-        <circle cx="16" cy="16" r="6" stroke="white" strokeWidth="2.2" fill="none" />
-        <path d="M16 6V9.5M16 22.5V26M6 16H9.5M22.5 16H26" stroke="white" strokeWidth="2" strokeLinecap="round" />
-        <circle cx="16" cy="16" r="2.2" fill="white" />
-      </svg>
+      <img src="/tokens/quanta.png" alt="QUANTA" className="w-5 h-5 object-contain rounded-full" />
     ),
   },
   {

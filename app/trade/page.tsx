@@ -197,8 +197,8 @@ export default function SwapToShieldPage() {
       if (outputToken.symbol === "VEIL") {
         denomination = parseEther("1000");
       } else if (outputToken.symbol === "PONS") {
-        denomination = parseEther("10000");
-      } else if (outputToken.symbol === "QNTA") {
+        denomination = parseEther("1000");
+      } else if (outputToken.symbol === "QUANTA" || outputToken.symbol === "QNTA") {
         denomination = parseEther("100");
       } else if (outputToken.decimals === 6) {
         denomination = parseUnits("100", 6);
@@ -293,8 +293,8 @@ export default function SwapToShieldPage() {
       await new Promise((r) => setTimeout(r, 650));
       let newDenom = parseEther("1000");
       if (outputToken.symbol === "PONS") {
-        newDenom = parseEther("10000");
-      } else if (outputToken.symbol === "QNTA") {
+        newDenom = parseEther("1000");
+      } else if (outputToken.symbol === "QUANTA" || outputToken.symbol === "QNTA") {
         newDenom = parseEther("100");
       } else if (outputToken.symbol === "ETH" || outputToken.symbol === "WETH") {
         newDenom = parseEther("0.001");
