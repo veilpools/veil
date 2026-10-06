@@ -33,7 +33,7 @@ const manifest = JSON.parse(fs.readFileSync(`deployments/veiltoken-${net}-latest
 const TOKEN = manifest.address;
 const mainnet = JSON.parse(fs.readFileSync("deployments/mainnet-latest.json", "utf8"));
 const TREASURY = useMainnet
-  ? mainnet.VeilTreasury.address
+  ? mainnet.contracts.VeilTreasury.address
   : "0x491413119a4adb0ea23b902c7fc7cee3845542b2";
 
 const key = process.env.MAINNET_PRIVATE_KEY || process.env.PRIVATE_KEY;

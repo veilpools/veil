@@ -56,13 +56,22 @@
 
 | Contract | Address | Blockscout Explorer |
 |---|---|---|
-| **VeilCreate2Deployer** | `0x3d1613651c366ce53fd64bada154d1b951b9233f` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x3d1613651c366ce53fd64bada154d1b951b9233f) |
-| **ShieldedVerifier** | `0x12b20b346342d2fc5272f0f708bcd5abaac480fb` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x12b20b346342d2fc5272f0f708bcd5abaac480fb) |
-| **ShieldedPool_ETH** | `0x3c4700360e23aa2d4671605f35e0fa1d354bc41b` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x3c4700360e23aa2d4671605f35e0fa1d354bc41b) |
-| **VeilTreasury** | `0x1b631ab61b99b364e3a880bd43adfe1b665bce16` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x1b631ab61b99b364e3a880bd43adfe1b665bce16) |
-| **VeilAttestationRegistry** | `0x411fb0c695152ea02ef48b96940c2b2fef656b7c` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x411fb0c695152ea02ef48b96940c2b2fef656b7c) |
-| **VeilHook (0x20c4)** | `0x5b2e52fe4f54327d8272327d12e47cba834360c4` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x5b2e52fe4f54327d8272327d12e47cba834360c4) |
-| **VeilShieldRouter** | `0xdce5cf65038f092c283449fda44e23d8820d717f` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xdce5cf65038f092c283449fda44e23d8820d717f) |
+| **VeilCreate2Deployer** | `0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008) |
+| **ShieldedVerifier** | `0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda) |
+| **ShieldedPool_ETH** | `0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0) |
+| **VeilTreasury** | `0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34) |
+| **VeilAttestationRegistry** | `0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855) |
+| **VeilHook (0x20c4)** | `0x9df0b52bf290a13e11c73c56c4c533e3887760c4` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x9df0b52bf290a13e11c73c56c4c533e3887760c4) |
+| **VeilShieldRouter** | `0x01a05f87c2c227a1b382cbc2e7e63b186538c86d` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x01a05f87c2c227a1b382cbc2e7e63b186538c86d) |
+| **VeilToken (temporary)** | `0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a) |
+
+### 🔥 Mainnet Burn Loop Proven (2026-10-06, deployer-owned suite)
+
+- **VeilToken deploy:** [`0x39bce42f32f8424bad6438428c7bbecfd5e7c7e81a432f8bc70dd85a608f022d`](https://explorer.mainnet.chain.robinhood.com/tx/0x39bce42f32f8424bad6438428c7bbecfd5e7c7e81a432f8bc70dd85a608f022d)
+- **setVeilToken:** [`0x56666c722a150a644648c569d9799b6ad63b244a4ff7b03e905af9bba0b291a2`](https://explorer.mainnet.chain.robinhood.com/tx/0x56666c722a150a644648c569d9799b6ad63b244a4ff7b03e905af9bba0b291a2)
+- **Treasury fund (10,000 VEIL):** [`0x5bffe13c453a557779b4dca7465c5883cf50f4f35c43b460c064a5975ffb219c`](https://explorer.mainnet.chain.robinhood.com/tx/0x5bffe13c453a557779b4dca7465c5883cf50f4f35c43b460c064a5975ffb219c)
+- **executeBurn (1,000 VEIL):** [`0xf52bdda4f6d17ac7ce5915a3846535f595dd0bdd02aaced7f2841ada5af994dc`](https://explorer.mainnet.chain.robinhood.com/tx/0xf52bdda4f6d17ac7ce5915a3846535f595dd0bdd02aaced7f2841ada5af994dc)
+- Supply 1,000,000,000 → 999,999,000, `totalBurned` = 1,000, `buybackShareBps` = 7000.
 
 ---
 

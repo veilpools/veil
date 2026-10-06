@@ -70,7 +70,7 @@ const ETH_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address
 // Live ShieldedVerifierMock address. Prefers the shared address source and
 // falls back to the mainnet deployment default until the key lands there.
 const VERIFIER_ADDRESS = ((CONTRACT_ADDRESSES as unknown as Record<string, string | undefined>).verifier ||
-  "0x12b20b346342d2fc5272f0f708bcd5abaac480fb") as Address;
+  "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda") as Address;
 
 export function formatNoteAmount(denomination: bigint, asset?: string): string {
   if (!asset) return `${formatEther(denomination)} ETH`;

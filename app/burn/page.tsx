@@ -6,7 +6,7 @@ import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
 
 const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
-  "0x1b631ab61b99b364e3a880bd43adfe1b665bce16") as Address;
+  "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34") as Address;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const EXPLORER = "https://explorer.mainnet.chain.robinhood.com";
 

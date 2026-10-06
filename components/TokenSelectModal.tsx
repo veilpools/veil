@@ -72,9 +72,10 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
   {
     symbol: "VEIL",
     name: "Veil Protocol Token",
-    // Wired to the canonical token via NEXT_PUBLIC_VEIL_TOKEN. Empty until
-    // the mainnet token deploys; the modal renders "—" and disables VEIL.
-    address: (typeof process !== "undefined" && process.env.NEXT_PUBLIC_VEIL_TOKEN) || "",
+    // Wired to the canonical token via NEXT_PUBLIC_VEIL_TOKEN (temporary
+    // mainnet token 0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a). The modal
+    // renders "—" and disables VEIL until a shielded pool lists it.
+    address: (typeof process !== "undefined" && process.env.NEXT_PUBLIC_VEIL_TOKEN) || "0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a",
     decimals: 18,
     balance: "0.00",
     priceUsd: 0,

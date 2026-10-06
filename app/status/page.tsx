@@ -6,7 +6,7 @@ import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
 
 const POOL_ADDRESS = (CONTRACT_ADDRESSES.poolEth ||
-  "0x3c4700360e23aa2d4671605f35e0fa1d354bc41b") as Address;
+  "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0") as Address;
 
 // Event names verified in lib/veil-artifact.ts SHIELDED_POOL_ABI — never invented.
 const DEPOSIT_EVENT = parseAbiItem(

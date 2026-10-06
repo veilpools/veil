@@ -9,11 +9,11 @@ import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
 // Live Robinhood Mainnet 4663 deployments via the shared address source.
 // Literals below are fallbacks only and match lib/contracts.ts defaults.
 const POOL_ADDRESS = (CONTRACT_ADDRESSES.poolEth ||
-  "0x3c4700360e23aa2d4671605f35e0fa1d354bc41b") as Address;
+  "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0") as Address;
 const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
-  "0x1b631ab61b99b364e3a880bd43adfe1b665bce16") as Address;
+  "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34") as Address;
 const HOOK_ADDRESS = (CONTRACT_ADDRESSES.hook ||
-  "0x5b2e52fe4f54327d8272327d12e47cba834360c4") as Address;
+  "0x9df0b52bf290a13e11c73c56c4c533e3887760c4") as Address;
 
 const EMPTY_ROOT = ("0x" + "00".repeat(32)) as `0x${string}`;
 

@@ -22,38 +22,44 @@ const ROWS: ContractRow[] = [
   {
     key: "router",
     label: "Veil Shield Router",
-    address: BOOK.router || "0xdce5cf65038f092c283449fda44e23d8820d717f",
+    address: BOOK.router || "0x01a05f87c2c227a1b382cbc2e7e63b186538c86d",
   },
   {
     key: "hook",
     label: "Veil Hook (Uniswap v4)",
-    address: BOOK.hook || "0x5b2e52fe4f54327d8272327d12e47cba834360c4",
+    address: BOOK.hook || "0x9df0b52bf290a13e11c73c56c4c533e3887760c4",
   },
   {
     key: "poolEth",
     label: "Shielded Pool (ETH)",
-    address: BOOK.poolEth || "0x3c4700360e23aa2d4671605f35e0fa1d354bc41b",
+    address: BOOK.poolEth || "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0",
   },
   {
     key: "treasury",
     label: "Veil Treasury",
-    address: BOOK.treasury || "0x1b631ab61b99b364e3a880bd43adfe1b665bce16",
+    address: BOOK.treasury || "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34",
   },
   {
     key: "registry",
     label: "Attestation Registry",
-    address: BOOK.registry || "0x411fb0c695152ea02ef48b96940c2b2fef656b7c",
+    address: BOOK.registry || "0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
   },
   {
     key: "verifier",
     label: "Shielded Verifier",
-    address: BOOK.verifier || "0x12b20b346342d2fc5272f0f708bcd5abaac480fb",
+    address: BOOK.verifier || "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
     note: "Provisional verifier",
   },
   {
     key: "deployer",
     label: "Create2 Deployer",
-    address: BOOK.deployer || "0x3d1613651c366ce53fd64bada154d1b951b9233f",
+    address: BOOK.deployer || "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008",
+  },
+  {
+    key: "token",
+    label: "Veil Token (temporary)",
+    address: BOOK.token || "0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a",
+    note: "Temporary token; canonical token launches on Pons",
   },
 ];
 

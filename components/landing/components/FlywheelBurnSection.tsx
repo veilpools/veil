@@ -9,9 +9,9 @@ import { RevealBox } from "./RevealBox";
 import { CountUp } from "./CountUp";
 
 const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
-  "0x1b631ab61b99b364e3a880bd43adfe1b665bce16") as Address;
+  "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34") as Address;
 const HOOK_ADDRESS = (CONTRACT_ADDRESSES.hook ||
-  "0x5b2e52fe4f54327d8272327d12e47cba834360c4") as Address;
+  "0x9df0b52bf290a13e11c73c56c4c533e3887760c4") as Address;
 const EXPLORER = "https://explorer.mainnet.chain.robinhood.com";
 
 // Event name verified in lib/veil-artifact.ts VEIL_TREASURY_ABI — never invented.
