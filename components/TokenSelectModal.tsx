@@ -34,7 +34,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Native Gas",
     iconBg: "rgba(98, 126, 234, 0.1) text-slate-800",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 256 417" fill="none">
+      <svg className="w-full h-full" viewBox="0 0 256 417" fill="none">
         <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#343434" />
         <path d="M127.962 0L0 212.32L127.962 287.958V157.252V0Z" fill="#8C8C8C" />
         <path d="M127.962 312.187L126.386 314.106V413.404L127.962 417L255.998 236.593L127.962 312.187Z" fill="#3C3C3B" />
@@ -57,7 +57,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Canonical v4",
     iconBg: "rgba(236, 72, 153, 0.1) text-pink-600",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 256 417" fill="none">
+      <svg className="w-full h-full" viewBox="0 0 256 417" fill="none">
         <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#EC4899" />
         <path d="M127.962 0L0 212.32L127.962 287.958V157.252V0Z" fill="#F472B6" />
         <path d="M127.962 312.187L126.386 314.106V413.404L127.962 417L255.998 236.593L127.962 312.187Z" fill="#BE185D" />
@@ -80,7 +80,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Protocol Token",
     iconBg: "rgba(255, 140, 0, 0.15) text-[#FF8C00]",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 145 97" fill="none">
+      <svg className="w-full h-full" viewBox="0 0 145 97" fill="none">
         <polygon points="0,0 26,0 66,74 106,0 132,0 79,97 53,97" fill="#FF8C00" />
         <circle cx="134" cy="85" r="11" fill="#FF8C00" />
       </svg>
@@ -99,7 +99,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Pons Launchpad",
     iconBg: "#ffffff",
     iconSvg: (
-      <img src="/tokens/pons.png" alt="PONS" className="w-5 h-5 object-contain" />
+      <img src="/tokens/pons.png" alt="PONS" className="w-full h-full object-contain" />
     ),
   },
   {
@@ -115,7 +115,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Robinhood DeFi",
     iconBg: "#ffffff",
     iconSvg: (
-      <img src="/tokens/quanta.png" alt="QUANTA" className="w-5 h-5 object-contain rounded-full" />
+      <img src="/tokens/quanta.png" alt="QUANTA" className="w-full h-full object-contain" />
     ),
   },
   {
@@ -131,7 +131,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Fiat Stable",
     iconBg: "rgba(39, 117, 202, 0.15) text-[#2775CA]",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 2000 2000" fill="none">
+      <svg className="w-full h-full" viewBox="0 0 2000 2000" fill="none">
         <circle cx="1000" cy="1000" r="1000" fill="#2775CA" />
         <path d="M1275 1158c0-129-77-173-230-192-107-14-129-37-129-87 0-48 37-79 104-79 64 0 99 24 116 71l108-45c-29-73-88-115-171-125V600h-90v100c-112 15-180 84-180 180 0 120 73 167 220 187 113 16 139 37 139 92 0 57-48 93-118 93-84 0-128-36-146-95l-111 43c31 92 98 143 205 156v104h90v-103c115-15 188-82 188-199z" fill="#FFFFFF" />
         <path d="M783 1485c-270-98-443-356-443-645 0-375 305-680 680-680 202 0 391 88 519 237l76-76C1476 177 1246 72 1000 72 488 72 72 488 72 1000c0 388 238 731 599 865l112-380z" fill="#FFFFFF" fillOpacity="0.4" />
@@ -152,7 +152,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Stablecoin",
     iconBg: "rgba(38, 161, 123, 0.15) text-[#26A17B]",
     iconSvg: (
-      <svg className="w-5 h-5" viewBox="0 0 2000 2000" fill="none">
+      <svg className="w-full h-full" viewBox="0 0 2000 2000" fill="none">
         <circle cx="1000" cy="1000" r="1000" fill="#26A17B" />
         <path d="M1150 970v-83h318V733H532v154h318v83c-273 13-477 64-477 125s204 112 477 125v375h300v-375c272-13 475-64 475-125s-203-112-475-125zm0 193c-23 2-98 7-150 7s-127-5-150-7c-214-10-373-45-373-88s159-78 373-88c23-2 98-7 150-7s127 5 150 7c214 10 373 45 373 88s-159 78-373 88z" fill="#FFFFFF" />
       </svg>
@@ -307,8 +307,8 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                     <div
                       style={{
-                        width: "38px",
-                        height: "38px",
+                        width: "40px",
+                        height: "40px",
                         borderRadius: "var(--radius-full)",
                         display: "flex",
                         alignItems: "center",
@@ -316,11 +316,15 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                         flexShrink: 0,
                         backgroundColor: "#ffffff",
                         border: "1px solid var(--color-border)",
-                        boxShadow: "0 1px 3px rgba(26, 26, 26, 0.05)",
+                        boxShadow: "0 2px 5px rgba(26, 26, 26, 0.05)",
+                        padding: "6px",
+                        boxSizing: "border-box",
                         overflow: "hidden",
                       }}
                     >
-                      {token.iconSvg}
+                      <div style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {token.iconSvg}
+                      </div>
                     </div>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

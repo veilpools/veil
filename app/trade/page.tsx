@@ -804,7 +804,7 @@ export default function SwapToShieldPage() {
                       transition: "all var(--duration-fast)",
                     }}
                   >
-                    <div className="w-5 h-5 flex items-center justify-center">
+                    <div className="w-6 h-6 flex items-center justify-center shrink-0">
                       {inputToken.iconSvg}
                     </div>
                     <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
@@ -895,7 +895,7 @@ export default function SwapToShieldPage() {
                       transition: "all var(--duration-fast)",
                     }}
                   >
-                    <div className="w-5 h-5 flex items-center justify-center">
+                    <div className="w-6 h-6 flex items-center justify-center shrink-0">
                       {outputToken.iconSvg}
                     </div>
                     <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
@@ -1256,12 +1256,14 @@ export default function SwapToShieldPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                     <div
                       style={{
-                        width: "36px",
-                        height: "36px",
+                        width: "40px",
+                        height: "40px",
                         borderRadius: "var(--radius-full)",
                         backgroundColor: "#ffffff",
                         border: "1px solid var(--color-border)",
-                        boxShadow: "0 1px 3px rgba(26, 26, 26, 0.05)",
+                        boxShadow: "0 2px 5px rgba(26, 26, 26, 0.05)",
+                        padding: "6px",
+                        boxSizing: "border-box",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1269,7 +1271,9 @@ export default function SwapToShieldPage() {
                         overflow: "hidden",
                       }}
                     >
-                      {outputToken.iconSvg}
+                      <div style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {outputToken.iconSvg}
+                      </div>
                     </div>
                     <div>
                       <span style={{ fontSize: "var(--text-body-sm)", color: "var(--color-text)", fontWeight: 600, display: "block" }}>
