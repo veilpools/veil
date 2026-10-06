@@ -5,6 +5,7 @@ out/
 .env*.local
 *.log
 e2e-note-backup.json
+.superpowers/
 deployments/*.tmp.json
 *.tsbuildinfo
 .DS_Store
