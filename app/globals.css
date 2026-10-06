@@ -1,0 +1,98 @@
+@import "../components/landing/styles/tokens.css";
+@import "../components/landing/styles/animations.css";
+@import "tailwindcss";
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: clip;
+  }
+
+  h1, h2, h3, h4, .font-headline {
+    font-family: var(--font-headline);
+  }
+
+  code, pre, .font-mono {
+    font-family: monospace;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: #fff;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* Reusable Veil UI Panels */
+.veil-card {
+  background: var(--color-panel);
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  border: var(--border-thin) solid var(--color-border-strong);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.veil-card:hover {
+  border-color: var(--color-text);
+}
+
+.veil-card-white {
+  background: #ffffff;
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  border: var(--border-thin) solid var(--color-border);
+  box-shadow: 0 4px 20px rgba(26, 26, 26, 0.04);
+}
+
+.veil-obsidian-card {
+  background: #1a1a1a;
+  color: #ffffff;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+}
+
+.veil-input-surface {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.veil-input-surface:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.tabular-numbers {
+  font-variant-numeric: tabular-nums;
+}

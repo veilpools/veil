@@ -1,0 +1,12 @@
+<svg width="355" height="97" viewBox="0 0 355 97" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- V -->
+  <polygon points="0,0 26,0 66,74 106,0 132,0 79,97 53,97" fill="currentColor"/>
+  <!-- E -->
+  <path d="M148 0H208V23H172V37H202V59H172V74H208V97H148V0Z" fill="currentColor"/>
+  <!-- I -->
+  <rect x="224" y="0" width="24" height="97" fill="currentColor"/>
+  <!-- L -->
+  <path d="M264 0H288V74H324V97H264V0Z" fill="currentColor"/>
+  <!-- Privacy Dot -->
+  <circle cx="342" cy="85" r="11" fill="#FF8C00"/>
+</svg>
