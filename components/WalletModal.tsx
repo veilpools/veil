@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { X, ExternalLink, Check, AlertCircle } from "lucide-react";
+import { ModalWrapper } from "./ModalWrapper";
 import {
   EVM_WALLETS,
   connectEvm,
@@ -25,12 +25,6 @@ export function WalletModal({
   const [detected, setDetected] = useState<EvmWalletId[]>([]);
   const [pending, setPending] = useState<EvmWalletId | null>(null);
   const [err, setErr] = useState("");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -57,17 +51,6 @@ export function WalletModal({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open || !mounted) return null;
-
   async function pick(id: EvmWalletId) {
     if (!detectEvm(id)) return;
     setErr("");
@@ -83,37 +66,19 @@ export function WalletModal({
     }
   }
 
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Connect EVM Wallet"
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        backgroundColor: "rgba(26, 26, 26, 0.45)",
-        backdropFilter: "blur(6px)",
+  return (
+    <ModalWrapper
+      isOpen={open}
+      onClose={onClose}
+      maxWidth="440px"
+      contentStyle={{
+        padding: "var(--space-6)",
+        maxHeight: "90vh",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--space-4)",
+        flexDirection: "column",
+        overflowY: "auto",
       }}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: "420px",
-          backgroundColor: "#ffffff",
-          borderRadius: "var(--radius-lg)",
-          border: "1px solid var(--color-border-strong)",
-          boxShadow: "0 20px 48px -12px rgba(26, 26, 26, 0.16)",
-          padding: "var(--space-6)",
-          boxSizing: "border-box",
-        }}
-      >
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <div>
@@ -302,8 +267,6 @@ export function WalletModal({
             <span>{err}</span>
           </div>
         )}
-      </div>
-    </div>,
-    document.body
+    </ModalWrapper>
   );
 }
