@@ -21,13 +21,15 @@ export interface TokenItem {
 }
 
 export const SUPPORTED_TOKENS: TokenItem[] = [
+  // priceUsd is deprecated: no oracle is wired yet, so all quotes hide USD.
+  // Kept as 0 for type compatibility. Do not use for output math.
   {
     symbol: "ETH",
     name: "Native Ether",
     address: "0x0000000000000000000000000000000000000000",
     decimals: 18,
     balance: "0.00",
-    priceUsd: 3240.5,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "0.001 ETH",
@@ -50,7 +52,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     address: "0x4200000000000000000000000000000000000006",
     decimals: 18,
     balance: "0.00",
-    priceUsd: 3240.5,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "0.001 ETH",
@@ -73,7 +75,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     address: "0x1b631ab61b99b364e3a880bd43adfe1b665bce16",
     decimals: 18,
     balance: "0.00",
-    priceUsd: 0.185,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "1,000 VEIL",
@@ -92,7 +94,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     address: "0x39dbed3a2bd333467115de45665cc57f813c4571",
     decimals: 18,
     balance: "0.00",
-    priceUsd: 0.384,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "1,000 PONS",
@@ -108,7 +110,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     address: "0x1da81ca017949efbe07972776580d04592ba9b63",
     decimals: 18,
     balance: "0.00",
-    priceUsd: 1.15,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "100 QUANTA",
@@ -124,7 +126,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     address: "0x2A2C6C1B14C5D65C13D75D5F00C81F78A86BC8C1",
     decimals: 6,
     balance: "0.00",
-    priceUsd: 1.0,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "100 USDC",
@@ -145,7 +147,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     address: "0x55d398326f99059fF775485246999027B3197955",
     decimals: 6,
     balance: "0.00",
-    priceUsd: 1.0,
+    priceUsd: 0,
     verified: true,
     isPoolSupported: true,
     poolDenomination: "100 USDT",
@@ -166,6 +168,7 @@ interface TokenSelectModalProps {
   onSelectToken: (token: TokenItem) => void;
   selectedSymbol: string;
   balances?: Record<string, string>;
+  disabledSymbols?: string[];
 }
 
 export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
@@ -174,12 +177,16 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
   onSelectToken,
   selectedSymbol,
   balances = {},
+  disabledSymbols = [],
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
+  // The VEIL entry reuses the treasury address, so no balance is trusted for
+  // it. The row shows no balance until the owner supplies the real token
+  // address, and callers disable it as a shield target via disabledSymbols.
   const filtered = SUPPORTED_TOKENS.map((t) => ({
     ...t,
-    balance: balances[t.symbol] ?? "0.00",
+    balance: t.symbol === "VEIL" ? "—" : balances[t.symbol] ?? "0.00",
   })).filter(
     (t) =>
       t.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -287,9 +294,12 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
           ) : (
             filtered.map((token) => {
               const isSelected = selectedSymbol === token.symbol;
+              const isDisabled = disabledSymbols.includes(token.symbol);
               return (
                 <button
                   key={token.symbol}
+                  disabled={isDisabled}
+                  title={isDisabled ? "Unavailable until the real token address is supplied" : undefined}
                   onClick={() => {
                     onSelectToken(token);
                     onClose();
@@ -304,7 +314,8 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                     textAlign: "left",
                     backgroundColor: isSelected ? "rgba(255, 140, 0, 0.12)" : "transparent",
                     border: "none",
-                    cursor: "pointer",
+                    cursor: isDisabled ? "not-allowed" : "pointer",
+                    opacity: isDisabled ? 0.45 : 1,
                     transition: "background var(--duration-fast)",
                     boxSizing: "border-box",
                   }}
@@ -362,7 +373,9 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                         {token.balance}
                       </div>
                       <div style={{ fontSize: "var(--text-caption)", color: "var(--color-faint)", fontFamily: "monospace" }}>
-                        ${((parseFloat(token.balance.replace(/,/g, "")) || 0) * token.priceUsd).toFixed(2)}
+                        {token.priceUsd > 0
+                          ? `$${((parseFloat(token.balance.replace(/,/g, "")) || 0) * token.priceUsd).toFixed(2)}`
+                          : "—"}
                       </div>
                     </div>
                     {isSelected && <Check className="w-4 h-4 text-[#FF8C00]" />}

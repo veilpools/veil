@@ -1,32 +1,38 @@
-import { createPublicClient, formatEther, http } from "viem";
+// scripts/check-balance.mjs
+import { rpcCall } from "./rpc-helper.mjs";
+import { formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { robinhoodTestnet, robinhoodMainnet } from "../lib/chains.mjs";
+import fs from "node:fs";
 
-const privateKey = "0xf5c33329c4bcc3b612af9a5e1134816782188d1107f54c58a48c236bf744995f";
-const account = privateKeyToAccount(privateKey);
+function loadEnvFile(path) {
+  try {
+    for (const rawLine of fs.readFileSync(path, "utf8").split("\n")) {
+      const line = rawLine.split("#")[0].trim();
+      const m = line.match(/^\s*([A-Z0-9_]+)=(.*)\s*$/);
+      if (!m || process.env[m[1]]) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[m[1]] = val;
+    }
+  } catch {}
+}
+loadEnvFile(".env.mainnet.local");
+loadEnvFile(".env.local");
+
+const key = process.env.MAINNET_PRIVATE_KEY || process.env.PRIVATE_KEY;
+if (!key) throw new Error("Missing MAINNET_PRIVATE_KEY or PRIVATE_KEY in env");
+const account = privateKeyToAccount(key.startsWith("0x") ? key : `0x${key}`);
 console.log("Account Address:", account.address);
 
-const testnetClient = createPublicClient({ chain: robinhoodTestnet, transport: http(robinhoodTestnet.rpcUrls.default.http[0]) });
-const mainnetClient = createPublicClient({ chain: robinhoodMainnet, transport: http(robinhoodMainnet.rpcUrls.default.http[0]) });
-
-async function check() {
+for (const chainId of [46630, 4663]) {
   try {
-    const testnetBal = await testnetClient.getBalance({ address: account.address });
-    console.log(`Robinhood Testnet (46630) Balance: ${formatEther(testnetBal)} ETH`);
-    const testnetBlock = await testnetClient.getBlockNumber();
-    console.log(`Current Testnet Block: ${testnetBlock}`);
+    const bal = await rpcCall(chainId, "eth_getBalance", [account.address, "latest"]);
+    console.log(`Chain ${chainId} Balance: ${formatEther(BigInt(bal))} ETH`);
+    const block = await rpcCall(chainId, "eth_blockNumber", []);
+    console.log(`Chain ${chainId} Block: ${BigInt(block).toString()}`);
   } catch (e) {
-    console.error("Testnet check failed:", e.message);
-  }
-
-  try {
-    const mainnetBal = await mainnetClient.getBalance({ address: account.address });
-    console.log(`Robinhood Mainnet (4663) Balance: ${formatEther(mainnetBal)} ETH`);
-    const mainnetBlock = await mainnetClient.getBlockNumber();
-    console.log(`Current Mainnet Block: ${mainnetBlock}`);
-  } catch (e) {
-    console.error("Mainnet check failed:", e.message);
+    console.error(`Chain ${chainId} check failed:`, e.message);
   }
 }
-
-check();

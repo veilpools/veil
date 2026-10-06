@@ -4,6 +4,7 @@ out/
 .env.local
 .env*.local
 *.log
+e2e-note-backup.json
 deployments/*.tmp.json
 *.tsbuildinfo
 .DS_Store

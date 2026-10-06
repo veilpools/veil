@@ -1,52 +1,110 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Copy, Check, ExternalLink } from "lucide-react";
-import { parseAbi, type Address } from "viem";
+import { Copy, Check } from "lucide-react";
+import { parseAbi, formatEther, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
+import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
 
-const SHIELDED_POOL_ETH = "0x3c4700360e23aa2d4671605f35e0fa1d354bc41b" as Address;
+// Live Robinhood Mainnet 4663 deployments via the shared address source.
+// Literals below are fallbacks only and match lib/contracts.ts defaults.
+const POOL_ADDRESS = (CONTRACT_ADDRESSES.poolEth ||
+  "0x3c4700360e23aa2d4671605f35e0fa1d354bc41b") as Address;
+const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
+  "0x1b631ab61b99b364e3a880bd43adfe1b665bce16") as Address;
+const HOOK_ADDRESS = (CONTRACT_ADDRESSES.hook ||
+  "0x5b2e52fe4f54327d8272327d12e47cba834360c4") as Address;
+
+const EMPTY_ROOT = ("0x" + "00".repeat(32)) as `0x${string}`;
 
 const POOL_ABI = parseAbi([
   "function nextIndex() view returns (uint32)",
   "function totalDeposits() view returns (uint256)",
   "function denomination() view returns (uint256)",
+  "function poolCap() view returns (uint256)",
+  "function rootHistory(uint256 index) view returns (bytes32)",
+  "function guardian() view returns (address)",
+  "function depositsPaused() view returns (bool)",
+  "function TREE_DEPTH() view returns (uint8)",
+]);
+
+const TREASURY_ABI = parseAbi([
+  "function buybackShareBps() view returns (uint256)",
 ]);
 
 function formatNumber(val: number): string {
   return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+type HookPermissions = Record<string, boolean>;
+
 export const ZkShieldRadar: React.FC = () => {
-  const [onChainNextIndex, setOnChainNextIndex] = useState<number>(0);
-  const [onChainTotalDeposits, setOnChainTotalDeposits] = useState<string>("0");
+  const [nextIndex, setNextIndex] = useState<number>(0);
+  const [totalDepositsEth, setTotalDepositsEth] = useState<string>("0");
+  const [treeDepth, setTreeDepth] = useState<number | null>(null);
+  const [merkleRoot, setMerkleRoot] = useState<`0x${string}`>(EMPTY_ROOT);
+  const [buybackBps, setBuybackBps] = useState<bigint | null>(null);
+  const [hookPermissions, setHookPermissions] = useState<HookPermissions | null>(null);
   const [copiedRoot, setCopiedRoot] = useState(false);
   const [isLiveLoaded, setIsLiveLoaded] = useState(false);
+  const [rpcError, setRpcError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadTelemetry() {
       try {
-        const nextIdx = await publicClient.readContract({
-          address: SHIELDED_POOL_ETH,
-          abi: POOL_ABI,
-          functionName: "nextIndex",
-        });
+        const [nextIdx, totalDep, depth, bps, perms] = await Promise.all([
+          publicClient.readContract({
+            address: POOL_ADDRESS,
+            abi: POOL_ABI,
+            functionName: "nextIndex",
+          }),
+          publicClient.readContract({
+            address: POOL_ADDRESS,
+            abi: POOL_ABI,
+            functionName: "totalDeposits",
+          }),
+          publicClient.readContract({
+            address: POOL_ADDRESS,
+            abi: POOL_ABI,
+            functionName: "TREE_DEPTH",
+          }),
+          publicClient.readContract({
+            address: TREASURY_ADDRESS,
+            abi: TREASURY_ABI,
+            functionName: "buybackShareBps",
+          }),
+          publicClient.readContract({
+            address: HOOK_ADDRESS,
+            abi: CONTRACT_ABIS.VeilHook,
+            functionName: "getHookPermissions",
+          }),
+        ]);
 
-        const totalDep = await publicClient.readContract({
-          address: SHIELDED_POOL_ETH,
-          abi: POOL_ABI,
-          functionName: "totalDeposits",
-        });
+        const root =
+          Number(nextIdx) > 0
+            ? await publicClient.readContract({
+                address: POOL_ADDRESS,
+                abi: POOL_ABI,
+                functionName: "rootHistory",
+                args: [BigInt(Number(nextIdx) - 1)],
+              })
+            : EMPTY_ROOT;
 
         if (isMounted) {
-          setOnChainNextIndex(Number(nextIdx));
-          setOnChainTotalDeposits((Number(totalDep) / 1e18).toFixed(3));
+          setNextIndex(Number(nextIdx));
+          setTotalDepositsEth(Number(formatEther(totalDep)).toFixed(3));
+          setTreeDepth(Number(depth));
+          setBuybackBps(bps);
+          setHookPermissions({ ...(perms as unknown as HookPermissions) });
+          setMerkleRoot(root);
           setIsLiveLoaded(true);
+          setRpcError(false);
         }
       } catch (e) {
-        console.warn("Telemetry fallback to local index:", e);
+        console.warn("Telemetry read failed, retrying:", e);
+        if (isMounted) setRpcError(true);
       }
     }
 
@@ -58,13 +116,18 @@ export const ZkShieldRadar: React.FC = () => {
     };
   }, []);
 
-  const merkleRoot = "0x2a91f487e419c8362d2919ab4619cd798b04fe90401827491048a1290bbfa710";
-
   function handleCopyRoot() {
     navigator.clipboard.writeText(merkleRoot);
     setCopiedRoot(true);
     setTimeout(() => setCopiedRoot(false), 2000);
   }
+
+  const enabledFlags = hookPermissions
+    ? Object.entries(hookPermissions).filter(([, v]) => v === true).map(([k]) => k)
+    : [];
+  const burnShareLabel = buybackBps === null ? "—" : `${Number(buybackBps) / 100}% Burn`;
+  const capacityLabel = treeDepth === null ? "—" : formatNumber(2 ** treeDepth);
+  const depthLabel = treeDepth === null ? "—" : `${treeDepth} Levels`;
 
   return (
     <div
@@ -121,9 +184,25 @@ export const ZkShieldRadar: React.FC = () => {
           />
           <span>Robinhood 4663</span>
           <span style={{ opacity: 0.4 }}>/</span>
-          <span>Hook 0x20C4</span>
+          <span>Hook live</span>
         </div>
       </div>
+
+      {!isLiveLoaded && !rpcError && (
+        <p style={{ margin: 0, fontSize: "var(--text-body-sm)", color: "var(--color-muted)", fontFamily: "monospace" }}>
+          Loading live state…
+        </p>
+      )}
+      {rpcError && !isLiveLoaded && (
+        <p style={{ margin: 0, fontSize: "var(--text-body-sm)", color: "#b45309", fontFamily: "monospace" }}>
+          RPC unreachable, retrying…
+        </p>
+      )}
+      {rpcError && isLiveLoaded && (
+        <p style={{ margin: 0, fontSize: "11px", color: "#b45309", fontFamily: "monospace" }}>
+          RPC unreachable, retrying… showing last synced values.
+        </p>
+      )}
 
       {/* 4 Metric Cards */}
       <div
@@ -149,10 +228,10 @@ export const ZkShieldRadar: React.FC = () => {
             LeanIMT Depth
           </div>
           <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-text)" }}>
-            20 Levels
+            {depthLabel}
           </div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
-            1,048,576 Capacity · Leaf #{formatNumber(onChainNextIndex)}
+            {capacityLabel} Capacity · Leaf #{formatNumber(nextIndex)}
           </div>
         </div>
 
@@ -172,10 +251,10 @@ export const ZkShieldRadar: React.FC = () => {
             On-Chain Shielded Notes
           </div>
           <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-text)" }}>
-            {formatNumber(onChainNextIndex)} Notes
+            {formatNumber(nextIndex)} Notes
           </div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
-            Total: {onChainTotalDeposits} ETH Deposited
+            Total: {totalDepositsEth} ETH Deposited
           </div>
         </div>
 
@@ -195,10 +274,25 @@ export const ZkShieldRadar: React.FC = () => {
             Hook Permissions
           </div>
           <div style={{ fontFamily: "monospace", fontSize: "1.2rem", fontWeight: 600, color: "var(--color-text)" }}>
-            0x20C4
+            {hookPermissions ? `${enabledFlags.length} enabled` : "—"}
           </div>
-          <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
-            beforeSwap | returnDelta
+          <div
+            style={{
+              fontSize: "11px",
+              fontFamily: "monospace",
+              color: "var(--color-faint)",
+              marginTop: "4px",
+              maxHeight: "72px",
+              overflowY: "auto",
+            }}
+          >
+            {hookPermissions
+              ? Object.entries(hookPermissions).map(([flag, on]) => (
+                  <div key={flag}>
+                    {flag}: {String(on)}
+                  </div>
+                ))
+              : "Loading live state…"}
           </div>
         </div>
 
@@ -218,7 +312,7 @@ export const ZkShieldRadar: React.FC = () => {
             Fee Burn Allocation
           </div>
           <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-text)" }}>
-            70.0% Burn
+            {burnShareLabel}
           </div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
             VeilTreasury Engine · Autonomous
@@ -240,10 +334,10 @@ export const ZkShieldRadar: React.FC = () => {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Current Merkle Root (LeanIMT Depth 20)
+            Current Merkle Root (live)
           </span>
           <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-accent)", fontWeight: 600 }}>
-            Live Sync
+            {isLiveLoaded ? "Live Sync" : "Syncing…"}
           </span>
         </div>
 
@@ -269,11 +363,12 @@ export const ZkShieldRadar: React.FC = () => {
               whiteSpace: "nowrap",
             }}
           >
-            {merkleRoot}
+            {!isLiveLoaded ? "Loading live state…" : nextIndex === 0 ? "Empty pool — no deposits yet" : merkleRoot}
           </span>
 
           <button
             onClick={handleCopyRoot}
+            disabled={!isLiveLoaded || nextIndex === 0}
             title="Copy Merkle Root"
             style={{
               display: "inline-flex",

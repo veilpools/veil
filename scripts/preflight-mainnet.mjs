@@ -1,10 +1,11 @@
 import {
   createPublicClient,
+  custom,
   formatEther,
   formatGwei,
-  http,
   keccak256,
 } from "viem";
+import { rpcRequest } from "./rpc-helper.mjs";
 import { privateKeyToAccount } from "viem/accounts";
 import { existsSync, readFileSync } from "node:fs";
 import {
@@ -22,12 +23,19 @@ async function main() {
   console.log("   VEIL PROTOCOL - ROBINHOOD MAINNET PREFLIGHT   ");
   console.log("=================================================\n");
 
-  const rpcUrl = process.env.MAINNET_RPC_URL || robinhoodMainnet.rpcUrls.default.http[0];
-  console.log(`Connecting to Robinhood Mainnet: ${rpcUrl}`);
+  // Transport goes through the shared IP-bypass helper (see scripts/rpc-helper.mjs).
+  const provider = {
+    async request({ method, params }) {
+      const res = await rpcRequest(4663, { jsonrpc: "2.0", id: 1, method, params });
+      if (res.error) throw new Error(`RPC error: ${res.error.message}`);
+      return res.result;
+    },
+  };
+  console.log("Connecting to Robinhood Mainnet via IP-bypass helper");
 
   const client = createPublicClient({
     chain: robinhoodMainnet,
-    transport: http(rpcUrl),
+    transport: custom(provider),
   });
 
   // 1. Chain ID Verification
@@ -67,16 +75,22 @@ async function main() {
   // 4. Deployer Account Readiness
   console.log("\n3. Deployer Account Readiness:");
   const env = {};
+  const parseEnvText = (text) => {
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.split("#")[0].trim();
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!m) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      env[m[1]] = val;
+    }
+  };
   if (existsSync(".env.mainnet.local")) {
-    for (const line of readFileSync(".env.mainnet.local", "utf8").split("\n")) {
-      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-      if (m) env[m[1]] = m[2];
-    }
+    parseEnvText(readFileSync(".env.mainnet.local", "utf8"));
   } else if (existsSync(".env.local")) {
-    for (const line of readFileSync(".env.local", "utf8").split("\n")) {
-      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-      if (m) env[m[1]] = m[2];
-    }
+    parseEnvText(readFileSync(".env.local", "utf8"));
   }
 
   const privateKey = process.env.MAINNET_PRIVATE_KEY || process.env.PRIVATE_KEY || env.PRIVATE_KEY;

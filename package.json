@@ -13,7 +13,9 @@
     "preflight:mainnet": "node scripts/preflight-mainnet.mjs",
     "deploy:testnet": "node scripts/deploy.mjs --testnet",
     "deploy:mainnet": "node scripts/deploy.mjs --mainnet",
-    "test:testnet": "node scripts/testnet-e2e.mjs"
+    "test:testnet": "node scripts/testnet-e2e.mjs",
+    "relay:withdraw": "node scripts/relay-withdraw.mjs",
+    "test:shield": "node scripts/mainnet-shield-e2e.mjs"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.4.0",

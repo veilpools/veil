@@ -22,24 +22,55 @@ import { ZkProverModal, type ZkProverStep } from "../../components/ZkProverModal
 import { WalletModal } from "../../components/WalletModal";
 import {
   formatEther,
-  parseEther,
   formatUnits,
-  parseUnits,
   createWalletClient,
   custom,
   parseAbi,
+  isAddress,
   type Address,
 } from "viem";
 import { robinhoodMainnet } from "../../lib/chains";
 import { loadWallet, getActiveEvmProvider, subscribeWalletChange } from "../../lib/wallets";
-import { fetchAllTokenBalances } from "../../lib/balances";
+import { fetchAllTokenBalances, publicClient } from "../../lib/balances";
+import { waitForTransactionReceipt } from "viem/actions";
+import { buildWithdrawArgs } from "../../lib/withdraw-args";
+import { CONTRACT_ADDRESSES } from "../../lib/contracts";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
-const SHIELDED_POOL_ETH = "0x3c4700360e23aa2d4671605f35e0fa1d354bc41b" as Address;
+// Single address source: follows lib/contracts.ts (env override or live mainnet default).
+const SHIELDED_POOL_ETH = CONTRACT_ADDRESSES.poolEth as Address;
 
 const POOL_DEPOSIT_ABI = parseAbi([
   "function deposit(bytes32 commitment) payable returns (uint32)",
 ]);
+
+const POOL_DEPOSIT_ABI_EXT = parseAbi([
+  "function deposit(bytes32 commitment) payable returns (uint32)",
+  "function denomination() view returns (uint256)",
+  "function poolCap() view returns (uint256)",
+  "function totalDeposits() view returns (uint256)",
+  "function depositsPaused() view returns (bool)",
+]);
+
+const POOL_WITHDRAW_ABI = parseAbi([
+  "function withdraw(bytes proof, bytes32 root, bytes32 nullifierHash, address recipient, uint256 fee)",
+  "function rootHistory(uint256 index) view returns (bytes32)",
+  "function nextIndex() view returns (uint32)",
+  "function isKnownRoot(bytes32 root) view returns (bool)",
+  "function isNullifierSpent(bytes32 n) view returns (bool)",
+  "function associationRoot() view returns (bytes32)",
+]);
+
+const VERIFIER_ABI = parseAbi([
+  "function shouldPass() view returns (bool)",
+]);
+
+const ETH_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+
+// Live ShieldedVerifierMock address. Prefers the shared address source and
+// falls back to the mainnet deployment default until the key lands there.
+const VERIFIER_ADDRESS = ((CONTRACT_ADDRESSES as unknown as Record<string, string | undefined>).verifier ||
+  "0x12b20b346342d2fc5272f0f708bcd5abaac480fb") as Address;
 
 export function formatNoteAmount(denomination: bigint, asset?: string): string {
   if (!asset) return `${formatEther(denomination)} ETH`;
@@ -168,6 +199,25 @@ export default function SwapToShieldPage() {
     return () => unsub();
   }, [inputToken.symbol]);
 
+  // Live ShieldedPool_ETH denomination for honest quotes and deposits.
+  const [liveDenomination, setLiveDenomination] = useState<bigint | null>(null);
+
+  useEffect(() => {
+    async function loadDenomination() {
+      try {
+        const denom = await publicClient.readContract({
+          address: SHIELDED_POOL_ETH,
+          abi: POOL_DEPOSIT_ABI_EXT,
+          functionName: "denomination",
+        });
+        setLiveDenomination(denom);
+      } catch (e) {
+        console.warn("Could not read live pool denomination", e);
+      }
+    }
+    loadDenomination();
+  }, []);
+
   function saveNoteLocally(newNote: ShieldedNote) {
     const updated = [newNote, ...notes];
     setNotes(updated);
@@ -192,26 +242,10 @@ export default function SwapToShieldPage() {
   }
 
   const parsedInput = parseFloat(inputAmount) || 0;
-  const inputUsd = parsedInput * inputToken.priceUsd;
-  const exchangeRate = outputToken.priceUsd > 0 ? inputToken.priceUsd / outputToken.priceUsd : 1;
-  const calculatedOutputRaw = parsedInput * exchangeRate;
-  const calculatedOutput =
-    calculatedOutputRaw === 0
-      ? "0.0"
-      : outputToken.decimals <= 6
-      ? calculatedOutputRaw.toFixed(2)
-      : calculatedOutputRaw < 1
-      ? calculatedOutputRaw.toFixed(4)
-      : calculatedOutputRaw >= 1000
-      ? calculatedOutputRaw.toFixed(2)
-      : calculatedOutputRaw.toFixed(4);
-  const outputUsd = (parseFloat(calculatedOutput) || 0) * outputToken.priceUsd;
-
-  function formatUsd(val: number): string {
-    const parts = val.toFixed(2).split(".");
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    return parts.join(".");
-  }
+  // Displayed pay must equal the value actually sent (liveDenomination).
+  const inputMatchesDenomination =
+    liveDenomination !== null &&
+    Math.abs(parsedInput - parseFloat(formatEther(liveDenomination))) < 1e-9;
 
   async function handleBuyAndShield() {
     if (!connectedAddress) {
@@ -220,6 +254,10 @@ export default function SwapToShieldPage() {
     }
 
     if (!inputAmount || parsedInput <= 0) return;
+    if (!inputMatchesDenomination) {
+      alert("Enter the exact pool denomination shown under You Shield.");
+      return;
+    }
 
     const activeProvider = getActiveEvmProvider();
     if (!activeProvider) {
@@ -228,7 +266,7 @@ export default function SwapToShieldPage() {
     }
 
     setIsExecuting(true);
-    setProverTitle("Executing 1-Tx Swap-to-Shield");
+    setProverTitle("Executing Shielded Deposit");
     setProverTxHash(null);
     setProverCommitment(null);
 
@@ -244,8 +282,8 @@ export default function SwapToShieldPage() {
         status: "pending",
       },
       {
-        title: "3. Uniswap v4 PoolManager Swap Execution",
-        detail: "Executing 1-Tx atomic swap via VeilShieldRouter with strict zero-custody invariant",
+        title: "3. ShieldedPool Deposit Execution",
+        detail: "Depositing fixed-denomination commitment to ShieldedPool_ETH on Robinhood Chain Mainnet",
         status: "pending",
       },
       {
@@ -260,17 +298,32 @@ export default function SwapToShieldPage() {
 
     try {
       await new Promise((r) => setTimeout(r, 650));
-      let denomination = parseEther("0.001");
-      if (outputToken.symbol === "VEIL") {
-        denomination = parseEther("1000");
-      } else if (outputToken.symbol === "PONS") {
-        denomination = parseEther("1000");
-      } else if (outputToken.symbol === "QUANTA" || outputToken.symbol === "QNTA") {
-        denomination = parseEther("100");
-      } else if (outputToken.decimals === 6) {
-        denomination = parseUnits("100", 6);
+      // Only ShieldedPool_ETH exists onchain, so v1 always targets it with its live
+      // denomination. Non-ETH outputs stay selectable for display but deposit as ETH.
+      const liveDenomination = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_DEPOSIT_ABI_EXT,
+        functionName: "denomination",
+      });
+      const paused = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_DEPOSIT_ABI_EXT,
+        functionName: "depositsPaused",
+      });
+      const cap = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_DEPOSIT_ABI_EXT,
+        functionName: "poolCap",
+      });
+      const total = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_DEPOSIT_ABI_EXT,
+        functionName: "totalDeposits",
+      });
+      if (paused || total + liveDenomination > cap) {
+        throw new Error("Pool is paused or the deposit cap is reached.");
       }
-      const note = createShieldedNote(denomination, outputToken.address as `0x${string}`);
+      const note = createShieldedNote(liveDenomination, ETH_ZERO_ADDRESS);
       setSelectedNote(note);
       setProverCommitment(note.commitment);
 
@@ -302,7 +355,7 @@ export default function SwapToShieldPage() {
         abi: POOL_DEPOSIT_ABI,
         functionName: "deposit",
         args: [note.commitment as `0x${string}`],
-        value: parseEther("0.001"),
+        value: liveDenomination,
       });
 
       setProverTxHash(depositHash);
@@ -314,7 +367,9 @@ export default function SwapToShieldPage() {
         { ...prev[3], status: "running" },
       ]);
 
-      await new Promise((r) => setTimeout(r, 600));
+      const receipt = await waitForTransactionReceipt(publicClient, { hash: depositHash });
+      if (receipt.status !== "success") throw new Error("Deposit transaction reverted onchain.");
+      setLiveDenomination(liveDenomination);
       saveNoteLocally(note);
 
       setProverSteps((prev) => [
@@ -337,126 +392,13 @@ export default function SwapToShieldPage() {
       setIsWalletModalOpen(true);
       return;
     }
-
     if (notes.length === 0) {
       alert("No shielded notes available in vault to spend.");
       return;
     }
-
-    const activeProvider = getActiveEvmProvider();
-    if (!activeProvider) {
-      setIsWalletModalOpen(true);
-      return;
-    }
-
-    const noteToSpend = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
-
-    setIsExecuting(true);
-    setProverTitle("Executing 2-in-2-out Shielded Swap");
-    setProverTxHash(null);
-    setProverCommitment(null);
-
-    const initialSteps: ZkProverStep[] = [
-      {
-        title: "1. Nullifier Derivation & Spend Proof",
-        detail: "Synthesizing Poseidon nullifier hash from note secret to prevent double spending",
-        status: "running",
-      },
-      {
-        title: "2. LeanIMT Merkle Tree Membership Proof",
-        detail: "Verifying Merkle root leaf path against Robinhood Chain privacy pool",
-        status: "pending",
-      },
-      {
-        title: "3. Atomic Private-to-Private Cross-Pool Swap",
-        detail: `Swapping ${formatNoteAmount(noteToSpend.denomination, noteToSpend.asset)} note into equivalent ${outputToken.symbol} shielded pool output note`,
-        status: "pending",
-      },
-      {
-        title: "4. New Commitment Minting & Vault Update",
-        detail: "Generating recipient private note commitment and storing encrypted in vault",
-        status: "pending",
-      },
-    ];
-
-    setProverSteps(initialSteps);
-    setIsProverOpen(true);
-
-    try {
-      await new Promise((r) => setTimeout(r, 650));
-      let newDenom = parseEther("1000");
-      if (outputToken.symbol === "PONS") {
-        newDenom = parseEther("1000");
-      } else if (outputToken.symbol === "QUANTA" || outputToken.symbol === "QNTA") {
-        newDenom = parseEther("100");
-      } else if (outputToken.symbol === "ETH" || outputToken.symbol === "WETH") {
-        newDenom = parseEther("0.001");
-      } else if (outputToken.decimals === 6) {
-        newDenom = parseUnits("100", 6);
-      }
-      const newNote = createShieldedNote(newDenom, outputToken.address as `0x${string}`);
-      setProverCommitment(newNote.commitment);
-
-      setProverSteps((prev) => [
-        { ...prev[0], status: "completed" },
-        { ...prev[1], status: "running" },
-        prev[2],
-        prev[3],
-      ]);
-
-      await new Promise((r) => setTimeout(r, 700));
-      setProverSteps((prev) => [
-        prev[0],
-        { ...prev[1], status: "completed" },
-        { ...prev[2], status: "running" },
-        prev[3],
-      ]);
-
-      // Step 3: Real On-Chain Private-to-Private Swap Dispatch via Wallet
-      const walletClient = createWalletClient({
-        account: connectedAddress,
-        chain: robinhoodMainnet,
-        transport: custom(activeProvider),
-      });
-
-      // Submit shielded note nullifier broadcast and new commitment registration
-      const txHash = await walletClient.sendTransaction({
-        to: SHIELDED_POOL_ETH,
-        value: 0n,
-        data: ("0x" + noteToSpend.nullifier.slice(2, 66) + newNote.commitment.slice(2, 66)) as `0x${string}`,
-      });
-
-      setProverTxHash(txHash);
-
-      setProverSteps((prev) => [
-        prev[0],
-        prev[1],
-        { ...prev[2], status: "completed" },
-        { ...prev[3], status: "running" },
-      ]);
-
-      await new Promise((r) => setTimeout(r, 600));
-      const updatedNotes = notes.filter((n) => n.nullifier !== noteToSpend.nullifier);
-      const withNew = [newNote, ...updatedNotes];
-      setNotes(withNew);
-      setSelectedNoteNullifier(newNote.nullifier);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(withNew));
-      }
-
-      setProverSteps((prev) => [
-        prev[0],
-        prev[1],
-        prev[2],
-        { ...prev[3], status: "completed" },
-      ]);
-    } catch (e: unknown) {
-      console.error("Shielded swap transaction error:", e);
-      setIsProverOpen(false);
-      alert(e instanceof Error ? e.message : "Shielded swap transaction cancelled or failed on-chain.");
-    } finally {
-      setIsExecuting(false);
-    }
+    alert(
+      "Shielded Swap needs a liquid v4 route plus full Groth16 binding — available after F3/F4. Your funds stay safe in the pool, use Withdraw for now."
+    );
   }
 
   async function handleWithdraw() {
@@ -495,7 +437,7 @@ export default function SwapToShieldPage() {
       },
       {
         title: "2. Constructing LeanIMT Merkle Membership Proof",
-        detail: "Validating leaf against active Robinhood Chain root (Block 80620033)",
+        detail: "Validating leaf against the live Robinhood Chain root",
         status: "pending",
       },
       {
@@ -505,7 +447,7 @@ export default function SwapToShieldPage() {
       },
       {
         title: "4. On-Chain Verifier & Unlinkable Dispatch",
-        detail: "Submitting to ShieldedVerifier contract; 0% link to original depositor address",
+        detail: "Submitting to ShieldedVerifier contract; 0% link to original depositor address. Provisional verifier — Groth16 follows (F4)",
         status: "pending",
       },
     ];
@@ -530,6 +472,41 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
+      if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
+      const idx = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "nextIndex",
+      });
+      if (idx === 0) throw new Error("Pool is empty, nothing to withdraw against.");
+      const pass = await publicClient.readContract({
+        address: VERIFIER_ADDRESS,
+        abi: VERIFIER_ABI,
+        functionName: "shouldPass",
+      });
+      if (!pass) throw new Error("Provisional verifier is disabled, withdrawals are unavailable.");
+      const spent = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "isNullifierSpent",
+        args: [noteToWithdraw.nullifierHash],
+      });
+      if (spent) throw new Error("Note already spent.");
+      const root = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "rootHistory",
+        args: [BigInt(idx - 1)],
+      });
+      const known = await publicClient.readContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "isKnownRoot",
+        args: [root],
+      });
+      if (!known) throw new Error("Unknown Merkle root");
+      const args = buildWithdrawArgs(noteToWithdraw, root, cleanRecipient as `0x${string}`);
+
       // Step 3: Real On-Chain Withdrawal Dispatch via Connected Wallet
       const walletClient = createWalletClient({
         account: connectedAddress,
@@ -537,11 +514,11 @@ export default function SwapToShieldPage() {
         transport: custom(activeProvider),
       });
 
-      // Send unlinked on-chain transaction with nullifier proof payload
-      const withdrawHash = await walletClient.sendTransaction({
-        to: cleanRecipient as Address,
-        value: 0n,
-        data: ("0x" + noteToWithdraw.nullifier.slice(2, 66)) as `0x${string}`,
+      const withdrawHash = await walletClient.writeContract({
+        address: SHIELDED_POOL_ETH,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "withdraw",
+        args: [args.proof, args.root, args.nullifierHash, args.recipient, args.fee],
       });
 
       setProverTxHash(withdrawHash);
@@ -553,7 +530,8 @@ export default function SwapToShieldPage() {
         { ...prev[3], status: "running" },
       ]);
 
-      await new Promise((r) => setTimeout(r, 600));
+      const receipt = await waitForTransactionReceipt(publicClient, { hash: withdrawHash });
+      if (receipt.status !== "success") throw new Error("Withdraw transaction reverted onchain.");
 
       const remaining = notes.filter((n) => n.nullifier !== noteToWithdraw.nullifier);
       setNotes(remaining);
@@ -943,10 +921,6 @@ export default function SwapToShieldPage() {
                     <ChevronDown className="w-4 h-4 text-[#FF8C00]" />
                   </button>
                 </div>
-
-                <div style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                  ≈ ${formatUsd(inputUsd)} USD
-                </div>
               </div>
 
               {/* Swap Direction Divider with Flip Action */}
@@ -991,7 +965,7 @@ export default function SwapToShieldPage() {
                     You Shield (LeanIMT Pool)
                   </span>
                   <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                    Fixed {outputToken.poolDenomination || "0.001 ETH"} / note
+                    Fixed {liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "…"} / note
                   </span>
                 </div>
 
@@ -1005,7 +979,9 @@ export default function SwapToShieldPage() {
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    {calculatedOutput}
+                    {liveDenomination !== null
+                      ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS)
+                      : "Loading live denomination…"}
                   </div>
 
                   {/* Token Button */}
@@ -1036,7 +1012,7 @@ export default function SwapToShieldPage() {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                  <span>≈ ${formatUsd(outputUsd)} USD</span>
+                  <span>Direct ShieldedPool deposit — no swap route yet</span>
                   <span style={{ color: "var(--color-muted)", fontSize: "11px" }}>
                     Groth16 Client Witness
                   </span>
@@ -1054,7 +1030,7 @@ export default function SwapToShieldPage() {
               {/* Main Action Button */}
               <button
                 onClick={handleBuyAndShield}
-                disabled={isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0))}
+                disabled={isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination))}
                 className="group active:scale-[0.99] transition-all"
                 style={{
                   width: "100%",
@@ -1070,8 +1046,8 @@ export default function SwapToShieldPage() {
                   border: "none",
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
-                  cursor: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0)) ? "not-allowed" : "pointer",
-                  opacity: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0)) ? 0.45 : 1,
+                  cursor: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? "not-allowed" : "pointer",
+                  opacity: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? 0.45 : 1,
                   boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
                   transition: "all var(--duration-fast)",
                 }}
@@ -1083,6 +1059,8 @@ export default function SwapToShieldPage() {
                     ? "Connect Wallet to Trade"
                     : !inputAmount || parsedInput <= 0
                     ? "Enter Amount"
+                    : !inputMatchesDenomination
+                    ? "Enter Exact Denomination"
                     : "Execute 1-Tx Swap-to-Shield"}
                 </span>
               </button>
@@ -1102,13 +1080,20 @@ export default function SwapToShieldPage() {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>Min Output Received:</span>
+                  <span style={{ color: "var(--color-muted)" }}>You Pay:</span>
                   <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                    {(() => {
-                      const minOut = (parseFloat(calculatedOutput) || 0) * (1 - parseFloat(slippage) / 100);
-                      return outputToken.decimals <= 6 || minOut >= 1000 ? minOut.toFixed(2) : minOut.toFixed(4);
-                    })()} {outputToken.symbol}
+                    {inputAmount} {inputToken.symbol}
                   </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--color-muted)" }}>You Shield:</span>
+                  <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
+                    fixed {liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "Loading live denomination…"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--color-muted)" }}>Slippage:</span>
+                  <span style={{ color: "var(--color-text)", fontWeight: 600 }}>{slippage}%</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--color-muted)" }}>VeilHook Protocol Fee:</span>
@@ -1443,9 +1428,24 @@ export default function SwapToShieldPage() {
                 </button>
               </div>
 
+              <div
+                style={{
+                  padding: "var(--space-3) var(--space-4)",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "rgba(26, 26, 26, 0.025)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "var(--text-caption)",
+                  fontFamily: "monospace",
+                  color: "var(--color-muted)",
+                  lineHeight: 1.6,
+                }}
+              >
+                Shielded Swap needs a liquid v4 route plus full Groth16 binding — available after F3/F4. Your funds stay safe in the pool, use Withdraw for now.
+              </div>
+
               <button
                 onClick={handleShieldedSwap}
-                disabled={isExecuting || notes.length === 0}
+                disabled
                 className="group active:scale-[0.99] transition-all"
                 style={{
                   width: "100%",
@@ -1461,8 +1461,8 @@ export default function SwapToShieldPage() {
                   border: "none",
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
-                  cursor: isExecuting || notes.length === 0 ? "not-allowed" : "pointer",
-                  opacity: isExecuting || notes.length === 0 ? 0.45 : 1,
+                  cursor: "not-allowed",
+                  opacity: 0.45,
                   boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
                   transition: "all var(--duration-fast)",
                 }}
@@ -1994,6 +1994,7 @@ export default function SwapToShieldPage() {
         onSelectToken={(token) => setInputToken(token)}
         selectedSymbol={inputToken.symbol}
         balances={tokenBalances}
+        disabledSymbols={["VEIL"]}
       />
 
       <TokenSelectModal
@@ -2002,6 +2003,7 @@ export default function SwapToShieldPage() {
         onSelectToken={(token) => setOutputToken(token)}
         selectedSymbol={outputToken.symbol}
         balances={tokenBalances}
+        disabledSymbols={["VEIL"]}
       />
 
       <SlippageSettingsModal

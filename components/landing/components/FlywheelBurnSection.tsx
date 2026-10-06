@@ -1,48 +1,134 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { formatEther, parseAbiItem, type Address } from "viem";
+import { publicClient } from "@/lib/balances";
+import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
 import { SectionHeader } from "./SectionHeader";
 import { RevealBox } from "./RevealBox";
 import { CountUp } from "./CountUp";
 
+const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
+  "0x1b631ab61b99b364e3a880bd43adfe1b665bce16") as Address;
+const HOOK_ADDRESS = (CONTRACT_ADDRESSES.hook ||
+  "0x5b2e52fe4f54327d8272327d12e47cba834360c4") as Address;
+const EXPLORER = "https://explorer.mainnet.chain.robinhood.com";
+
+// Event name verified in lib/veil-artifact.ts VEIL_TREASURY_ABI — never invented.
+const TOKENS_BURNED_EVENT = parseAbiItem(
+  "event TokensBurned(uint256 amount, uint256 totalBurnedCumulative)"
+);
+
 interface BurnEvent {
   txHash: string;
   amount: string;
-  source: "VeilHook Protocol Fee" | "Pons Creator Fee";
+  source: "VeilTreasury burn";
   timestamp: string;
   blockNumber: number;
 }
 
+function formatVeil(raw: bigint): string {
+  const n = Number(formatEther(raw));
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} VEIL`;
+}
+
+function formatEth(raw: bigint): string {
+  const n = Number(formatEther(raw));
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH`;
+}
+
 export const FlywheelBurnSection: React.FC = () => {
   const [copiedTx, setCopiedTx] = useState<string | null>(null);
+  const [totalBurned, setTotalBurned] = useState<string | null>(null);
+  const [totalFeeVolume, setTotalFeeVolume] = useState<string | null>(null);
+  const [treasuryBalance, setTreasuryBalance] = useState<string | null>(null);
+  const [feeBps, setFeeBps] = useState<bigint | null>(null);
+  const [buybackBps, setBuybackBps] = useState<bigint | null>(null);
+  const [burnHistory, setBurnHistory] = useState<BurnEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rpcError, setRpcError] = useState(false);
 
-  const totalBurned = "12,450,000 VEIL";
-  const totalBuybackEth = "3.42 ETH";
-  const currentTreasuryBalance = "0.85 ETH";
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const [burned, fees, balance, hookFee, bps, logs] = await Promise.all([
+          publicClient.readContract({
+            address: TREASURY_ADDRESS,
+            abi: CONTRACT_ABIS.VeilTreasury,
+            functionName: "totalBurned",
+          }),
+          publicClient.readContract({
+            address: TREASURY_ADDRESS,
+            abi: CONTRACT_ABIS.VeilTreasury,
+            functionName: "totalFeeReceived",
+          }),
+          publicClient.getBalance({ address: TREASURY_ADDRESS }),
+          publicClient.readContract({
+            address: HOOK_ADDRESS,
+            abi: CONTRACT_ABIS.VeilHook,
+            functionName: "feeBps",
+          }),
+          publicClient.readContract({
+            address: TREASURY_ADDRESS,
+            abi: CONTRACT_ABIS.VeilTreasury,
+            functionName: "buybackShareBps",
+          }),
+            publicClient.getLogs({
+            address: TREASURY_ADDRESS,
+            event: TOKENS_BURNED_EVENT,
+            fromBlock: 80614838n,
+          }),
+        ]);
 
-  const burnHistory: BurnEvent[] = [
-    {
-      txHash: "0x2e2b78ee1f88027a74bfcd6243b5282b6670e77a0f0754f1f715fa3033ea7e7f",
-      amount: "2,500,000 VEIL",
-      source: "VeilHook Protocol Fee",
-      timestamp: "2026-10-04 18:24 UTC",
-      blockNumber: 74493182,
-    },
-    {
-      txHash: "0xdd8d74717fb0b0cedd3d72d9dad001337c1220858732eacc76cdd45bf7986537",
-      amount: "4,100,000 VEIL",
-      source: "Pons Creator Fee",
-      timestamp: "2026-10-03 14:10 UTC",
-      blockNumber: 74492346,
-    },
-    {
-      txHash: "0xe1d56d831c4ea6305d1c47c5298fce39f335e50954b8086e03b2764609d94c50",
-      amount: "5,850,000 VEIL",
-      source: "VeilHook Protocol Fee",
-      timestamp: "2026-10-02 09:45 UTC",
-      blockNumber: 74484139,
-    },
-  ];
+        const latest = logs.slice(-25).reverse();
+        const rows: BurnEvent[] = await Promise.all(
+          latest.map(async (l) => {
+            const blockNum = Number(l.blockNumber ?? 0n);
+            let timestamp = `Block ${blockNum}`;
+            try {
+              if (l.blockNumber !== undefined && l.blockNumber !== null) {
+                const block = await publicClient.getBlock({ blockNumber: l.blockNumber });
+                timestamp = new Date(Number(block.timestamp) * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
+              }
+            } catch {
+              timestamp = `Block ${blockNum}`;
+            }
+            return {
+              txHash: l.transactionHash ?? "",
+              amount: formatVeil(l.args.amount ?? 0n),
+              source: "VeilTreasury burn" as const,
+              timestamp,
+              blockNumber: blockNum,
+            };
+          })
+        );
+
+        if (mounted) {
+          setTotalBurned(formatVeil(burned));
+          setTotalFeeVolume(formatEth(fees));
+          setTreasuryBalance(formatEth(balance));
+          setFeeBps(hookFee);
+          setBuybackBps(bps);
+          setBurnHistory(rows);
+          setLoading(false);
+          setRpcError(false);
+        }
+      } catch (e) {
+        console.warn("Flywheel section read failed:", e);
+        if (mounted) {
+          setLoading(false);
+          setRpcError(true);
+        }
+      }
+    }
+    load();
+    const timer = setInterval(load, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const copyToClipboard = (tx: string) => {
     navigator.clipboard.writeText(tx);
@@ -61,6 +147,17 @@ export const FlywheelBurnSection: React.FC = () => {
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />
+
+        {loading && (
+          <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
+            Loading live state…
+          </p>
+        )}
+        {rpcError && (
+          <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "#b45309" }}>
+            RPC unreachable, retrying…
+          </p>
+        )}
 
         {/* KPI Metrics Cards */}
         <RevealBox
@@ -102,7 +199,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 letterSpacing: "-0.01em",
               }}
             >
-              <CountUp value={totalBurned} />
+              <CountUp value={totalBurned ?? "—"} />
             </div>
             <span
               style={{
@@ -136,7 +233,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 color: "var(--color-faint)",
               }}
             >
-              Cumulative Buyback Volume
+              Cumulative Fee Volume
             </span>
             <div
               style={{
@@ -147,7 +244,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 letterSpacing: "-0.01em",
               }}
             >
-              <CountUp value={totalBuybackEth} />
+              <CountUp value={totalFeeVolume ?? "—"} />
             </div>
             <span
               style={{
@@ -191,7 +288,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 letterSpacing: "-0.01em",
               }}
             >
-              <CountUp value={currentTreasuryBalance} />
+              <CountUp value={treasuryBalance ?? "—"} />
             </div>
             <span
               style={{
@@ -200,7 +297,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Accumulating for Next Epoch
+              {buybackBps === null ? "Accumulating for Next Epoch" : `${Number(buybackBps) / 100}% buyback share · Accumulating for Next Epoch`}
             </span>
           </div>
         </RevealBox>
@@ -306,7 +403,7 @@ export const FlywheelBurnSection: React.FC = () => {
                       fontWeight: 600,
                     }}
                   >
-                    <CountUp value="30" /> BPS
+                    <CountUp value={feeBps === null ? "—" : String(feeBps)} /> BPS
                   </span>
                   <span style={{ fontFamily: "var(--font-headline)", fontSize: "var(--text-h4)", color: "var(--color-text)", fontWeight: 600 }}>
                     VeilHook Protocol Fee
@@ -381,6 +478,11 @@ export const FlywheelBurnSection: React.FC = () => {
               </div>
             </div>
 
+            {burnHistory.length === 0 ? (
+              <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
+                {loading ? "Loading live state…" : "No burns yet — 0"}
+              </p>
+            ) : (
             <div
               className="lp-card"
               style={{
@@ -498,7 +600,7 @@ export const FlywheelBurnSection: React.FC = () => {
                       {/* Explorer Link */}
                       <div style={{ textAlign: "right" }}>
                         <a
-                          href={`https://explorer.mainnet.chain.robinhood.com/tx/${event.txHash}`}
+                          href={`${EXPLORER}/tx/${event.txHash}`}
                           target="_blank"
                           rel="noreferrer"
                           style={{
@@ -523,6 +625,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </RevealBox>
       </div>
