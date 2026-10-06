@@ -15,7 +15,12 @@
     "deploy:mainnet": "node scripts/deploy.mjs --mainnet",
     "test:testnet": "node scripts/testnet-e2e.mjs",
     "relay:withdraw": "node scripts/relay-withdraw.mjs",
-    "test:shield": "node scripts/mainnet-shield-e2e.mjs"
+    "test:shield": "node scripts/mainnet-shield-e2e.mjs",
+    "compile:veiltoken": "node scripts/compile-veiltoken.mjs",
+    "deploy:veiltoken": "node scripts/deploy-veiltoken.mjs --testnet",
+    "deploy:veiltoken:mainnet": "node scripts/deploy-veiltoken.mjs --mainnet",
+    "wire:treasury": "node scripts/wire-treasury-testnet.mjs",
+    "verify:veiltoken": "node scripts/verify-veiltoken.mjs --testnet"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.4.0",

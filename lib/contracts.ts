@@ -28,4 +28,7 @@ export const CONTRACT_ADDRESSES = {
   registry: process.env.NEXT_PUBLIC_VEIL_ATTESTATION_REGISTRY || "0x411fb0c695152ea02ef48b96940c2b2fef656b7c",
   verifier: process.env.NEXT_PUBLIC_SHIELDED_VERIFIER || "0x12b20b346342d2fc5272f0f708bcd5abaac480fb",
   deployer: process.env.NEXT_PUBLIC_VEIL_CREATE2_DEPLOYER || "0x3d1613651c366ce53fd64bada154d1b951b9233f",
+  // Temporary VeilToken (testnet 0x6f79e2af86e316beb999efacf3bab91c66d913fe).
+  // Empty until the canonical token deploys; UI shows "—" and disables VEIL.
+  token: process.env.NEXT_PUBLIC_VEIL_TOKEN || "",
 } as const;

@@ -10,7 +10,9 @@ describe("Contract address source", () => {
     expect(CONTRACT_ADDRESSES.registry).toBe("0x411fb0c695152ea02ef48b96940c2b2fef656b7c");
     expect(CONTRACT_ADDRESSES.verifier).toBe("0x12b20b346342d2fc5272f0f708bcd5abaac480fb");
     expect(CONTRACT_ADDRESSES.deployer).toBe("0x3d1613651c366ce53fd64bada154d1b951b9233f");
-    for (const addr of Object.values(CONTRACT_ADDRESSES)) {
+    for (const [key, addr] of Object.entries(CONTRACT_ADDRESSES)) {
+      // token is empty until the canonical token deploys (NEXT_PUBLIC_VEIL_TOKEN).
+      if (key === "token" && addr === "") continue;
       expect(addr).toMatch(/^0x[0-9a-fA-F]{40}$/);
     }
   });

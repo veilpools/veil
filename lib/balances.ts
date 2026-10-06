@@ -47,6 +47,9 @@ export async function fetchAllTokenBalances(
   }
 
   // 2. Fetch ERC20 balances in parallel
+  for (const t of tokens) {
+    if (!t.address) result[t.symbol] = "—";
+  }
   const promises = tokens
     .filter((t) => t.symbol !== "ETH" && t.address && t.address !== "0x0000000000000000000000000000000000000000")
     .map(async (token) => {

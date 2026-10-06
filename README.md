@@ -83,6 +83,21 @@
 - **Live ZK Withdrawal:** [`0xe2fc81edc64eeab55c8837e93637b8cc36334ad1a885534e2ba4d658b0b26f4e`](https://explorer.testnet.chain.robinhood.com/tx/0xe2fc81edc64eeab55c8837e93637b8cc36334ad1a885534e2ba4d658b0b26f4e)
 - **Attestation Registry Proof:** [`0xefb9475ce25739dfbb4270424ef4605fec30bc95676bbe96d3a0726facd18ccc`](https://explorer.testnet.chain.robinhood.com/tx/0xefb9475ce25739dfbb4270424ef4605fec30bc95676bbe96d3a0726facd18ccc)
 
+### 🪙 Temporary VeilToken (Testnet, End-to-End Burn Proven 2026-10-06)
+
+Temporary protocol token for end-to-end testing (1B fixed supply, self-burn). The canonical token launches on Pons.
+
+| Item | Value |
+|---|---|
+| **VeilToken** | [`0x6f79e2af86e316beb999efacf3bab91c66d913fe`](https://explorer.testnet.chain.robinhood.com/address/0x6f79e2af86e316beb999efacf3bab91c66d913fe) |
+| **Deploy Tx** | [`0x365b905a6cd4390d326dd0182def223e3f04bb98acdb40ee828a38c632f68c7e`](https://explorer.testnet.chain.robinhood.com/tx/0x365b905a6cd4390d326dd0182def223e3f04bb98acdb40ee828a38c632f68c7e) |
+| **setVeilToken** | [`0xf773ae17ce0e4563dcf95abf8e2644ce23c3a3737520e5a6ce2271b9d90c6e63`](https://explorer.testnet.chain.robinhood.com/tx/0xf773ae17ce0e4563dcf95abf8e2644ce23c3a3737520e5a6ce2271b9d90c6e63) |
+| **Treasury Fund (10,000 VEIL)** | [`0x699e8417e432dfb95a93817eacdb28bf8b5a07adda1f6426ba851081af53d667`](https://explorer.testnet.chain.robinhood.com/tx/0x699e8417e432dfb95a93817eacdb28bf8b5a07adda1f6426ba851081af53d667) |
+| **executeBurn (1,000 VEIL)** | [`0x3df1259e80af32936cbc086688c150e8aef437c9f835dd249d055705709d64af`](https://explorer.testnet.chain.robinhood.com/tx/0x3df1259e80af32936cbc086688c150e8aef437c9f835dd249d055705709d64af) |
+| **Supply** | 1,000,000,000 → 999,999,000 (`totalBurned` = 1,000, `buybackShareBps` = 7000) |
+
+> Mainnet repeat is ready (`pnpm deploy:veiltoken:mainnet`) but blocked on funding: deployer `0xCdbdc82A021071eE445d9f897433a7E4B4EAfD8d` holds 0 ETH on mainnet 4663. Source verification on the testnet explorer is pending (instance verifier rejects valid builds; local build proven byte-identical).
+
 ---
 
 ## 🔐 Client-Side Security & Note Privacy
