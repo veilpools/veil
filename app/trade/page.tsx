@@ -127,9 +127,12 @@ import {
   buildSelfRelayShieldedSwapArgs,
   getShieldedSwapRouteStatus,
   isShieldedSwapExecuteDisabled,
+  readShieldedSwapRouteStatusLive,
   selectShieldedSwapRelayPath,
   shieldedSwapPendingMessage,
+  SHIELDED_SWAP_DESTINATION_POOL,
   SHIELDED_SWAP_ROUTER,
+  SHIELDED_SWAP_SOURCE_DENOMINATION,
   SHIELDED_SWAP_SOURCE_POOL,
 } from "../../lib/shielded-swap-ui";
 import {
@@ -1331,12 +1334,14 @@ export default function SwapToShieldPage() {
   // hardcoded minOut: a zero-floor eth_call simulation returns the live
   // output first, then minAmountOut derives from it and the user's slippage.
   //
-  // R3 feasibility gate (load-bearing, verified onchain 2026-10-07): the
-  // destination pool MUST exist. Only ShieldedPool_ETH is deployed on
-  // testnet, so getShieldedSwapRouteStatus() reports executable: false and
-  // this handler fails closed with the honest pending state — never a fake
-  // swap. The post-gate execution path below is real (not stubbed) and runs
-  // unchanged once a destination pool deploys.
+  // R3 live gate (load-bearing, Task 4b): the pools MUST exist AND be unpaused
+  // onchain, and the v4 route must be liquid — enforced by
+  // readShieldedSwapRouteStatusLive below, never by config alone.
+  // Executable direction is VEIL -> ETH (zeroForOne=false): the ETH -> VEIL
+  // direction cannot settle native input through the deployed router (proven
+  // onchain 2026-10-07, "eth settle failed" — see task-4b-report.md), so the
+  // source is always a VEIL pool and the destination the legacy ETH pool.
+  // The post-gate execution path below is real (not stubbed).
   async function handleShieldedSwap() {
     setFlowError(null);
     if (!connectedAddress) {
@@ -1366,6 +1371,23 @@ export default function SwapToShieldPage() {
       return;
     }
     const destination = route.destination;
+
+    // LIVE-READ enforcement (Task 4b R2, fixes T4 I-1): re-read every known
+    // pool onchain (denomination/asset/paused) plus v4 route liquidity before
+    // building any params. Config alone never enables execution.
+    // (No T2-quote quoter here by design: the connected wallet may hold its
+    // funds shielded with no loose VEIL, which would make the quoter revert
+    // for a funded user. The binding route proof is the zero-floor
+    // shieldedSwap simulation of the exact calldata in step 2 — the same
+    // eth_call pattern as the T2 quote path.)
+    const liveGate = await readShieldedSwapRouteStatusLive(publicClient);
+    if (!liveGate.executable) {
+      setFlowError(
+        liveGate.reason ??
+          "Shielded swap is not executable against live chain state right now. No transaction was sent."
+      );
+      return;
+    }
 
     const noteToSwap = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
     // Router interface gate: shieldedSwap spends via
@@ -1421,7 +1443,7 @@ export default function SwapToShieldPage() {
     try {
       const guards = await readSwapGuards(publicClient, route.sourcePool);
       if (guards.paused) {
-        throw new Error("Shielded ETH source pool deposits are paused. No transaction was sent.");
+        throw new Error("Shielded source pool deposits are paused. No transaction was sent.");
       }
       if (noteToSwap.denomination !== guards.denomination) {
         throw new Error(
@@ -1481,7 +1503,9 @@ export default function SwapToShieldPage() {
       setProverCommitment(secrets.commitment);
 
       // Live output simulation with a zero floor, then slippage-bound params.
-      selectShieldedSwapRelayPath();
+      // M-2 fix: the relay selection is USED — its relayerFee flows into both
+      // param builds instead of being discarded.
+      const relaySelection = selectShieldedSwapRelayPath();
       const simParams = buildSelfRelayShieldedSwapArgs({
         note: noteToSwap,
         proof: withdrawArgs.proof,
@@ -1490,6 +1514,7 @@ export default function SwapToShieldPage() {
         slippagePercent: 0,
         newCommitment: secrets.commitment,
         poolDestination: destination,
+        relayerFee: relaySelection.relayerFee,
       });
       const walletClient = createWalletClient({
         account: connectedAddress,
@@ -1517,6 +1542,7 @@ export default function SwapToShieldPage() {
         slippagePercent: slippagePct,
         newCommitment: secrets.commitment,
         poolDestination: destination,
+        relayerFee: relaySelection.relayerFee,
       });
       setIsShieldedProving(false);
       setProverSteps((prev) => [
@@ -2100,9 +2126,10 @@ export default function SwapToShieldPage() {
 
   const activeNoteItem = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
 
-  // Task 4 route status (config-driven, no RPC in render): the planned
-  // shielded-swap route plus the honest destination-pool pending state while
-  // testnet deploys only one legacy pool (R3 feasibility exit).
+  // Task 4b route status (config-driven, no RPC in render): the planned
+  // VEIL -> ETH shielded-swap route. Execution itself is enforced by the LIVE
+  // gate inside handleShieldedSwap (onchain pool reads + route liquidity),
+  // so render never enables a swap the chain cannot serve.
   const shieldedSwapRoute = getShieldedSwapRouteStatus();
   const shieldedSwapDisabled = isShieldedSwapExecuteDisabled({
     isExecuting: isShieldedSwapping,
@@ -3449,9 +3476,11 @@ export default function SwapToShieldPage() {
                 </button>
               </div>
 
-              {/* Planned route + honest pending state (Task 4, R3): the router
-                  path is real but the destination pool is not deployed yet,
-                  so execution stays disabled and no swap is faked. */}
+              {/* Live route (Task 4b): VEIL -> ETH via the router. Source and
+                  destination are config labels (live values are re-read inside
+                  the execution handler); only the executable direction is
+                  shown — an ETH source can never settle through the deployed
+                  router (see task-4b-report.md). */}
               <div
                 role="status"
                 style={{
@@ -3467,21 +3496,23 @@ export default function SwapToShieldPage() {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                  <span style={{ color: "var(--color-muted)" }}>Source (live):</span>
+                  <span style={{ color: "var(--color-muted)" }}>Source (config):</span>
                   <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" }}>
-                    {`ShieldedPool_ETH ${SHIELDED_SWAP_SOURCE_POOL.slice(0, 6)}…${SHIELDED_SWAP_SOURCE_POOL.slice(-4)} · 0.001 ETH/note`}
+                    {`ShieldedPool_VEIL2 ${SHIELDED_SWAP_SOURCE_POOL.slice(0, 6)}…${SHIELDED_SWAP_SOURCE_POOL.slice(-4)} · ${formatEther(SHIELDED_SWAP_SOURCE_DENOMINATION)} VEIL/note`}
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                   <span style={{ color: "var(--color-muted)" }}>Swap leg:</span>
                   <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
-                    v4 ETH/VEIL 0.3% via shieldedSwap
+                    v4 VEIL/ETH 0.3% via shieldedSwap
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                   <span style={{ color: "var(--color-muted)" }}>Destination:</span>
-                  <span style={{ color: "var(--color-accent-ink)", fontWeight: 600, textAlign: "right" }}>
-                    Pending — no second shielded pool on testnet
+                  <span style={{ color: "var(--color-accent-ink)", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" }}>
+                    {shieldedSwapRoute.destination
+                      ? `ShieldedPool_ETH ${SHIELDED_SWAP_DESTINATION_POOL.slice(0, 6)}…${SHIELDED_SWAP_DESTINATION_POOL.slice(-4)} · 0.001 ETH/note`
+                      : "Pending — no second shielded pool on testnet"}
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
@@ -3493,7 +3524,8 @@ export default function SwapToShieldPage() {
                 <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
                   No hosted relayer service exists on testnet — and none is claimed. If the
                   relayer path ever goes down, this self-relay path is the fallback (§7 #6).
-                  Your funds stay safe in the pool; use Withdraw for now.
+                  Execution re-checks both pools and the route live before sending; your
+                  spent note rolls into a new ETH note in your vault.
                 </span>
                 {shieldedSwapTxHash && (
                   <span style={{ overflowWrap: "anywhere" }}>

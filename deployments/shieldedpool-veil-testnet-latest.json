@@ -1,0 +1,38 @@
+{
+  "network": "Robinhood Testnet",
+  "chainId": 46630,
+  "deployedAt": "2026-10-07T15:16:56.052Z",
+  "deployer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "contracts": {
+    "ShieldedPool_VEIL": {
+      "address": "0xd73920a3cbfdf3f6be530cab73fc9c876619517a",
+      "tx": "0xb96c12927fa3a08582092cb4a28056ca24cfdaa8dcfdde24d8a23960dbbab8d6",
+      "blockNumber": 130567965,
+      "args": {
+        "asset": "0x019086f63407fadf0ccb89516e465baef5031aa9",
+        "verifier": "0xab9dd89A3B16DB81140D6a5842A439de6f4969b6",
+        "denomination": "500000000000000000",
+        "poolCap": "5000000000000000000000",
+        "associationRoot": "0x2188824287183927522224640574525727508854836440041603434369820418",
+        "guardian": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d"
+      },
+      "mirrors": {
+        "pool": "ShieldedPool_ETH",
+        "address": "0x1b1d39e4da649747ecc0e93e7a06452a3061de17",
+        "verifier": "0xab9dd89A3B16DB81140D6a5842A439de6f4969b6",
+        "associationRoot": "0x2188824287183927522224640574525727508854836440041603434369820418",
+        "depositsUnpaused": true
+      },
+      "router": "0xb1baee8d519a7a2edbaff99eec0ba10948670d68",
+      "sizing": {
+        "impliedVeilPerEth": 1055.319,
+        "impliedPointZeroZeroOneEthOutputVeil": 1.0553,
+        "v4Tick": 69619,
+        "v4Liquidity": "301001000000000000"
+      },
+      "gasUsed": "1337535",
+      "gasPriceWei": "10000000"
+    }
+  },
+  "status": "completed"
+}

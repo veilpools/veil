@@ -1,0 +1,63 @@
+{
+  "network": "Robinhood Testnet",
+  "chainId": 46630,
+  "ranAt": "2026-10-07T(recovered-from-chain)",
+  "deployer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "router": "0xb1baee8d519a7a2edbaff99eec0ba10948670d68",
+  "direction": "VEIL -> ETH (zeroForOne=false; ETH-input direction is contract-blocked, see task-4b-report.md)",
+  "poolSource": "0x172e9cc542cf9349813f74548eec6e0a1df65e17",
+  "poolDestination": "0x1b1d39e4da649747ecc0e93e7a06452a3061de17",
+  "liveSimOutputWei": "1569433509894083",
+  "minAmountOutWei": "1561586342344612",
+  "slippagePercent": 0.5,
+  "txs": {
+    "approve": {
+      "hash": "0xaf81af92c4c043655b3805b0a00f8d91fbed081286971405326d5280e401b598",
+      "blockNumber": 130570420
+    },
+    "deposit": {
+      "hash": "0x96c6ff58d58ba69843eabc6fc18b9bd1c560a68a2756aed290b1144ed828d6a8",
+      "blockNumber": 130570427
+    },
+    "shieldedSwap": {
+      "hash": "0xca96165662271da1a883f7cf4e8da6fbc49d8388ecaf194d62b261807a248a84",
+      "blockNumber": 130570448
+    }
+  },
+  "assertions": {
+    "event": {
+      "relayer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+      "nullifierHash": "0xf0e548ced4775f77453d5c767d6435a38eb2c2a2bf6fb77f18584c3e492fb1f0",
+      "newCommitment": "0x32f92e236ec3e082f7700b90e6dc881ee4e145f0fd6904c056e65e294783b95e",
+      "amountOut": "1569433509894083"
+    },
+    "destNextIndexBefore": 3,
+    "destNextIndexAfter": 4,
+    "srcNextIndexAfter": 1,
+    "routerEthAfter": "0",
+    "routerVeilAfter": "0",
+    "sourceNullifierSpent": true
+  },
+  "sourceNote": {
+    "commitment": "0xff39f9af31c6e524cdf491314e9f9f35d2402f1e317cabc73f2d596d4e15fc32",
+    "nullifierHash": "0xf0e548ced4775f77453d5c767d6435a38eb2c2a2bf6fb77f18584c3e492fb1f0",
+    "denomination": "2000000000000000000",
+    "asset": "0x019086f63407fadf0ccb89516e465baef5031aa9",
+    "nullifier": "LOST (run crashed before persisting secrets; nullifier already spent, secrets useless)",
+    "secret": "LOST (see above)"
+  },
+  "destNote": {
+    "commitment": "0x32f92e236ec3e082f7700b90e6dc881ee4e145f0fd6904c056e65e294783b95e",
+    "denomination": "1000000000000000",
+    "asset": "0x0000000000000000000000000000000000000000",
+    "nullifier": "LOST (run crashed before persisting secrets; 0.001 test ETH locked as unspendable note)",
+    "secret": "LOST (see above)"
+  },
+  "cycleGasWei": "7812580000000",
+  "explorer": {
+    "approve": "https://explorer.testnet.chain.robinhood.com/tx/0xaf81af92c4c043655b3805b0a00f8d91fbed081286971405326d5280e401b598",
+    "deposit": "https://explorer.testnet.chain.robinhood.com/tx/0x96c6ff58d58ba69843eabc6fc18b9bd1c560a68a2756aed290b1144ed828d6a8",
+    "shieldedSwap": "https://explorer.testnet.chain.robinhood.com/tx/0xca96165662271da1a883f7cf4e8da6fbc49d8388ecaf194d62b261807a248a84"
+  },
+  "status": "completed (manifest recovered from chain; all assertions re-verified)"
+}
