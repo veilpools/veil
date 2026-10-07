@@ -41,6 +41,13 @@ export function isBowNote(note: unknown): note is BowShieldedNote {
   return typeof note === "object" && note !== null && (note as BowShieldedNote).type === "0xbow";
 }
 
+export type WithdrawPath = "0xbow" | "legacy";
+
+/** Pure withdraw-path router: 0xbow notes take the Groth16 path, everything else legacy. */
+export function getWithdrawPath(note: AnyShieldedNote): WithdrawPath {
+  return isBowNote(note) ? "0xbow" : "legacy";
+}
+
 export function generateRandomBytes32(): `0x${string}` {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);

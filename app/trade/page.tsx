@@ -20,6 +20,7 @@ import {
   createBowDepositSecrets,
   createBowNote,
   isBowNote,
+  getWithdrawPath,
   serializeNotesList,
   deserializeNotesList,
   type ShieldedNote,
@@ -469,6 +470,10 @@ export default function SwapToShieldPage() {
         if (!ownLog) throw new Error("Could not find Deposited log in deposit transaction block.");
 
         const label = BigInt(ownLog.args._label ?? 0n);
+        const onchainValue = BigInt(ownLog.args._value ?? 0n);
+        if (onchainValue !== depositDenomination) {
+          throw new Error("Deposited value mismatch: onchain event does not match the 0.001 ETH denomination.");
+        }
         const bowNote = createBowNote({
           scope,
           denomination: depositDenomination,
@@ -481,7 +486,14 @@ export default function SwapToShieldPage() {
           chainId: TESTNET_CHAIN_ID,
         });
 
+        // Commitment recompute check: locally derived Poseidon commitment must
+        // match the onchain Deposited event (script parity).
+        if (BigInt(bowNote.commitmentHash) !== BigInt(ownLog.args._commitment ?? 0n)) {
+          throw new Error("Commitment derivation mismatch between local note and onchain event.");
+        }
+
         setSelectedNote(bowNote);
+        setProverCommitment(bowNote.commitmentHash);
         saveNoteLocally(bowNote);
 
         fetch("/api/asp/sync", {
@@ -635,8 +647,12 @@ export default function SwapToShieldPage() {
 
     const noteToWithdraw = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
 
+    // Route by note kind: 0xbow notes take the Groth16 testnet path, legacy
+    // keccak notes take the legacy path. Never mix the two.
+    const withdrawPath = getWithdrawPath(noteToWithdraw);
     const connectedChainId = await getConnectedChainId(activeProvider);
-    const useTestnetBow = connectedChainId === TESTNET_CHAIN_ID && isTestnetBowConfigured();
+    const useTestnetBow =
+      withdrawPath === "0xbow" && connectedChainId === TESTNET_CHAIN_ID && isTestnetBowConfigured();
 
     // 0xbow testnet (46630) path: real Groth16 SDK flow, no Mock verifier.
     if (useTestnetBow) {
@@ -671,13 +687,13 @@ export default function SwapToShieldPage() {
       try {
         if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
 
-        if (!isBowNote(noteToWithdraw)) {
+        if (withdrawPath !== "0xbow" || !isBowNote(noteToWithdraw)) {
           throw new Error(
-            "The selected note is a legacy mock note. Please select a 0xbow shielded note (0.001 ETH) created on testnet."
+            "The selected note is a legacy note. Please select a 0xbow shielded note (0.001 ETH) created on testnet."
           );
         }
 
-        const bowNote = noteToWithdraw as BowShieldedNote;
+        const bowNote = noteToWithdraw;
         setProverCommitment(bowNote.commitmentHash);
 
         const testnetClient = createTestnetBowPublicClient();
@@ -716,7 +732,7 @@ export default function SwapToShieldPage() {
         ]);
 
         // Fetch pool events to build State Tree and Association Set
-        const { orderedCommitments, labels } = await fetchBowPoolEvents(
+        let { orderedCommitments, labels } = await fetchBowPoolEvents(
           testnetClient,
           TESTNET_0XBOW.pool
         );
@@ -727,26 +743,46 @@ export default function SwapToShieldPage() {
           );
         }
 
-        const stateTree = buildBowStateTree(orderedCommitments);
-        const aspSet = buildBowAssociationSet(labels);
+        let stateTree = buildBowStateTree(orderedCommitments);
+        let aspSet = buildBowAssociationSet(labels);
 
         if (!aspSet.labels.includes(label)) {
           throw new Error("Deposit label not found in Association Set. Try syncing ASP.");
         }
 
-        const onchainAspRoot = await testnetClient.readContract({
+        let onchainAspRoot = await testnetClient.readContract({
           address: TESTNET_0XBOW.entrypointProxy,
           abi: BOW_ENTRYPOINT_RELAY_ABI,
           functionName: "latestRoot",
         });
 
         if (aspSet.root !== BigInt(onchainAspRoot)) {
-          // Re-sync ASP onchain
+          // Re-sync ASP onchain, then re-read (never prove against a stale root).
           await fetch("/api/asp/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
           });
+          const refreshed = await fetchBowPoolEvents(testnetClient, TESTNET_0XBOW.pool);
+          orderedCommitments = refreshed.orderedCommitments;
+          labels = refreshed.labels;
+          if (!orderedCommitments.includes(commitmentHash)) {
+            throw new Error(
+              "Deposit commitment not found in onchain state tree after ASP re-sync."
+            );
+          }
+          stateTree = buildBowStateTree(orderedCommitments);
+          aspSet = buildBowAssociationSet(labels);
+          onchainAspRoot = await testnetClient.readContract({
+            address: TESTNET_0XBOW.entrypointProxy,
+            abi: BOW_ENTRYPOINT_RELAY_ABI,
+            functionName: "latestRoot",
+          });
+          if (aspSet.root !== BigInt(onchainAspRoot)) {
+            throw new Error(
+              "Association Set root is not synced onchain. Wait for the ASP sync transaction to confirm and try again."
+            );
+          }
         }
 
         const stateMerkleProof = stateTree.proof(commitmentHash);
@@ -760,9 +796,21 @@ export default function SwapToShieldPage() {
           scope,
         });
 
+        // Local spend context: register the deposited note first (script parity
+        // with addPoolAccount), otherwise createWithdrawalSecrets throws
+        // AccountError commitmentNotFound on the empty fresh service.
         const accountService = new AccountService(null as any, {
           mnemonic: generateMnemonic(english, 256),
         });
+        accountService.addPoolAccount(
+          scope as never,
+          denomination,
+          nullifier as never,
+          secret as never,
+          label as never,
+          BigInt(bowNote.blockNumber),
+          bowNote.txHash as `0x${string}`
+        );
 
         const commitmentObj: AccountCommitment = {
           hash: commitmentHash as never,
@@ -871,6 +919,15 @@ export default function SwapToShieldPage() {
       } finally {
         setIsExecuting(false);
       }
+      return;
+    }
+
+    // A 0xbow note outside the testnet path never enters the legacy pool:
+    // fail closed with directions instead of sending it to the wrong verifier.
+    if (withdrawPath === "0xbow") {
+      setFlowError(
+        "This 0xbow note lives on Robinhood Testnet (46630). Switch your wallet to testnet to withdraw it. No transaction was sent."
+      );
       return;
     }
 
