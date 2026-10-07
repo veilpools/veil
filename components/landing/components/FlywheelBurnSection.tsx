@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
-import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, CONTRACT_ABIS, TREASURY_DEPLOYMENT_BLOCK } from "@/lib/contracts";
 import { appChain } from "@/lib/chains";
 import { SectionHeader } from "./SectionHeader";
 import { RevealBox } from "./RevealBox";
@@ -78,7 +78,7 @@ export const FlywheelBurnSection: React.FC = () => {
             publicClient.getLogs({
             address: TREASURY_ADDRESS,
             event: TOKENS_BURNED_EVENT,
-            fromBlock: 80614838n,
+            fromBlock: TREASURY_DEPLOYMENT_BLOCK,
           }),
         ]);
 

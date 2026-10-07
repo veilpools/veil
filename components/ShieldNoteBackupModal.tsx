@@ -3,14 +3,14 @@
 import React, { useState } from "react";
 import { Lock, Download, Copy, Check, X, ShieldAlert } from "lucide-react";
 import { encryptNoteBackup, decryptNoteBackup, type EncryptedNoteBackup } from "../lib/crypto-backup";
-import { serializeNote, deserializeNote, type ShieldedNote } from "../lib/note";
+import { serializeAnyNote, deserializeAnyNote, type AnyShieldedNote } from "../lib/note";
 import { ModalWrapper } from "./ModalWrapper";
 
 interface Props {
-  note: ShieldedNote | null;
+  note: AnyShieldedNote | null;
   isOpen: boolean;
   onClose: () => void;
-  onRestoreNote?: (note: ShieldedNote) => void;
+  onRestoreNote?: (note: AnyShieldedNote) => void;
 }
 
 export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: Props) {
@@ -26,7 +26,7 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
     if (!note) return;
     setError(null);
     try {
-      const raw = serializeNote(note);
+      const raw = serializeAnyNote(note);
       const backup = await encryptNoteBackup(raw, password);
       setEncryptedPayload(JSON.stringify(backup, null, 2));
     } catch (e: unknown) {
@@ -39,7 +39,7 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
     try {
       const backup = JSON.parse(importJson) as EncryptedNoteBackup;
       const decrypted = await decryptNoteBackup(backup, password);
-      const restored = deserializeNote(decrypted);
+      const restored = deserializeAnyNote(decrypted);
       if (onRestoreNote) {
         onRestoreNote(restored);
       }

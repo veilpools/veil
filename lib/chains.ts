@@ -10,7 +10,12 @@ export const robinhoodMainnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_RPC_URL || "https://rpc.mainnet.chain.robinhood.com"],
+      http: [
+        process.env.NEXT_PUBLIC_MAINNET_RPC_URL ||
+        (process.env.NEXT_PUBLIC_RPC_URL && !process.env.NEXT_PUBLIC_RPC_URL.includes("testnet")
+          ? process.env.NEXT_PUBLIC_RPC_URL
+          : "https://rpc.mainnet.chain.robinhood.com"),
+      ],
     },
     public: {
       http: ["https://rpc.mainnet.chain.robinhood.com"],
@@ -34,7 +39,12 @@ export const robinhoodTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_RPC_URL || "https://rpc.testnet.chain.robinhood.com"],
+      http: [
+        process.env.NEXT_PUBLIC_TESTNET_RPC_URL ||
+        (process.env.NEXT_PUBLIC_RPC_URL && !process.env.NEXT_PUBLIC_RPC_URL.includes("mainnet")
+          ? process.env.NEXT_PUBLIC_RPC_URL
+          : "https://rpc.testnet.chain.robinhood.com"),
+      ],
     },
     public: {
       http: ["https://rpc.testnet.chain.robinhood.com"],

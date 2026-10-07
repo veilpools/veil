@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
-import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, CONTRACT_ABIS, TREASURY_DEPLOYMENT_BLOCK } from "@/lib/contracts";
 import { appChain } from "@/lib/chains";
 
 const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
@@ -73,12 +73,12 @@ export default function BurnPage() {
           publicClient.getLogs({
             address: TREASURY_ADDRESS,
             event: TOKENS_BURNED_EVENT,
-            fromBlock: 80614838n,
+            fromBlock: TREASURY_DEPLOYMENT_BLOCK,
           }),
           publicClient.getLogs({
             address: TREASURY_ADDRESS,
             event: FEE_RECEIVED_EVENT,
-            fromBlock: 80614838n,
+            fromBlock: TREASURY_DEPLOYMENT_BLOCK,
           }),
         ]);
 

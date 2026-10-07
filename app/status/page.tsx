@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
-import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, CONTRACT_ABIS, POOL_DEPLOYMENT_BLOCK } from "@/lib/contracts";
 
 const POOL_ADDRESS = (CONTRACT_ADDRESSES.poolEth ||
   "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0") as Address;
@@ -103,12 +103,12 @@ export default function StatusPage() {
           publicClient.getLogs({
             address: POOL_ADDRESS,
             event: DEPOSIT_EVENT,
-            fromBlock: 80614838n,
+            fromBlock: POOL_DEPLOYMENT_BLOCK,
           }),
           publicClient.getLogs({
             address: POOL_ADDRESS,
             event: WITHDRAW_EVENT,
-            fromBlock: 80614838n,
+            fromBlock: POOL_DEPLOYMENT_BLOCK,
           }),
         ]);
 

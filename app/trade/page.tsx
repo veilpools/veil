@@ -15,7 +15,17 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { createShieldedNote, type ShieldedNote } from "../../lib/note";
+import {
+  createShieldedNote,
+  createBowDepositSecrets,
+  createBowNote,
+  isBowNote,
+  serializeNotesList,
+  deserializeNotesList,
+  type ShieldedNote,
+  type BowShieldedNote,
+  type AnyShieldedNote,
+} from "../../lib/note";
 import { ShieldNoteBackupModal } from "../../components/ShieldNoteBackupModal";
 import { ZkShieldRadar } from "../../components/ZkShieldRadar";
 import { TokenSelectModal, SUPPORTED_TOKENS, type TokenItem } from "../../components/TokenSelectModal";
@@ -49,8 +59,15 @@ import {
   createBowSdk,
   createBowWithdrawalContext,
   createTestnetBowPublicClient,
+  buildBowStateTree,
+  fetchBowPoolEvents,
+  fetchBowAspSet,
+  proveBowWithdrawal,
 } from "../../lib/0xbow-client";
 import { fetchPinnedBowArtifact } from "../../lib/0xbow-artifacts";
+import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
+import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
+import { generateMnemonic, english } from "viem/accounts";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
 // Single address source: follows lib/contracts.ts (env override or live mainnet default).
@@ -145,22 +162,10 @@ export function getNoteAssetSymbol(asset?: string): string {
   return match ? match.symbol : "ETH";
 }
 
-function serializeNotesList(noteList: ShieldedNote[]): string {
-  return JSON.stringify(noteList, (_, v) => (typeof v === "bigint" ? v.toString() : v));
-}
-
-function deserializeNotesList(raw: string): ShieldedNote[] {
-  const parsed = JSON.parse(raw);
-  return parsed.map((n: Record<string, unknown>) => ({
-    ...n,
-    denomination: BigInt(n.denomination as string | number),
-  })) as ShieldedNote[];
-}
-
 export default function SwapToShieldPage() {
   const [activeTab, setActiveTab] = useState<"buy_and_shield" | "shielded_swap" | "withdraw" | "vault">("buy_and_shield");
-  const [notes, setNotes] = useState<ShieldedNote[]>([]);
-  const [selectedNote, setSelectedNote] = useState<ShieldedNote | null>(null);
+  const [notes, setNotes] = useState<AnyShieldedNote[]>([]);
+  const [selectedNote, setSelectedNote] = useState<AnyShieldedNote | null>(null);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
 
   // Wallet Modal
@@ -268,6 +273,10 @@ export default function SwapToShieldPage() {
 
   useEffect(() => {
     async function loadDenomination() {
+      if (APP_CHAIN_ID === TESTNET_CHAIN_ID) {
+        setLiveDenomination(1000000000000000n);
+        return;
+      }
       try {
         const denom = await publicClient.readContract({
           address: SHIELDED_POOL_ETH,
@@ -282,8 +291,8 @@ export default function SwapToShieldPage() {
     loadDenomination();
   }, []);
 
-  function saveNoteLocally(newNote: ShieldedNote) {
-    const updated = [newNote, ...notes];
+  function saveNoteLocally(newNote: AnyShieldedNote) {
+    const updated = [newNote, ...notes.filter((n) => n.nullifier !== newNote.nullifier)];
     setNotes(updated);
     setSelectedNoteNullifier(newNote.nullifier);
     if (typeof window !== "undefined") {
@@ -332,38 +341,165 @@ export default function SwapToShieldPage() {
       return;
     }
 
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    const useTestnetBow =
+      (connectedChainId === TESTNET_CHAIN_ID || (!connectedChainId && APP_CHAIN_ID === TESTNET_CHAIN_ID)) &&
+      isTestnetBowConfigured();
+
     setIsExecuting(true);
-    setProverTitle("Executing Shielded Deposit");
+    setProverTitle(useTestnetBow ? "Executing 0xbow Shielded Deposit (Testnet)" : "Executing Shielded Deposit");
     setProverTxHash(null);
     setProverCommitment(null);
 
-    const initialSteps: ZkProverStep[] = [
-      {
-        title: "1. Client-Side Cryptographic Key Derivation",
-        detail: "Generating cryptographically secure secret & nullifier with CSPRNG entropy",
-        status: "running",
-      },
-      {
-        title: "2. Merkle Tree Commitment Construction",
-        detail: "Computing keccak256 commitment for Robinhood privacy pool insertion",
-        status: "pending",
-      },
-      {
-        title: "3. ShieldedPool Deposit Execution",
-        detail: "Depositing fixed-denomination commitment to ShieldedPool_ETH on Robinhood Chain Mainnet",
-        status: "pending",
-      },
-      {
-        title: "4. Settlement & Local Encrypted Vault Storage",
-        detail: "Verifying Merkle root update on Robinhood Chain Mainnet",
-        status: "pending",
-      },
-    ];
+    const initialSteps: ZkProverStep[] = useTestnetBow
+      ? [
+          {
+            title: "1. Client-Side 0xbow Key Derivation",
+            detail: "Deriving nullifier, secret & precommitment using BIP-39 entropy & Poseidon hash",
+            status: "running",
+          },
+          {
+            title: "2. Privacy Pools Precommitment Preparation",
+            detail: "Binding commitment preimage to Testnet Privacy Pool scope",
+            status: "pending",
+          },
+          {
+            title: "3. On-Chain Deposit Execution",
+            detail: "Calling entrypointProxy.deposit() with 0.001 ETH on Robinhood Testnet",
+            status: "pending",
+          },
+          {
+            title: "4. Settlement, ASP Sync & Local Vault Storage",
+            detail: "Confirming block receipt, syncing Association Set & persisting note",
+            status: "pending",
+          },
+        ]
+      : [
+          {
+            title: "1. Client-Side Cryptographic Key Derivation",
+            detail: "Generating cryptographically secure secret & nullifier with CSPRNG entropy",
+            status: "running",
+          },
+          {
+            title: "2. Merkle Tree Commitment Construction",
+            detail: "Computing keccak256 commitment for Robinhood privacy pool insertion",
+            status: "pending",
+          },
+          {
+            title: "3. ShieldedPool Deposit Execution",
+            detail: "Depositing fixed-denomination commitment to ShieldedPool_ETH on Robinhood Chain Mainnet",
+            status: "pending",
+          },
+          {
+            title: "4. Settlement & Local Encrypted Vault Storage",
+            detail: "Verifying Merkle root update on Robinhood Chain Mainnet",
+            status: "pending",
+          },
+        ];
 
     setProverSteps(initialSteps);
     setIsProverOpen(true);
 
     try {
+      if (useTestnetBow) {
+        await new Promise((r) => setTimeout(r, 400));
+        const testnetClient = createTestnetBowPublicClient();
+        const scope = await testnetClient.readContract({
+          address: TESTNET_0XBOW.pool,
+          abi: BOW_POOL_SCOPE_ABI,
+          functionName: "SCOPE",
+        });
+
+        const secrets = createBowDepositSecrets(scope);
+        setProverCommitment(secrets.precommitment.toString());
+
+        setProverSteps((prev) => [
+          { ...prev[0], status: "completed" },
+          { ...prev[1], status: "running" },
+          prev[2],
+          prev[3],
+        ]);
+
+        await new Promise((r) => setTimeout(r, 400));
+        setProverSteps((prev) => [
+          prev[0],
+          { ...prev[1], status: "completed" },
+          { ...prev[2], status: "running" },
+          prev[3],
+        ]);
+
+        const walletClient = createWalletClient({
+          account: connectedAddress,
+          chain: appChain,
+          transport: custom(activeProvider),
+        });
+
+        const depositDenomination = 1000000000000000n; // 0.001 ETH
+        const depositHash = await walletClient.writeContract({
+          address: TESTNET_0XBOW.entrypointProxy,
+          abi: parseAbi(["function deposit(uint256 _precommitmentHash) payable returns (uint256)"]),
+          functionName: "deposit",
+          args: [secrets.precommitment],
+          value: depositDenomination,
+        });
+
+        setProverTxHash(depositHash);
+        setProverSteps((prev) => [
+          prev[0],
+          prev[1],
+          { ...prev[2], status: "completed" },
+          { ...prev[3], status: "running" },
+        ]);
+
+        const receipt = await waitForTransactionReceipt(testnetClient, { hash: depositHash });
+        if (receipt.status !== "success") throw new Error("0xbow deposit transaction reverted onchain.");
+
+        const poolLogs = await testnetClient.getContractEvents({
+          address: TESTNET_0XBOW.pool,
+          abi: parseAbi([
+            "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
+          ]),
+          eventName: "Deposited",
+          fromBlock: receipt.blockNumber,
+          toBlock: receipt.blockNumber,
+        });
+        const ownLog =
+          poolLogs.find((l) => l.transactionHash.toLowerCase() === depositHash.toLowerCase()) ||
+          poolLogs[poolLogs.length - 1];
+        if (!ownLog) throw new Error("Could not find Deposited log in deposit transaction block.");
+
+        const label = BigInt(ownLog.args._label ?? 0n);
+        const bowNote = createBowNote({
+          scope,
+          denomination: depositDenomination,
+          label,
+          nullifier: secrets.nullifier,
+          secret: secrets.secret,
+          precommitment: secrets.precommitment,
+          txHash: depositHash,
+          blockNumber: receipt.blockNumber,
+          chainId: TESTNET_CHAIN_ID,
+        });
+
+        setSelectedNote(bowNote);
+        saveNoteLocally(bowNote);
+
+        fetch("/api/asp/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
+        }).catch((err) => console.warn("Background ASP sync:", err));
+
+        setProverSteps((prev) => [
+          prev[0],
+          prev[1],
+          prev[2],
+          { ...prev[3], status: "completed" },
+        ]);
+        setIsProverOpen(true);
+        return;
+      }
+
       await new Promise((r) => setTimeout(r, 650));
       // Only ShieldedPool_ETH exists onchain, so v1 always targets it with its live
       // denomination. Non-ETH outputs stay selectable for display but deposit as ETH.
@@ -505,75 +641,229 @@ export default function SwapToShieldPage() {
     // 0xbow testnet (46630) path: real Groth16 SDK flow, no Mock verifier.
     if (useTestnetBow) {
       setIsExecuting(true);
-      setProverTitle("Preparing 0xbow Shielded Withdrawal (Testnet)");
+      setProverTitle("Generating 0xbow Groth16 Shielded Withdrawal (Testnet)");
       setProverTxHash(null);
       setProverCommitment(null);
       const bowSteps: ZkProverStep[] = [
         {
-          title: "1. Recovering Note Nullifier & Secret",
-          detail: "Reading client-side note credentials from the local vault",
+          title: "1. Recovering Note Credentials & Nullifier",
+          detail: "Loading Poseidon commitment, secret & nullifier from local vault",
           status: "running",
         },
         {
-          title: "2. Loading pinned Groth16 artifacts (v1.2.1)",
-          detail: "Fetching /shield-artifacts/v1.2.1 withdraw wasm+zkey with SHA-256 integrity check",
+          title: "2. Fetching Pinned Circuits & Verifying Integrity",
+          detail: "Loading withdraw.wasm and withdraw.zkey (v1.2.1) with SHA-256 verification",
           status: "pending",
         },
         {
-          title: "3. Proving locally via Groth16 wasm",
-          detail: "Real snarkjs proveWithdrawal against the testnet pool + sentinel ASP (no Mock)",
+          title: "3. Client-Side Groth16 ZK-SNARK Proving",
+          detail: "Executing snarkjs Groth16 prover in browser against onchain State & ASP Merkle trees",
           status: "pending",
         },
         {
-          title: "4. Entrypoint relay dispatch + receipt gating",
-          detail: "Submitting relay() to the testnet entrypoint proxy on Robinhood Testnet 46630",
+          title: "4. Entrypoint Proxy Relay & On-Chain Settlement",
+          detail: "Submitting verified proof to Entrypoint relay on Robinhood Testnet",
           status: "pending",
         },
       ];
       setProverSteps(bowSteps);
       setIsProverOpen(true);
       try {
-        await new Promise((r) => setTimeout(r, 500));
+        if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
+
+        if (!isBowNote(noteToWithdraw)) {
+          throw new Error(
+            "The selected note is a legacy mock note. Please select a 0xbow shielded note (0.001 ETH) created on testnet."
+          );
+        }
+
+        const bowNote = noteToWithdraw as BowShieldedNote;
+        setProverCommitment(bowNote.commitmentHash);
+
+        const testnetClient = createTestnetBowPublicClient();
+        const scope = BigInt(bowNote.scope);
+        const denomination = BigInt(bowNote.denomination);
+        const label = BigInt(bowNote.label);
+        const nullifier = BigInt(bowNote.nullifier);
+        const secret = BigInt(bowNote.secret);
+        const commitmentHash = BigInt(bowNote.commitmentHash);
+
         setProverSteps((prev) => [
           { ...prev[0], status: "completed" },
           { ...prev[1], status: "running" },
           prev[2],
           prev[3],
         ]);
-        if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
-        const testnetClient = createTestnetBowPublicClient();
-        const scope = await testnetClient.readContract({
-          address: TESTNET_0XBOW.pool,
-          abi: BOW_POOL_SCOPE_ABI,
-          functionName: "SCOPE",
-        });
+
         // Real artifact integrity check — fails closed before any proving attempt.
         await fetchPinnedBowArtifact("withdraw.wasm");
         await fetchPinnedBowArtifact("withdraw.zkey");
+
+        // Sync ASP root first if needed
+        try {
+          await fetch("/api/asp/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
+          });
+        } catch {}
+
         setProverSteps((prev) => [
           prev[0],
           { ...prev[1], status: "completed" },
           { ...prev[2], status: "running" },
           prev[3],
         ]);
-        // Real SDK instantiation + withdrawal context binding (processooor + scope).
+
+        // Fetch pool events to build State Tree and Association Set
+        const { orderedCommitments, labels } = await fetchBowPoolEvents(
+          testnetClient,
+          TESTNET_0XBOW.pool
+        );
+
+        if (!orderedCommitments.includes(commitmentHash)) {
+          throw new Error(
+            "Deposit commitment not found in onchain state tree. Please ensure your deposit transaction was confirmed."
+          );
+        }
+
+        const stateTree = buildBowStateTree(orderedCommitments);
+        const aspSet = buildBowAssociationSet(labels);
+
+        if (!aspSet.labels.includes(label)) {
+          throw new Error("Deposit label not found in Association Set. Try syncing ASP.");
+        }
+
+        const onchainAspRoot = await testnetClient.readContract({
+          address: TESTNET_0XBOW.entrypointProxy,
+          abi: BOW_ENTRYPOINT_RELAY_ABI,
+          functionName: "latestRoot",
+        });
+
+        if (aspSet.root !== BigInt(onchainAspRoot)) {
+          // Re-sync ASP onchain
+          await fetch("/api/asp/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
+          });
+        }
+
+        const stateMerkleProof = stateTree.proof(commitmentHash);
+        const aspMerkleProof = buildBowAssociationProof(aspSet, label);
+
         const sdk = createBowSdk();
-        void sdk;
-        createBowWithdrawalContext({
+        const { withdrawal, context } = createBowWithdrawalContext({
           entrypoint: TESTNET_0XBOW.entrypointProxy,
           recipient: cleanRecipient as Address,
           feeRecipient: connectedAddress,
           scope,
         });
-        // Honest gate: veil v1 vault notes (lib/note.ts) are keccak commitments, not
-        // 0xbow Poseidon AccountCommitments, so no valid Groth16 membership proof can
-        // be built yet. Fail closed here — no transaction is sent. Once testnet
-        // deposits create Poseidon notes, this branch proceeds to proveBowWithdrawal
-        // (PrivacyPoolSDK.proveWithdrawal) + entrypointProxy.relay() with
-        // waitForTransactionReceipt gating on the testnet client.
-        throw new Error(
-          "Legacy keccak note cannot be spent on the 0xbow testnet pool (Poseidon/Groth16). Deposit via the testnet 0xbow pool to create a compatible note first. No transaction was sent."
-        );
+
+        const accountService = new AccountService(null as any, {
+          mnemonic: generateMnemonic(english, 256),
+        });
+
+        const commitmentObj: AccountCommitment = {
+          hash: commitmentHash as never,
+          label: label as never,
+          nullifier: nullifier as never,
+          secret: secret as never,
+          value: denomination,
+          blockNumber: BigInt(bowNote.blockNumber),
+          txHash: bowNote.txHash as `0x${string}`,
+        };
+
+        const secretPair = accountService.createWithdrawalSecrets(commitmentObj);
+
+        const withdrawalProof = await sdk.proveWithdrawal(commitmentObj, {
+          withdrawalAmount: denomination,
+          stateMerkleProof,
+          aspMerkleProof,
+          stateRoot: stateTree.root as never,
+          stateTreeDepth: 32n,
+          aspRoot: aspSet.root as never,
+          aspTreeDepth: 32n,
+          context,
+          newNullifier: secretPair.nullifier,
+          newSecret: secretPair.secret,
+        });
+
+        const isValid = await sdk.verifyWithdrawal(withdrawalProof);
+        if (!isValid) throw new Error("Local verification of Groth16 withdrawal proof failed.");
+
+        setProverSteps((prev) => [
+          prev[0],
+          prev[1],
+          { ...prev[2], status: "completed" },
+          { ...prev[3], status: "running" },
+        ]);
+
+        const pc = withdrawalProof.proof;
+        const proofStruct = {
+          pA: [BigInt(pc.pi_a[0]), BigInt(pc.pi_a[1])] as const,
+          pB: [
+            [BigInt(pc.pi_b[0][1]), BigInt(pc.pi_b[0][0])],
+            [BigInt(pc.pi_b[1][1]), BigInt(pc.pi_b[1][0])],
+          ] as const,
+          pC: [BigInt(pc.pi_c[0]), BigInt(pc.pi_c[1])] as const,
+          pubSignals: withdrawalProof.publicSignals.map(BigInt) as [
+            bigint,
+            bigint,
+            bigint,
+            bigint,
+            bigint,
+            bigint,
+            bigint,
+            bigint
+          ],
+        };
+
+        const walletClient = createWalletClient({
+          account: connectedAddress,
+          chain: appChain,
+          transport: custom(activeProvider),
+        });
+
+        const relayHash = await walletClient.writeContract({
+          address: TESTNET_0XBOW.entrypointProxy,
+          abi: BOW_ENTRYPOINT_RELAY_ABI,
+          functionName: "relay",
+          args: [withdrawal, proofStruct as any, scope],
+        });
+
+        setProverTxHash(relayHash);
+
+        const receipt = await waitForTransactionReceipt(testnetClient, { hash: relayHash });
+        if (receipt.status !== "success") throw new Error("Entrypoint relay transaction reverted onchain.");
+
+        // Remove spent note from local storage
+        const remaining = notes.filter((n) => n.nullifier !== bowNote.nullifier);
+        setNotes(remaining);
+        if (remaining.length > 0) {
+          setSelectedNoteNullifier(remaining[0].nullifier);
+        } else {
+          setSelectedNoteNullifier("");
+        }
+        if (typeof window !== "undefined") {
+          localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(remaining));
+        }
+
+        // Refresh token balances
+        if (connectedAddress) {
+          try {
+            const liveBals = await fetchAllTokenBalances(connectedAddress, SUPPORTED_TOKENS);
+            setTokenBalances(liveBals);
+          } catch {}
+        }
+
+        setProverSteps((prev) => [
+          prev[0],
+          prev[1],
+          prev[2],
+          { ...prev[3], status: "completed" },
+        ]);
+        setIsProverOpen(true);
       } catch (e: unknown) {
         console.error("0xbow testnet withdrawal error:", e);
         setIsProverOpen(false);
@@ -700,11 +990,15 @@ export default function SwapToShieldPage() {
         functionName: "shouldPass",
       });
       if (!pass) throw new Error("Provisional verifier is disabled, withdrawals are unavailable.");
+      if (isBowNote(noteToWithdraw)) {
+        throw new Error("This pool only accepts legacy shielded notes.");
+      }
+      const legacyNote = noteToWithdraw as ShieldedNote;
       const spent = await publicClient.readContract({
         address: SHIELDED_POOL_ETH,
         abi: POOL_WITHDRAW_ABI,
         functionName: "isNullifierSpent",
-        args: [noteToWithdraw.nullifierHash],
+        args: [legacyNote.nullifierHash],
       });
       if (spent) throw new Error("Note already spent.");
       const root = await publicClient.readContract({
@@ -720,7 +1014,7 @@ export default function SwapToShieldPage() {
         args: [root],
       });
       if (!known) throw new Error("Unknown Merkle root");
-      const args = buildWithdrawArgs(noteToWithdraw, root, cleanRecipient as `0x${string}`);
+      const args = buildWithdrawArgs(legacyNote, root, cleanRecipient as `0x${string}`);
 
       // Step 3: Real On-Chain Withdrawal Dispatch via Connected Wallet
       const walletClient = createWalletClient({
@@ -2146,7 +2440,7 @@ export default function SwapToShieldPage() {
                               fontWeight: 500,
                             }}
                           >
-                            Attested · Depth 20
+                            {isBowNote(note) ? "0xbow v1.2.1 · Groth16" : "Attested · Depth 20"}
                           </span>
                         </div>
                         <span style={{ fontFamily: "monospace", fontSize: "1.1rem", color: "var(--color-accent-ink)", fontWeight: 700 }}>
@@ -2167,36 +2461,41 @@ export default function SwapToShieldPage() {
                           fontFamily: "monospace",
                         }}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ color: "var(--color-muted)" }}>Commitment:</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                              {note.commitment.slice(0, 12)}...{note.commitment.slice(-8)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyCommitment(note.commitment)}
-                              title="Copy full commitment hash"
-                              aria-label="Copy full commitment hash"
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                color: "var(--color-accent-ink)",
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                                fontWeight: 600,
-                                padding: "4px 8px",
-                                minHeight: "24px",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <Copy className="w-3 h-3" aria-hidden="true" />
-                              <span>{copiedCommitment === note.commitment ? "Copied" : "Copy"}</span>
-                            </button>
-                          </div>
-                        </div>
+                        {(() => {
+                          const commitmentStr = isBowNote(note) ? note.commitmentHash : note.commitment;
+                          return (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ color: "var(--color-muted)" }}>Commitment:</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
+                                  {commitmentStr.slice(0, 12)}...{commitmentStr.slice(-8)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCommitment(commitmentStr)}
+                                  title="Copy full commitment hash"
+                                  aria-label="Copy full commitment hash"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "var(--color-accent-ink)",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    fontWeight: 600,
+                                    padding: "4px 8px",
+                                    minHeight: "24px",
+                                    borderRadius: "4px",
+                                  }}
+                                >
+                                  <Copy className="w-3 h-3" aria-hidden="true" />
+                                  <span>{copiedCommitment === commitmentStr ? "Copied" : "Copy"}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ color: "var(--color-muted)" }}>Nullifier:</span>

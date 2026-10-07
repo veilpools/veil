@@ -8,6 +8,7 @@ import {
   CircuitName,
   PrivacyPoolSDK,
   DataService,
+  generateMerkleProof,
   type CircuitsInterface,
   type AccountCommitment,
   type ChainConfig,
@@ -18,16 +19,39 @@ import {
   type PoolInfo,
   type Withdrawal,
 } from "@0xbow/privacy-pools-core-sdk";
-import { createPublicClient, encodeAbiParameters, http, type Address, type PublicClient } from "viem";
+import { createPublicClient, encodeAbiParameters, http, parseAbiItem, type Address, type PublicClient } from "viem";
 import { fetchPinnedBowArtifact, type BowArtifactName } from "./0xbow-artifacts";
-import { buildBowAssociationProof, type BowAssociationSet } from "./0xbow-association";
+import { buildBowAssociationProof, buildBowAssociationSet, type BowAssociationSet } from "./0xbow-association";
 import { TESTNET_0XBOW, TESTNET_0XBOW_META, TESTNET_CHAIN_ID } from "./privacy-pools";
 import { robinhoodTestnet } from "./chains";
 
 export interface BowStateTree {
   leaves: bigint[];
   root: bigint;
-  proof(commitment: bigint): ReturnType<typeof import("@0xbow/privacy-pools-core-sdk").generateMerkleProof>;
+  proof(commitment: bigint): ReturnType<typeof generateMerkleProof>;
+}
+
+export function buildBowStateTree(
+  depositCommitments: bigint[],
+  withdrawalNewCommitments: bigint[] = []
+): BowStateTree {
+  const leaves = [...depositCommitments, ...withdrawalNewCommitments];
+  if (leaves.length === 0) {
+    throw new Error("bow_state_tree_empty");
+  }
+  const sampleProof = generateMerkleProof(leaves, leaves[0]);
+  const root = BigInt(sampleProof.root);
+  return {
+    leaves,
+    root,
+    proof(commitment: bigint) {
+      const p = generateMerkleProof(leaves, commitment);
+      if (BigInt(p.root) !== root) {
+        throw new Error("bow_state_root_mismatch");
+      }
+      return p;
+    },
+  };
 }
 
 export class PinnedBowCircuits implements CircuitsInterface {
@@ -195,4 +219,114 @@ export class BowTestnetDataService extends DataService {
 
 export function isTestnetChainId(chainId: number | undefined): boolean {
   return chainId === TESTNET_CHAIN_ID;
+}
+
+export const BOW_DEPOSITED_EVENT = parseAbiItem(
+  "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)"
+);
+
+export const BOW_WITHDRAWN_EVENT = parseAbiItem(
+  "event Withdrawn(address indexed _processooor, uint256 _value, uint256 _spentNullifier, uint256 _newCommitment)"
+);
+
+export async function fetchBowPoolEvents(
+  client: PublicClient,
+  poolAddress: Address = TESTNET_0XBOW.pool,
+  fromBlock: bigint = TESTNET_0XBOW_META.poolDeploymentBlock
+) {
+  const currentBlock = await client.getBlockNumber();
+  const depositLogs = [];
+  const withdrawLogs = [];
+  const CHUNK_SIZE = 40000n;
+
+  for (let start = fromBlock; start <= currentBlock; start += CHUNK_SIZE) {
+    const end = start + CHUNK_SIZE - 1n < currentBlock ? start + CHUNK_SIZE - 1n : currentBlock;
+    const [deps, withs] = await Promise.all([
+      client.getLogs({
+        address: poolAddress,
+        event: BOW_DEPOSITED_EVENT,
+        fromBlock: start,
+        toBlock: end,
+      }),
+      client.getLogs({
+        address: poolAddress,
+        event: BOW_WITHDRAWN_EVENT,
+        fromBlock: start,
+        toBlock: end,
+      }),
+    ]);
+    depositLogs.push(...deps);
+    withdrawLogs.push(...withs);
+  }
+
+  const orderedCommitments: bigint[] = [
+    ...depositLogs.map((l) => ({
+      commitment: BigInt(l.args._commitment ?? 0n),
+      blockNumber: l.blockNumber ?? 0n,
+      txIndex: l.transactionIndex ?? 0,
+      logIndex: l.logIndex ?? 0,
+    })),
+    ...withdrawLogs
+      .filter((l) => BigInt(l.args._newCommitment ?? 0n) !== 0n)
+      .map((l) => ({
+        commitment: BigInt(l.args._newCommitment ?? 0n),
+        blockNumber: l.blockNumber ?? 0n,
+        txIndex: l.transactionIndex ?? 0,
+        logIndex: l.logIndex ?? 0,
+      })),
+  ]
+    .sort((a, b) =>
+      a.blockNumber !== b.blockNumber
+        ? a.blockNumber < b.blockNumber
+          ? -1
+          : 1
+        : a.txIndex !== b.txIndex
+        ? a.txIndex - b.txIndex
+        : a.logIndex - b.logIndex
+    )
+    .map((item) => item.commitment);
+
+  const labels = [
+    ...new Set(
+      depositLogs
+        .map((l) => BigInt(l.args._label ?? 0n))
+        .filter((lbl) => lbl !== 0n)
+        .map(String)
+    ),
+  ].map(BigInt);
+
+  return {
+    depositLogs,
+    withdrawLogs,
+    orderedCommitments,
+    labels,
+  };
+}
+
+export async function fetchBowAspSet(
+  client: PublicClient,
+  entrypointAddress: Address = TESTNET_0XBOW.entrypointProxy,
+  poolAddress: Address = TESTNET_0XBOW.pool,
+  fromBlock: bigint = TESTNET_0XBOW_META.poolDeploymentBlock
+) {
+  const { labels } = await fetchBowPoolEvents(client, poolAddress, fromBlock);
+  const aspSet = buildBowAssociationSet(labels);
+  const onchainRoot = await client.readContract({
+    address: entrypointAddress,
+    abi: [
+      {
+        type: "function",
+        name: "latestRoot",
+        stateMutability: "view",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256" }],
+      },
+    ],
+    functionName: "latestRoot",
+  });
+  return {
+    aspSet,
+    onchainRoot: BigInt(onchainRoot as bigint),
+    isConsistent: aspSet.root === BigInt(onchainRoot as bigint),
+  };
 }
