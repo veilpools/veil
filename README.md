@@ -128,7 +128,13 @@ Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approv
 - **Attested swap:** [`0x2a076f288e8ea8f5554593410b3839d0c5ae026cb7e00aeb7bbf68fd48cdd04b`](https://explorer.testnet.chain.robinhood.com/tx/0x2a076f288e8ea8f5554593410b3839d0c5ae026cb7e00aeb7bbf68fd48cdd04b) with attested `hookData`
 - **Treasury fee from usage:** 0 → 2706559470897 wei collected by the hook on a real swap
 
-Pending (needs testnet funds): fee-bearing relay run (`maxRelayFeeBPS` is immutably 0 on this deployment).
+Pending (needs testnet funds): fee-bearing relay run on v1 (its `maxRelayFeeBPS` is immutably 0; v3 suite sets 100).
+
+### 🔀 Full Shielded Swap ETH → VEIL (Testnet, proven 2026-10-07)
+
+Fresh 0xbow suite v2 (operator-owned entrypoint, ETH + VEIL pools, `maxRelayFeeBPS=100`):
+
+- **ETH shielded** → **withdrawn (ZK)** → **v4 swap ETH→VEIL** ([0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99](https://explorer.testnet.chain.robinhood.com/tx/0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99)) → **VEIL shielded** ([0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc](https://explorer.testnet.chain.robinhood.com/tx/0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc), 0.001 VEIL note)
 
 ### 🔀 Router Swap-to-Shield (Testnet, proven 2026-10-07)
 

@@ -39,6 +39,7 @@ const sources = [
   "node_modules/@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol",
   "vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/implementations/PrivacyPoolSimple.sol",
   "contracts/VeilTestnetPrivacyPool.sol",
+  "contracts/VeilTestnetPrivacyPoolERC20.sol",
   "vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/verifiers/WithdrawalVerifier.sol",
   "vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/verifiers/CommitmentVerifier.sol",
 ];
@@ -102,6 +103,7 @@ const wanted = new Set([
   "Entrypoint",
   "ERC1967Proxy",
   "VeilTestnetPrivacyPool",
+  "VeilTestnetPrivacyPoolERC20",
   "PrivacyPoolSimple",
   "PoseidonT3",
   "PoseidonT4",
