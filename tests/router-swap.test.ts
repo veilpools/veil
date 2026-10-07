@@ -3,9 +3,11 @@ import { parseEther } from "viem";
 import {
   buildSwapToShieldParams,
   findSwapToShieldExecuted,
+  isRouterExecuteDisabled,
   mapRouterSwapError,
   parseSlippagePercent,
   slippageBps,
+  withAllowanceHint,
   TESTNET_LEGACY_ETH_POOL,
   TESTNET_ROUTER_ADDRESS,
   TESTNET_ROUTER_HOOK_DATA,
@@ -134,5 +136,52 @@ describe("router swapToShield builders (testnet e2e task 2)", () => {
         COMMITMENT
       )
     ).toBeNull();
+  });
+
+  it("I-1: execute stays disabled while simulating or without a fresh quote", () => {
+    const ready = {
+      isExecuting: false,
+      connected: true,
+      veilInValid: true,
+      quoteBelowDenomination: false,
+      isQuoting: false,
+      hasQuote: true,
+    };
+    expect(isRouterExecuteDisabled(ready)).toBe(false);
+    // Simulating (label "Simulating Live Output…") must NOT be executable.
+    expect(isRouterExecuteDisabled({ ...ready, isQuoting: true })).toBe(true);
+    // Missing quote must NOT be executable.
+    expect(isRouterExecuteDisabled({ ...ready, hasQuote: false })).toBe(true);
+    expect(
+      isRouterExecuteDisabled({ ...ready, isQuoting: true, hasQuote: false })
+    ).toBe(true);
+    // Existing gates still hold.
+    expect(isRouterExecuteDisabled({ ...ready, isExecuting: true })).toBe(true);
+    expect(isRouterExecuteDisabled({ ...ready, veilInValid: false })).toBe(true);
+    expect(
+      isRouterExecuteDisabled({ ...ready, quoteBelowDenomination: true })
+    ).toBe(true);
+    // Disconnected stays enabled so the button can open the wallet modal.
+    expect(isRouterExecuteDisabled({ ...ready, connected: false })).toBe(false);
+  });
+
+  it("I-2: quote failure surfaces the revert reason first, allowance only as hint", () => {
+    const primary = mapRouterSwapError(
+      new Error("reverted: InsufficientOutputForDenomination")
+    );
+    expect(primary).toMatch(/InsufficientOutputForDenomination/);
+    const noted = withAllowanceHint(primary, true);
+    // Real reason leads, allowance guidance is secondary only.
+    expect(noted.indexOf("InsufficientOutputForDenomination")).toBeLessThan(
+      noted.toLowerCase().indexOf("secondary hint")
+    );
+    expect(noted).toMatch(/Secondary hint/);
+    // No allowance gap -> primary untouched.
+    expect(withAllowanceHint(primary, false)).toBe(primary);
+    // Allowance-caused primary is not duplicated.
+    const allowancePrimary = mapRouterSwapError(
+      new Error("ERC20InsufficientAllowance")
+    );
+    expect(withAllowanceHint(allowancePrimary, true)).toBe(allowancePrimary);
   });
 });

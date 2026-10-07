@@ -54,12 +54,14 @@ import { CONTRACT_ABIS, CONTRACT_ADDRESSES } from "../../lib/contracts";
 import {
   buildSwapToShieldParams,
   findSwapToShieldExecuted,
+  isRouterExecuteDisabled,
   mapRouterSwapError,
   parseSlippagePercent,
   quoteSwapToShieldOutput,
   readSwapGuards,
   readVeilAllowance,
   readVeilBalance,
+  withAllowanceHint,
   PROVEN_SCRIPT_VEIL_AMOUNT_IN,
   TESTNET_LEGACY_ETH_POOL,
   TESTNET_ROUTER_ADDRESS,
@@ -386,13 +388,13 @@ export default function SwapToShieldPage() {
         } catch (e: unknown) {
           if (cancelled) return;
           setRouterQuote(null);
-          // Honest signal, never a fabricated number: without a VEIL
-          // approval the simulation cannot run from this wallet (the node
-          // returns a bare revert), so say so instead of guessing.
+          // Review fix I-2: surface the ACTUAL revert reason first
+          // (InsufficientOutput/paused/cap/slippage decode via
+          // mapRouterSwapError); missing allowance is only a secondary hint,
+          // never a mask. The node returns a bare revert on allowance, so the
+          // old approve-first branch hid the real cause.
           setRouterQuoteNote(
-            preAllow < veilIn
-              ? "The router is not approved to spend this VEIL yet, so the live simulation cannot run from this wallet. Approve VEIL for the router during execution — the quote refreshes automatically afterwards."
-              : mapRouterSwapError(e)
+            withAllowanceHint(mapRouterSwapError(e), preAllow < veilIn)
           );
         } finally {
           if (!cancelled) setIsQuoting(false);
@@ -475,6 +477,24 @@ export default function SwapToShieldPage() {
       return;
     }
     const veilIn = parsedVeilIn;
+    // Review fix I-1 (defense in depth): never send a real approve+swap tx
+    // while the live quote is missing or still simulating. The button is
+    // disabled in this state; this guard covers keyboard/programmatic clicks.
+    if (
+      isRouterExecuteDisabled({
+        isExecuting,
+        connected: Boolean(connectedAddress),
+        veilInValid: parsedVeilIn !== null,
+        quoteBelowDenomination: routerQuoteBelowDenomination,
+        isQuoting,
+        hasQuote: routerQuote !== null,
+      })
+    ) {
+      setFlowError(
+        "Live router quote is not ready yet — wait for the simulated output to load. No transaction was sent."
+      );
+      return;
+    }
 
     setIsExecuting(true);
     setProverTitle("Executing Router Swap-to-Shield (Testnet)");
@@ -2050,9 +2070,14 @@ export default function SwapToShieldPage() {
                 onClick={handleBuyAndShield}
                 disabled={
                   isTestnetRouterMode
-                    ? isExecuting ||
-                      (Boolean(connectedAddress) &&
-                        (parsedVeilIn === null || routerQuoteBelowDenomination))
+                    ? isRouterExecuteDisabled({
+                        isExecuting,
+                        connected: Boolean(connectedAddress),
+                        veilInValid: parsedVeilIn !== null,
+                        quoteBelowDenomination: routerQuoteBelowDenomination,
+                        isQuoting,
+                        hasQuote: routerQuote !== null,
+                      })
                     : isExecuting ||
                       (Boolean(connectedAddress) &&
                         (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination))
@@ -2073,16 +2098,26 @@ export default function SwapToShieldPage() {
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
                   cursor: isTestnetRouterMode
-                    ? isExecuting ||
-                      (Boolean(connectedAddress) &&
-                        (parsedVeilIn === null || routerQuoteBelowDenomination))
+                    ? isRouterExecuteDisabled({
+                        isExecuting,
+                        connected: Boolean(connectedAddress),
+                        veilInValid: parsedVeilIn !== null,
+                        quoteBelowDenomination: routerQuoteBelowDenomination,
+                        isQuoting,
+                        hasQuote: routerQuote !== null,
+                      })
                       ? "not-allowed"
                       : "pointer"
                     : isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? "not-allowed" : "pointer",
                   opacity: isTestnetRouterMode
-                    ? isExecuting ||
-                      (Boolean(connectedAddress) &&
-                        (parsedVeilIn === null || routerQuoteBelowDenomination))
+                    ? isRouterExecuteDisabled({
+                        isExecuting,
+                        connected: Boolean(connectedAddress),
+                        veilInValid: parsedVeilIn !== null,
+                        quoteBelowDenomination: routerQuoteBelowDenomination,
+                        isQuoting,
+                        hasQuote: routerQuote !== null,
+                      })
                       ? 0.45
                       : 1
                     : isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? 0.45 : 1,

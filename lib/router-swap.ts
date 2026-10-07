@@ -261,6 +261,47 @@ export function mapRouterSwapError(error: unknown, slippagePercent?: number): st
   return "Router swap failed before execution. Check your wallet, testnet connection, and VEIL balance, then try again.";
 }
 
+/**
+ * Review fix I-2: quote-failure notes must surface the ACTUAL revert reason
+ * first; missing-allowance guidance is only a secondary hint. The previous
+ * call-site showed the approve-first message whenever allowance was missing,
+ * masking InsufficientOutput/paused/cap. This helper keeps the decoded
+ * primary untouched and appends the allowance hint only when it does not
+ * already carry it.
+ */
+export function withAllowanceHint(primary: string, allowanceMissing: boolean): string {
+  if (!allowanceMissing) return primary;
+  if (/approve/i.test(primary)) return primary;
+  return (
+    `${primary} Secondary hint: the router is not approved to spend this VEIL yet, ` +
+    `so approve VEIL for the router during execution — the quote refreshes automatically afterwards.`
+  );
+}
+
+/**
+ * Review fix I-1: single source of truth for whether the router Execute
+ * button must stay disabled. The button is disabled until a fresh live quote
+ * exists — while simulating (isQuoting) or with no quote (hasQuote false) it
+ * stays disabled so no real approve+swap tx can fire. When disconnected the
+ * button stays enabled so it can open the wallet modal.
+ */
+export function isRouterExecuteDisabled(args: {
+  isExecuting: boolean;
+  connected: boolean;
+  veilInValid: boolean;
+  quoteBelowDenomination: boolean;
+  isQuoting: boolean;
+  hasQuote: boolean;
+}): boolean {
+  if (args.isExecuting) return true;
+  if (!args.connected) return false;
+  if (!args.veilInValid) return true;
+  if (args.quoteBelowDenomination) return true;
+  if (args.isQuoting) return true;
+  if (!args.hasQuote) return true;
+  return false;
+}
+
 export async function readSwapGuards(
   client: PublicClient,
   pool: Address = TESTNET_LEGACY_ETH_POOL
