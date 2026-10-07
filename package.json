@@ -20,7 +20,9 @@
     "deploy:veiltoken": "node scripts/deploy-veiltoken.mjs --testnet",
     "deploy:veiltoken:mainnet": "node scripts/deploy-veiltoken.mjs --mainnet",
     "wire:treasury": "node scripts/wire-treasury-testnet.mjs",
-    "verify:veiltoken": "node scripts/verify-veiltoken.mjs --testnet"
+    "verify:veiltoken": "node scripts/verify-veiltoken.mjs --testnet",
+    "migrate:mainnet:dry": "node scripts/migrate-mainnet-0xbow.mjs",
+    "migrate:mainnet": "node scripts/migrate-mainnet-0xbow.mjs --execute"
   },
   "dependencies": {
     "@0xbow/privacy-pools-core-sdk": "1.5.0",

@@ -65,6 +65,16 @@
 | **VeilShieldRouter** | `0x01a05f87c2c227a1b382cbc2e7e63b186538c86d` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x01a05f87c2c227a1b382cbc2e7e63b186538c86d) |
 | **VeilToken (temporary)** | `0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a) |
 
+### 🚀 Mainnet 0xbow Migration (ready, waiting on funds)
+
+Validated offline (`pnpm migrate:mainnet:dry`, ctor/link/encoding checks green). One command once the deployer holds **≥0.0015 ETH**:
+
+```bash
+pnpm migrate:mainnet
+```
+
+Deploys on 4663 (testnet-proven bytecode): PoseidonT3/T4 → WithdrawalVerifier + CommitmentVerifier → Entrypoint (proxy, init in construction) → ETH pool + VEIL pool → activate → `registerPool` (0.001 ETH / 1 VEIL, `maxRelayFeeBPS=100`) → sentinel ASP → writes `deployments/privacy-pools-mainnet-latest.json` + `NEXT_PUBLIC_0XBOW_*` env. UI switch to the 0xbow withdraw path on mainnet is the single follow-up step.
+
 ### 🔥 Mainnet Burn Loop Proven (2026-10-06, deployer-owned suite)
 
 - **VeilToken deploy:** [`0x39bce42f32f8424bad6438428c7bbecfd5e7c7e81a432f8bc70dd85a608f022d`](https://explorer.mainnet.chain.robinhood.com/tx/0x39bce42f32f8424bad6438428c7bbecfd5e7c7e81a432f8bc70dd85a608f022d)
