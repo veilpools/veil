@@ -2,9 +2,9 @@
   "network": "robinhood-testnet",
   "chainId": 46630,
   "contract": "VeilToken",
-  "address": "0x019086f63407fadf0ccb89516e465baef5031aa9",
-  "tx": "0x818e90d82f549143a86a26ba0414490b105e4723403e1cabb80a66c5a0214d59",
-  "blockNumber": 130225165,
+  "address": "0xeb92aabf97df261c053cc1914ca4a8872f54e70b",
+  "tx": "0x8da60de2c0ea2ef7ea65ed87fb978eb0d78af044864f24a174b86f9794b37b22",
+  "blockNumber": 130278609,
   "args": {
     "name": "Veil",
     "symbol": "VEIL",
