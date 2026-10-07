@@ -58,6 +58,11 @@ export function formatPoolKey(tokenA: Address, tokenB: Address, hookAddress: Add
 }
 
 export function calculateSlippageBound(expectedOut: bigint, slippagePercent: number): bigint {
+  if (!Number.isFinite(slippagePercent) || slippagePercent < 0 || slippagePercent >= 100) {
+    throw new RangeError(
+      `Slippage percent out of range [0, 100): received ${slippagePercent}.`
+    );
+  }
   const bps = BigInt(Math.floor(slippagePercent * 100));
   return (expectedOut * (10_000n - bps)) / 10_000n;
 }

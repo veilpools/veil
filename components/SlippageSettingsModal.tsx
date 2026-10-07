@@ -181,7 +181,8 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
               }}
             />
             <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>
-              minutes before automatic revert
+              minutes. Applies to attestation signatures; router swaps execute
+              immediately from a fresh live quote instead.
             </span>
           </div>
         </div>

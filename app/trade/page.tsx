@@ -25,7 +25,6 @@ import {
   serializeNotesList,
   deserializeNotesList,
   type ShieldedNote,
-  type BowShieldedNote,
   type AnyShieldedNote,
 } from "../../lib/note";
 import { ShieldNoteBackupModal } from "../../components/ShieldNoteBackupModal";
@@ -464,6 +463,7 @@ export default function SwapToShieldPage() {
     const timer = setTimeout(() => {
       (async () => {
         let preAllow = 0n;
+        let slippagePct = 0.5;
         try {
           const [bal, allow] = await Promise.all([
             readVeilBalance(publicClient, connectedAddress),
@@ -476,7 +476,6 @@ export default function SwapToShieldPage() {
             amountIn: veilIn,
             commitment: generateRandomBytes32(),
           });
-          let slippagePct = 0.5;
           try {
             slippagePct = parseSlippagePercent(slippage);
           } catch {
@@ -499,7 +498,7 @@ export default function SwapToShieldPage() {
           // never a mask. The node returns a bare revert on allowance, so the
           // old approve-first branch hid the real cause.
           setRouterQuoteNote(
-            withAllowanceHint(mapRouterSwapError(e), preAllow < veilIn)
+            `${withAllowanceHint(mapRouterSwapError(e), preAllow < veilIn)} (Slippage setting: ${slippagePct}%. Raise it in Execution Settings if the quote trails the market.)`
           );
         } finally {
           if (!cancelled) setIsQuoting(false);
@@ -1182,10 +1181,13 @@ export default function SwapToShieldPage() {
           fromBlock: receipt.blockNumber,
           toBlock: receipt.blockNumber,
         });
-        const ownLog =
-          poolLogs.find((l) => l.transactionHash.toLowerCase() === depositHash.toLowerCase()) ||
-          poolLogs[poolLogs.length - 1];
-        if (!ownLog) throw new Error("Could not find Deposited log in deposit transaction block.");
+        const ownLog = poolLogs.find(
+          (l) => l.transactionHash.toLowerCase() === depositHash.toLowerCase()
+        );
+        if (!ownLog)
+          throw new Error(
+            "Deposit confirmed but our Deposited event was not found in the receipt block. No note was saved. Check the transaction on the explorer and retry with a fresh deposit."
+          );
 
         const label = BigInt(ownLog.args._label ?? 0n);
         const onchainValue = BigInt(ownLog.args._value ?? 0n);

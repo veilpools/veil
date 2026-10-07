@@ -9,7 +9,7 @@ import {
 // Task R1: regression guards for the router ETH-settlement fix.
 // Root cause: `_settleCurrency` sent native ETH to the PoolManager with a
 // bare `.call{value}()`, but the canonical v4 PoolManager has no
-// receive()/fallback() — native settlement only works via the payable
+// receive()/fallback() -- native settlement only works via the payable
 // `settle{value}()` entrypoint (paid = msg.value). The bare call always
 // reverted, surfacing as `eth settle failed` on every ETH-input path.
 const ROUTER_SOURCE = readFileSync(

@@ -34,3 +34,9 @@
 2. Publish the association-set policy (sentinel-only is a placeholder, not a policy).
 3. Decide attestation criteria (owner-allowlist today, ZK proofs later) and the owner-power sunset schedule — publish both.
 4. Marketing copy: no price promises, no "audited" claims (this is an INTERNAL audit), keep the provisional-verifier labels until Groth16 verifier + Pons token ship.
+
+## 6. Testnet end-to-end round (2026-10-07, post-audit)
+
+- Router native-ETH settlement bug FIXED and proven on testnet: _settleCurrency bare-called ETH into the receiveless PoolManager (eth settle failed on every ETH-input path). Fix settles via payable PoolManager.settle with value (contracts/VeilShieldRouter.sol). Fixed router deployed on testnet 46630 at 0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27; ETH-direction swapToShield and shieldedSwap proven live with invariant checks. Token-input paths were never affected.
+- Stranded test dust (permanent, by design - pools expose no rescue path): two 0.001 ETH legacy notes with lost pre-send secrets are unspendable and locked forever (first-attempt note 0x0eec..833d/0x1c70..a6c2e plus swap-dest note 0x32f9..95e5e). Deployer test dust only; no user funds affected. Scripts now snapshot secrets pre-send; UI persists notes on confirmed deposit only.
+- Test gating windows are temporary fixtures (v2 pool 30-day re-gate tx 0x8895..1b17 for section-7 test 7 demo), labeled as such in UI copy.

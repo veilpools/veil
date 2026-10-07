@@ -38,6 +38,16 @@ describe("Router & Hook Math Verification", () => {
     expect(minOut50).toBe(parseEther("0.95"));
   });
 
+  it("rejects out-of-range slippage instead of flooring minOut to 0", () => {
+    const expected = parseEther("1.0");
+    expect(() => calculateSlippageBound(expected, 100)).toThrow(RangeError);
+    expect(() => calculateSlippageBound(expected, 150)).toThrow(RangeError);
+    expect(() => calculateSlippageBound(expected, -1)).toThrow(RangeError);
+    expect(() => calculateSlippageBound(expected, Number.NaN)).toThrow(RangeError);
+    // Boundary stays valid: just under 100% still yields a positive bound.
+    expect(calculateSlippageBound(expected, 99.99)).toBeGreaterThan(0n);
+  });
+
   it("encodes and decodes hook attestation data correctly", () => {
     const user = "0xCdbdc82A021071eE445d9f897433a7E4B4EAfD8d" as const;
     const encoded = encodeHookAttestationData(user);
