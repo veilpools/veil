@@ -71,6 +71,38 @@ import {
 } from "../../lib/router-swap";
 import { calculateSlippageBound } from "../../lib/router-client";
 import {
+  buildGatedHookInnerHash,
+  buildGatedPoolId,
+  buildGatedSwapTxArgs,
+  buildSelfAttestInnerHash,
+  buildSelfAttestProofRoot,
+  describeGatedSimRevert,
+  encodeGatedHookData,
+  GATED_EXPLORER_ADDRESS_BASE,
+  GATED_EXPLORER_TX_BASE,
+  GATED_HOOK_ADDRESS,
+  GATED_HOOKDATA_TTL_SECONDS,
+  GATED_POOL_ID,
+  GATED_REGISTRY_ADDRESS,
+  GATED_SWAPPER_ABI,
+  GATED_SWAPPER_ADDRESS,
+  GATED_TESTNET_CHAIN_ID,
+  GATED_VEIL_TOKEN,
+  isGatedExecuteDisabled,
+  mapGatedSwapError,
+  mapSelfAttestError,
+  PROVEN_GATED_VEIL_AMOUNT_IN,
+  readAttestationStatus,
+  readGatingConfig,
+  readVeilAllowanceGated,
+  readVeilBalanceGated,
+  SELF_ATTEST_DEADLINE_TTL_SECONDS,
+  simulateGatedSwapCall,
+  VEIL_ERC20_MIN_ABI,
+  type AttestationStatus,
+  type GatingConfig,
+} from "../../lib/gated-attest";
+import {
   TESTNET_0XBOW,
   TESTNET_CHAIN_ID,
   MAINNET_CHAIN_ID,
@@ -220,6 +252,21 @@ export default function SwapToShieldPage() {
   const [isQuoting, setIsQuoting] = useState(false);
   const [veilBalance, setVeilBalance] = useState<string | null>(null);
 
+  // Testnet self-attest + gated pool (Task 3): live onchain attestation
+  // status per connected address plus the gated ETH/VEIL pool config, read
+  // from the v2 registry/hook (lib/gated-attest.ts). Untouched by T1/T2.
+  const [attestation, setAttestation] = useState<AttestationStatus | null>(null);
+  const [gating, setGating] = useState<GatingConfig | null>(null);
+  const [isAttestLoading, setIsAttestLoading] = useState(false);
+  const [isAttesting, setIsAttesting] = useState(false);
+  const [attestTxHash, setAttestTxHash] = useState<string | null>(null);
+  const [attestNote, setAttestNote] = useState<string | null>(null);
+  const [gatedAmountIn, setGatedAmountIn] = useState(PROVEN_GATED_VEIL_AMOUNT_IN);
+  const [isSimulatingGated, setIsSimulatingGated] = useState(false);
+  const [gatedSimNote, setGatedSimNote] = useState<string | null>(null);
+  const [isGatedSwapping, setIsGatedSwapping] = useState(false);
+  const [gatedTxHash, setGatedTxHash] = useState<string | null>(null);
+
   // Form Inputs
   const [inputAmount, setInputAmount] = useState("0.001");
   const [cleanRecipient, setCleanRecipient] = useState("");
@@ -305,6 +352,37 @@ export default function SwapToShieldPage() {
     });
     return () => unsub();
   }, [inputToken.symbol]);
+
+  // Task 3 live reads: attestation status + gating config from chain for the
+  // connected address (never localStorage). Refreshes on wallet change.
+  // Placed after connectedAddress is declared (TDZ-safe).
+  useEffect(() => {
+    if (!isTestnetBuild || activeTab !== "buy_and_shield" || !connectedAddress) {
+      setAttestation(null);
+      setGating(null);
+      return;
+    }
+    let cancelled = false;
+    setIsAttestLoading(true);
+    (async () => {
+      try {
+        const [status, config] = await Promise.all([
+          readAttestationStatus(publicClient, connectedAddress),
+          readGatingConfig(publicClient),
+        ]);
+        if (cancelled) return;
+        setAttestation(status);
+        setGating(config);
+      } catch (e) {
+        if (!cancelled) console.warn("Could not read attestation/gating state", e);
+      } finally {
+        if (!cancelled) setIsAttestLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isTestnetBuild, activeTab, connectedAddress]);
 
   // Live ShieldedPool_ETH denomination for honest quotes and deposits.
   const [liveDenomination, setLiveDenomination] = useState<bigint | null>(null);
@@ -449,6 +527,16 @@ export default function SwapToShieldPage() {
     routerQuote !== null &&
     liveDenomination !== null &&
     routerQuote.quotedOut < liveDenomination;
+
+  // Task 3 gated-path VEIL input validity. Null disables gated execution;
+  // the reason is shown in the gated panel, never an alert().
+  let parsedGatedIn: bigint | null = null;
+  try {
+    const gatedCandidate = parseEther(gatedAmountIn);
+    if (gatedCandidate > 0n) parsedGatedIn = gatedCandidate;
+  } catch {
+    parsedGatedIn = null;
+  }
 
   // Testnet router execution (Task 2): REAL VeilShieldRouter.swapToShield via
   // the connected wallet on chain 46630 — VEIL in, ETH out, exact-denomination
@@ -659,6 +747,261 @@ export default function SwapToShieldPage() {
       setFlowError(mapRouterSwapError(e, slippagePct));
     } finally {
       setIsExecuting(false);
+    }
+  }
+
+  // Task 3: re-read attestation + gating from chain (refresh button and
+  // after attest/swap transactions confirm). Live chain state only.
+  async function refreshAttestationState(): Promise<void> {
+    if (!connectedAddress) return;
+    setIsAttestLoading(true);
+    try {
+      const [status, config] = await Promise.all([
+        readAttestationStatus(publicClient, connectedAddress),
+        readGatingConfig(publicClient),
+      ]);
+      setAttestation(status);
+      setGating(config);
+    } catch (e) {
+      console.warn("Could not read attestation/gating state", e);
+    } finally {
+      setIsAttestLoading(false);
+    }
+  }
+
+  // Task 3 (R1/R2): permissionless self-attestation via the connected wallet
+  // (1 tx). Mirrors scripts/selfattest-hook-v2.mjs: fresh proof root, live
+  // nonce, deadline now+3600s, EIP-191 personal_sign (no gas), then
+  // registry.selfAttest. Already attested -> status only, no tx.
+  async function handleSelfAttest() {
+    setFlowError(null);
+    setAttestNote(null);
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    if (connectedChainId !== GATED_TESTNET_CHAIN_ID) {
+      setFlowError(
+        "Self-attestation lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
+      );
+      return;
+    }
+    setIsAttesting(true);
+    try {
+      const live = await readAttestationStatus(publicClient, connectedAddress);
+      setAttestation(live);
+      if (live.attested) {
+        setAttestNote("This address is already attested onchain. No transaction was sent.");
+        return;
+      }
+      const proofRoot = buildSelfAttestProofRoot();
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + SELF_ATTEST_DEADLINE_TTL_SECONDS);
+      const inner = buildSelfAttestInnerHash({
+        registry: GATED_REGISTRY_ADDRESS,
+        chainId: BigInt(GATED_TESTNET_CHAIN_ID),
+        user: connectedAddress,
+        proofRoot,
+        nonce: live.nonce,
+        deadline,
+      });
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: appChain,
+        transport: custom(activeProvider),
+      });
+      const signature = await walletClient.signMessage({ message: { raw: inner } });
+      const attestHash = await walletClient.writeContract({
+        address: GATED_REGISTRY_ADDRESS,
+        abi: CONTRACT_ABIS.VeilAttestationRegistry,
+        functionName: "selfAttest",
+        args: [proofRoot, deadline, signature],
+      });
+      const receipt = await waitForTransactionReceipt(publicClient, { hash: attestHash });
+      if (receipt.status !== "success") {
+        throw new Error("Self-attestation transaction reverted onchain.");
+      }
+      setAttestTxHash(attestHash);
+      setGatedSimNote(null);
+      await refreshAttestationState();
+      setAttestNote("Self-attestation confirmed onchain. The gated pool simulation below should now pass.");
+    } catch (e: unknown) {
+      console.error("Self-attestation error:", e);
+      setFlowError(mapSelfAttestError(e));
+    } finally {
+      setIsAttesting(false);
+    }
+  }
+
+  // Task 3 (R4): gas-free eth_call simulation of the exact gated-swap
+  // calldata. The wallet signs the hookData message (no gas), then the node
+  // executes swapExactIn against latest state. Pre-attest the hook reverts
+  // with GatingActiveUserNotAttested; post-attest the same call succeeds.
+  async function handleSimulateGatedSwap() {
+    setFlowError(null);
+    setGatedSimNote(null);
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    if (connectedChainId !== GATED_TESTNET_CHAIN_ID) {
+      setFlowError(
+        "The gated pool lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. Nothing was simulated."
+      );
+      return;
+    }
+    let amountIn: bigint;
+    try {
+      amountIn = parseEther(gatedAmountIn);
+      if (amountIn <= 0n) throw new Error("non-positive");
+    } catch {
+      setFlowError("Enter a valid VEIL amount greater than zero to simulate.");
+      return;
+    }
+    setIsSimulatingGated(true);
+    try {
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: appChain,
+        transport: custom(activeProvider),
+      });
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + GATED_HOOKDATA_TTL_SECONDS);
+      const inner = buildGatedHookInnerHash({
+        hook: GATED_HOOK_ADDRESS,
+        chainId: BigInt(GATED_TESTNET_CHAIN_ID),
+        user: connectedAddress,
+        poolId: buildGatedPoolId(),
+        deadline,
+      });
+      const signature = await walletClient.signMessage({ message: { raw: inner } });
+      const hookData = encodeGatedHookData({ user: connectedAddress, deadline, signature });
+      const result = await simulateGatedSwapCall(publicClient, {
+        from: connectedAddress,
+        amountIn,
+        hookData,
+      });
+      if (result.ok) {
+        setGatedSimNote(
+          "Gas-free simulation passed: the gated pool would accept this swap for your address (eth_call succeeded, no gas spent)."
+        );
+      } else {
+        setGatedSimNote(result.message);
+      }
+    } catch (e: unknown) {
+      console.error("Gated simulation error:", e);
+      setFlowError(mapGatedSwapError(e));
+    } finally {
+      setIsSimulatingGated(false);
+    }
+  }
+
+  // Task 3 (R3): gated-pool swap execution with signature-bound hookData.
+  // Mirrors scripts/gated-swap-v2.mjs swapAs: approve VEIL for the swapper,
+  // then swapExactIn({key, zeroForOne=false, amountIn, minOut=1n, hookData,
+  // inputToken=VEIL}). Fail closed: live attestation pre-check first, since
+  // an unattested execution would revert onchain and burn gas.
+  async function handleGatedSwap() {
+    setFlowError(null);
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    if (connectedChainId !== GATED_TESTNET_CHAIN_ID) {
+      setFlowError(
+        "The gated pool lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
+      );
+      return;
+    }
+    let amountIn: bigint;
+    try {
+      amountIn = parseEther(gatedAmountIn);
+      if (amountIn <= 0n) throw new Error("non-positive");
+    } catch {
+      setFlowError("Enter a valid VEIL amount greater than zero.");
+      return;
+    }
+    const live = await readAttestationStatus(publicClient, connectedAddress);
+    setAttestation(live);
+    if (!live.attested) {
+      setFlowError(
+        "This address is not attested yet. The gated pool would reject the swap (GatingActiveUserNotAttested) and burn gas — self-attest above first, then execute. No transaction was sent."
+      );
+      return;
+    }
+    const veilBal = await readVeilBalanceGated(publicClient, connectedAddress);
+    if (veilBal < amountIn) {
+      setFlowError(
+        `Insufficient test VEIL balance. The gated route needs ${formatEther(amountIn)} test VEIL (${GATED_VEIL_TOKEN}) already in your wallet — there is no onchain faucet. Fund test VEIL and try again.`
+      );
+      return;
+    }
+    setIsGatedSwapping(true);
+    try {
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: appChain,
+        transport: custom(activeProvider),
+      });
+      const allowance = await readVeilAllowanceGated(publicClient, connectedAddress);
+      if (allowance < amountIn) {
+        const approveHash = await walletClient.writeContract({
+          address: GATED_VEIL_TOKEN,
+          abi: VEIL_ERC20_MIN_ABI,
+          functionName: "approve",
+          args: [GATED_SWAPPER_ADDRESS, amountIn],
+        });
+        const approveReceipt = await waitForTransactionReceipt(publicClient, {
+          hash: approveHash,
+        });
+        if (approveReceipt.status !== "success") {
+          throw new Error("VEIL approval reverted onchain. No swap was sent.");
+        }
+      }
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + GATED_HOOKDATA_TTL_SECONDS);
+      const inner = buildGatedHookInnerHash({
+        hook: GATED_HOOK_ADDRESS,
+        chainId: BigInt(GATED_TESTNET_CHAIN_ID),
+        user: connectedAddress,
+        poolId: buildGatedPoolId(),
+        deadline,
+      });
+      const signature = await walletClient.signMessage({ message: { raw: inner } });
+      const hookData = encodeGatedHookData({ user: connectedAddress, deadline, signature });
+      const txArgs = buildGatedSwapTxArgs({ from: connectedAddress, amountIn, hookData });
+      const swapHash = await walletClient.writeContract({
+        address: GATED_SWAPPER_ADDRESS,
+        abi: GATED_SWAPPER_ABI,
+        functionName: "swapExactIn",
+        args: [...txArgs],
+      });
+      const receipt = await waitForTransactionReceipt(publicClient, { hash: swapHash });
+      if (receipt.status !== "success") {
+        throw new Error("Gated swap transaction reverted onchain.");
+      }
+      setGatedTxHash(swapHash);
+      setGatedSimNote("Gated swap confirmed onchain (VEIL in, ETH out through the gated pool). Explorer link below.");
+    } catch (e: unknown) {
+      console.error("Gated swap error:", e);
+      setFlowError(mapGatedSwapError(e));
+    } finally {
+      setIsGatedSwapping(false);
     }
   }
 
@@ -2218,6 +2561,267 @@ export default function SwapToShieldPage() {
                     ? "Fallback active: direct ShieldedPool deposit (no swap). Switch back to the router route."
                     : "Router route unavailable? Fall back to direct ShieldedPool deposit (no swap)."}
                 </button>
+              )}
+
+              {/* Self-attestation + gated pool (Task 3, testnet only): the
+                  user self-attests onchain and trades through the gated
+                  ETH/VEIL pool. All status reads live from chain. */}
+              {isTestnetBuild && activeTab === "buy_and_shield" && (
+                <div
+                  role="region"
+                  aria-label="Self-attestation and gated pool"
+                  style={{
+                    padding: "var(--space-4)",
+                    borderRadius: "var(--radius-md)",
+                    backgroundColor: "rgba(26, 26, 26, 0.025)",
+                    border: "1px solid var(--color-border)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--space-3)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "var(--text-caption)", fontWeight: 700, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Self-Attestation &amp; Gated Pool
+                    </span>
+                    <span style={{ fontSize: "11px", color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>
+                      Testnet 46630
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
+                    Self-attestation is permissionless: anyone can attest, with no eligibility
+                    conditions (docs/DECISIONS.md; association-set policy: docs/ASP-POLICY.md).
+                    Pool gating is an anti-bot speedbump plus launch windows only — nothing
+                    claimed here beyond what the hook reports onchain below.
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "var(--text-caption)", fontFamily: "monospace" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ color: "var(--color-muted)" }}>Registry:</span>
+                      <a href={`${GATED_EXPLORER_ADDRESS_BASE}${GATED_REGISTRY_ADDRESS}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)", overflowWrap: "anywhere" }}>
+                        {`${GATED_REGISTRY_ADDRESS.slice(0, 6)}…${GATED_REGISTRY_ADDRESS.slice(-4)}`}
+                      </a>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ color: "var(--color-muted)" }}>Hook:</span>
+                      <a href={`${GATED_EXPLORER_ADDRESS_BASE}${GATED_HOOK_ADDRESS}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)", overflowWrap: "anywhere" }}>
+                        {`${GATED_HOOK_ADDRESS.slice(0, 6)}…${GATED_HOOK_ADDRESS.slice(-4)}`}
+                      </a>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ color: "var(--color-muted)" }}>Your attestation:</span>
+                      <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
+                        {!connectedAddress
+                          ? "Connect a wallet to read status"
+                          : isAttestLoading && attestation === null
+                          ? "Reading from chain…"
+                          : attestation?.attested
+                          ? "Attested — gated pool unlocked"
+                          : "Not attested — self-attest below"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ color: "var(--color-muted)" }}>Pool gating:</span>
+                      <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
+                        {!gating
+                          ? "Reading from chain…"
+                          : !gating.gated
+                          ? "Not gated — any address can swap"
+                          : gating.active
+                          ? `Active — window ends ${gating.windowEndsAt !== null ? new Date(Number(gating.windowEndsAt) * 1000).toUTCString() : "never (permanent)"}`
+                          : "Window elapsed — pool currently accepts any address"}
+                      </span>
+                    </div>
+                    {gating?.gated && (
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                        <span style={{ color: "var(--color-muted)" }}>Gated pool:</span>
+                        <span style={{ color: "var(--color-muted)", textAlign: "right" }}>
+                          {`ETH/VEIL 0.3% · id ${GATED_POOL_ID.slice(0, 10)}… · window ${(Number(gating.duration) / 86400).toFixed(1)} days`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={handleSelfAttest}
+                      disabled={isAttesting || (Boolean(connectedAddress) && attestation?.attested === true)}
+                      aria-label="Self-attest the connected address onchain"
+                      style={{
+                        flex: 1,
+                        minHeight: "44px",
+                        padding: "8px 14px",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid var(--color-border)",
+                        backgroundColor: "var(--color-accent)",
+                        color: "var(--color-accent-contrast)",
+                        fontWeight: 600,
+                        fontSize: "var(--text-body-sm)",
+                        cursor: isAttesting || (Boolean(connectedAddress) && attestation?.attested === true) ? "not-allowed" : "pointer",
+                        opacity: isAttesting || (Boolean(connectedAddress) && attestation?.attested === true) ? 0.45 : 1,
+                      }}
+                    >
+                      {!connectedAddress
+                        ? "Connect Wallet to Attest"
+                        : isAttesting
+                        ? "Attesting…"
+                        : attestation?.attested
+                        ? "Already Attested"
+                        : "Self-Attest (1 Transaction)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFlowError(null);
+                        void refreshAttestationState();
+                      }}
+                      disabled={isAttestLoading || !connectedAddress}
+                      aria-label="Refresh attestation and gating status from chain"
+                      style={{
+                        minHeight: "44px",
+                        padding: "8px 14px",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid var(--color-border)",
+                        backgroundColor: "transparent",
+                        color: "var(--color-text)",
+                        fontWeight: 600,
+                        fontSize: "var(--text-body-sm)",
+                        cursor: isAttestLoading || !connectedAddress ? "not-allowed" : "pointer",
+                        opacity: isAttestLoading || !connectedAddress ? 0.45 : 1,
+                      }}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  {attestNote && (
+                    <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
+                      {attestNote}
+                    </span>
+                  )}
+                  {attestTxHash && (
+                    <span style={{ fontSize: "var(--text-caption)", fontFamily: "monospace", overflowWrap: "anywhere" }}>
+                      <span style={{ color: "var(--color-muted)" }}>Attestation tx: </span>
+                      <a href={`${GATED_EXPLORER_TX_BASE}${attestTxHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)" }}>
+                        {attestTxHash}
+                      </a>
+                    </span>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
+                    <label htmlFor="gated-veil-amount" style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Gated Swap Amount (VEIL in, ETH out)
+                    </label>
+                    <input
+                      id="gated-veil-amount"
+                      type="text"
+                      inputMode="decimal"
+                      value={gatedAmountIn}
+                      onChange={(e) => setGatedAmountIn(e.target.value)}
+                      placeholder={PROVEN_GATED_VEIL_AMOUNT_IN}
+                      aria-describedby="gated-swap-hint"
+                      style={{
+                        minHeight: "44px",
+                        padding: "8px 12px",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid var(--color-border)",
+                        backgroundColor: "var(--color-surface)",
+                        color: "var(--color-text)",
+                        fontFamily: "monospace",
+                        fontSize: "var(--text-body)",
+                      }}
+                    />
+                    <span id="gated-swap-hint" style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
+                      Minimum accepted is 1 wei, verbatim from the proven script — no slippage
+                      protection on this testnet path. Needs test VEIL already in your wallet;
+                      there is no onchain faucet.
+                    </span>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={handleSimulateGatedSwap}
+                        disabled={isSimulatingGated}
+                        aria-label="Simulate the gated swap gas-free via eth_call"
+                        style={{
+                          flex: 1,
+                          minHeight: "44px",
+                          padding: "8px 14px",
+                          borderRadius: "var(--radius-sm)",
+                          border: "1px solid var(--color-border)",
+                          backgroundColor: "transparent",
+                          color: "var(--color-text)",
+                          fontWeight: 600,
+                          fontSize: "var(--text-body-sm)",
+                          cursor: isSimulatingGated ? "not-allowed" : "pointer",
+                          opacity: isSimulatingGated ? 0.45 : 1,
+                        }}
+                      >
+                        {isSimulatingGated ? "Simulating…" : "Simulate Gated Swap (Gas-Free)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleGatedSwap}
+                        disabled={isGatedExecuteDisabled({
+                          isSwapping: isGatedSwapping,
+                          connected: Boolean(connectedAddress),
+                          veilInValid: parsedGatedIn !== null,
+                          attested: attestation?.attested ?? null,
+                          isSimulating: isSimulatingGated,
+                        })}
+                        aria-label="Execute the gated pool swap"
+                        style={{
+                          flex: 1,
+                          minHeight: "44px",
+                          padding: "8px 14px",
+                          borderRadius: "var(--radius-sm)",
+                          border: "none",
+                          backgroundColor: "var(--color-accent)",
+                          color: "var(--color-accent-contrast)",
+                          fontWeight: 600,
+                          fontSize: "var(--text-body-sm)",
+                          cursor: isGatedExecuteDisabled({
+                            isSwapping: isGatedSwapping,
+                            connected: Boolean(connectedAddress),
+                            veilInValid: parsedGatedIn !== null,
+                            attested: attestation?.attested ?? null,
+                            isSimulating: isSimulatingGated,
+                          })
+                            ? "not-allowed"
+                            : "pointer",
+                          opacity: isGatedExecuteDisabled({
+                            isSwapping: isGatedSwapping,
+                            connected: Boolean(connectedAddress),
+                            veilInValid: parsedGatedIn !== null,
+                            attested: attestation?.attested ?? null,
+                            isSimulating: isSimulatingGated,
+                          })
+                            ? 0.45
+                            : 1,
+                        }}
+                      >
+                        {!connectedAddress
+                          ? "Connect Wallet to Trade"
+                          : parsedGatedIn === null
+                          ? "Enter VEIL Amount"
+                          : attestation?.attested !== true
+                          ? "Attest First to Unlock"
+                          : isGatedSwapping
+                          ? "Swapping Through Gated Pool…"
+                          : "Execute Gated Swap"}
+                      </button>
+                    </div>
+                    {gatedSimNote && (
+                      <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
+                        {gatedSimNote}
+                      </span>
+                    )}
+                    {gatedTxHash && (
+                      <span style={{ fontSize: "var(--text-caption)", fontFamily: "monospace", overflowWrap: "anywhere" }}>
+                        <span style={{ color: "var(--color-muted)" }}>Gated swap tx: </span>
+                        <a href={`${GATED_EXPLORER_TX_BASE}${gatedTxHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)" }}>
+                          {gatedTxHash}
+                        </a>
+                      </span>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}
