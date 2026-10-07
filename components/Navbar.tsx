@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, LogOut, Copy, Check, ChevronDown } from "lucide-react";
 import { WalletModal } from "./WalletModal";
@@ -24,6 +24,24 @@ export function Navbar() {
   const [copied, setCopied] = useState(false);
   const [balances, setBalances] = useState<Record<string, string>>({});
   const [balancesLoading, setBalancesLoading] = useState(false);
+  const walletMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close the wallet menu on outside click or Escape (standard disclosure).
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!walletMenuRef.current?.contains(e.target as Node)) setIsMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isMenuOpen]);
 
   useEffect(() => {
     if (!isMenuOpen || !wallet?.address) return;
@@ -158,6 +176,7 @@ export function Navbar() {
               }}
             >
               <span
+                aria-hidden="true"
                 style={{
                   width: "6px",
                   height: "6px",
@@ -169,10 +188,13 @@ export function Navbar() {
             </div>
 
             {wallet ? (
-              <div style={{ position: "relative" }}>
+              <div style={{ position: "relative" }} ref={walletMenuRef}>
                 <button
                   type="button"
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  aria-haspopup="true"
+                  aria-expanded={isMenuOpen}
+                  aria-label={`Wallet ${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}, open account menu`}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -274,6 +296,7 @@ export function Navbar() {
                     <button
                       type="button"
                       onClick={handleCopy}
+                      aria-label={copied ? "Address copied to clipboard" : "Copy wallet address"}
                       style={{
                         width: "100%",
                         display: "flex",
@@ -309,13 +332,13 @@ export function Navbar() {
                         backgroundColor: "transparent",
                         fontSize: "12px",
                         fontFamily: "var(--font-body)",
-                        color: "#dc2626",
+                        color: "var(--color-danger-ink)",
                         cursor: "pointer",
                         textAlign: "left",
                       }}
                       className="hover:bg-red-50"
                     >
-                      <LogOut size={14} />
+                      <LogOut size={14} aria-hidden="true" />
                       <span>Disconnect Wallet</span>
                     </button>
                   </div>

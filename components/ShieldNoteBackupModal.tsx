@@ -16,6 +16,7 @@ interface Props {
 export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: Props) {
   const [mode, setMode] = useState<"export" | "import">("export");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [encryptedPayload, setEncryptedPayload] = useState<string | null>(null);
   const [importJson, setImportJson] = useState("");
   const [copied, setCopied] = useState(false);
@@ -60,6 +61,7 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="480px"
+      ariaLabel="Encrypted note backup"
       contentStyle={{
         padding: "var(--space-6)",
         display: "flex",
@@ -90,15 +92,15 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--color-accent)",
+                color: "var(--color-accent-ink)",
               }}
             >
               <Lock className="w-4 h-4 text-[#FF8C00]" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "var(--text-h4)", color: "var(--color-text)", fontWeight: 600 }}>
+              <h2 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "var(--text-h4)", color: "var(--color-text)", fontWeight: 600 }}>
                 Encrypted Note Backup
-              </h3>
+              </h2>
               <p style={{ margin: 0, fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
                 Client-side AES-GCM key preservation
               </p>
@@ -135,9 +137,12 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
           }}
         >
           <button
+            type="button"
             onClick={() => { setMode("export"); setError(null); }}
+            aria-pressed={mode === "export"}
             style={{
               padding: "6px",
+              minHeight: "28px",
               borderRadius: "var(--radius-sm)",
               fontSize: "var(--text-caption)",
               fontFamily: "var(--font-body)",
@@ -145,16 +150,19 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
               cursor: "pointer",
               border: mode === "export" ? "1px solid var(--color-accent)" : "none",
               backgroundColor: mode === "export" ? "rgba(255, 140, 0, 0.15)" : "transparent",
-              color: mode === "export" ? "var(--color-accent)" : "var(--color-muted)",
+              color: mode === "export" ? "var(--color-accent-ink)" : "var(--color-muted)",
               transition: "all var(--duration-fast)",
             }}
           >
             Export Backup
           </button>
           <button
+            type="button"
             onClick={() => { setMode("import"); setError(null); }}
+            aria-pressed={mode === "import"}
             style={{
               padding: "6px",
+              minHeight: "28px",
               borderRadius: "var(--radius-sm)",
               fontSize: "var(--text-caption)",
               fontFamily: "var(--font-body)",
@@ -162,7 +170,7 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
               cursor: "pointer",
               border: mode === "import" ? "1px solid var(--color-accent)" : "none",
               backgroundColor: mode === "import" ? "rgba(255, 140, 0, 0.15)" : "transparent",
-              color: mode === "import" ? "var(--color-accent)" : "var(--color-muted)",
+              color: mode === "import" ? "var(--color-accent-ink)" : "var(--color-muted)",
               transition: "all var(--duration-fast)",
             }}
           >
@@ -172,19 +180,20 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
 
         {error && (
           <div
+            role="alert"
             style={{
               padding: "var(--space-3)",
               borderRadius: "var(--radius-sm)",
-              backgroundColor: "rgba(255, 106, 123, 0.1)",
-              border: "1px solid rgba(255, 106, 123, 0.3)",
-              color: "#c0283c",
+              backgroundColor: "var(--color-danger-bg)",
+              border: "1px solid var(--color-danger-border)",
+              color: "var(--color-danger-ink)",
               fontSize: "var(--text-caption)",
               display: "flex",
               alignItems: "center",
               gap: "var(--space-2)",
             }}
           >
-            <ShieldAlert className="w-4 h-4 shrink-0" />
+            <ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}
@@ -192,26 +201,53 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
         {mode === "export" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontWeight: 500 }}>
+              <label htmlFor="backup-password" style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontWeight: 500 }}>
                 Encryption Password
               </label>
-              <input
-                type="password"
-                placeholder="Enter password (min 8 chars)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: "rgba(26, 26, 26, 0.04)",
-                  border: "1px solid var(--color-border-strong)",
-                  color: "var(--color-text)",
-                  fontSize: "var(--text-body-sm)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  id="backup-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="Enter password (min 8 chars)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 64px 10px 12px",
+                    borderRadius: "var(--radius-md)",
+                    backgroundColor: "rgba(26, 26, 26, 0.04)",
+                    border: "1px solid var(--color-border-strong)",
+                    color: "var(--color-text)",
+                    fontSize: "16px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    minHeight: "24px",
+                    padding: "2px 8px",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--color-muted)",
+                    fontSize: "11px",
+                    fontFamily: "var(--font-body)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
 
             <button
@@ -243,16 +279,19 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>Encrypted JSON Payload</span>
                   <button
+                    type="button"
                     onClick={handleCopy}
+                    aria-label="Copy encrypted JSON payload"
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: "var(--color-accent)",
+                      color: "var(--color-accent-ink)",
                       cursor: "pointer",
                       fontSize: "var(--text-caption)",
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
+                      minHeight: "24px",
                       fontWeight: 600,
                     }}
                   >
@@ -284,10 +323,11 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontWeight: 500 }}>
+              <label htmlFor="backup-json" style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontWeight: 500 }}>
                 Paste Encrypted Backup JSON
               </label>
               <textarea
+                id="backup-json"
                 rows={4}
                 placeholder='{"ciphertext": "...", "salt": "...", "iv": "..."}'
                 value={importJson}
@@ -299,7 +339,7 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
                   backgroundColor: "rgba(26, 26, 26, 0.04)",
                   border: "1px solid var(--color-border-strong)",
                   color: "var(--color-text)",
-                  fontSize: "11px",
+                  fontSize: "16px",
                   fontFamily: "monospace",
                   outline: "none",
                   boxSizing: "border-box",
@@ -308,26 +348,53 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontWeight: 500 }}>
+              <label htmlFor="backup-decrypt-password" style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontWeight: 500 }}>
                 Decryption Password
               </label>
-              <input
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: "rgba(26, 26, 26, 0.04)",
-                  border: "1px solid var(--color-border-strong)",
-                  color: "var(--color-text)",
-                  fontSize: "var(--text-body-sm)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  id="backup-decrypt-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 64px 10px 12px",
+                    borderRadius: "var(--radius-md)",
+                    backgroundColor: "rgba(26, 26, 26, 0.04)",
+                    border: "1px solid var(--color-border-strong)",
+                    color: "var(--color-text)",
+                    fontSize: "16px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    minHeight: "24px",
+                    padding: "2px 8px",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--color-muted)",
+                    fontSize: "11px",
+                    fontFamily: "var(--font-body)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
 
             <button

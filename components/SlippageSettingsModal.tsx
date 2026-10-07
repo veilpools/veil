@@ -28,6 +28,7 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="420px"
+      ariaLabel="Execution settings"
       contentStyle={{
         padding: "var(--space-6)",
         display: "flex",
@@ -73,16 +74,19 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-body-sm)" }}>
             <span style={{ color: "var(--color-muted)", fontWeight: 500 }}>Slippage Tolerance</span>
-            <span style={{ color: "var(--color-accent)", fontFamily: "monospace", fontWeight: 600 }}>{slippage}%</span>
+            <span style={{ color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>{slippage}%</span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--space-2)" }}>
             {["0.1", "0.5", "1.0"].map((s) => (
               <button
                 key={s}
+                type="button"
                 onClick={() => setSlippage(s)}
+                aria-pressed={slippage === s}
                 style={{
                   padding: "8px 0",
+                  minHeight: "34px",
                   borderRadius: "var(--radius-sm)",
                   fontFamily: "monospace",
                   fontSize: "var(--text-body-sm)",
@@ -97,7 +101,7 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
                     slippage === s
                       ? "rgba(255, 140, 0, 0.15)"
                       : "rgba(26, 26, 26, 0.04)",
-                  color: slippage === s ? "var(--color-accent)" : "var(--color-text)",
+                  color: slippage === s ? "var(--color-accent-ink)" : "var(--color-text)",
                 }}
               >
                 {s}%
@@ -107,7 +111,9 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
               <input
                 type="number"
                 step="0.1"
+                min="0"
                 placeholder="Custom"
+                aria-label="Custom slippage tolerance percent"
                 value={["0.1", "0.5", "1.0"].includes(slippage) ? "" : slippage}
                 onChange={(e) => setSlippage(e.target.value)}
                 style={{
@@ -117,7 +123,7 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
                   backgroundColor: "rgba(26, 26, 26, 0.04)",
                   borderRadius: "var(--radius-sm)",
                   border: "1px solid var(--color-border-strong)",
-                  fontSize: "var(--text-body-sm)",
+                  fontSize: "16px",
                   fontFamily: "monospace",
                   color: "var(--color-text)",
                   outline: "none",
@@ -129,19 +135,20 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
 
           {isHighSlippage && (
             <div
+              role="status"
               style={{
                 padding: "var(--space-3)",
                 borderRadius: "var(--radius-sm)",
                 backgroundColor: "rgba(255, 140, 0, 0.1)",
                 border: "1px solid rgba(255, 140, 0, 0.3)",
                 fontSize: "var(--text-caption)",
-                color: "var(--color-accent)",
+                color: "var(--color-accent-ink)",
                 display: "flex",
                 alignItems: "center",
                 gap: "var(--space-2)",
               }}
             >
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>High slippage may expose your swap to greater price variance.</span>
             </div>
           )}
@@ -156,6 +163,8 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
             <input
               type="number"
+              min="1"
+              aria-label="Transaction deadline in minutes"
               value={deadlineMinutes}
               onChange={(e) => setDeadlineMinutes(e.target.value)}
               style={{
@@ -164,7 +173,7 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
                 backgroundColor: "rgba(26, 26, 26, 0.04)",
                 borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--color-border-strong)",
-                fontSize: "var(--text-body-sm)",
+                fontSize: "16px",
                 fontFamily: "monospace",
                 color: "var(--color-text)",
                 textAlign: "center",
@@ -190,8 +199,8 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
             gap: "4px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--color-accent)", fontWeight: 600 }}>
-            <Shield className="w-3.5 h-3.5 text-[#FF8C00]" />
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--color-accent-ink)", fontWeight: 600 }}>
+            <Shield className="w-3.5 h-3.5 text-[#FF8C00]" aria-hidden="true" />
             <span>Router Invariant Protection</span>
           </div>
           <p style={{ margin: 0, color: "var(--color-muted)", lineHeight: "var(--leading-body-sm)" }}>

@@ -18,10 +18,12 @@ export function WalletModal({
   open,
   onClose,
   onPick,
+  ariaLabel = "Connect a wallet",
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (id: EvmWalletId, address: string) => void;
+  ariaLabel?: string;
 }) {
   const [detected, setDetected] = useState<EvmWalletId[]>([]);
   const [pending, setPending] = useState<EvmWalletId | null>(null);
@@ -72,6 +74,7 @@ export function WalletModal({
       isOpen={open}
       onClose={onClose}
       maxWidth="440px"
+      ariaLabel={ariaLabel}
       contentStyle={{
         padding: "var(--space-6)",
         maxHeight: "90vh",
@@ -83,7 +86,7 @@ export function WalletModal({
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <div>
-            <h3
+            <h2
               style={{
                 margin: 0,
                 fontSize: "1.25rem",
@@ -93,7 +96,7 @@ export function WalletModal({
               }}
             >
               Connect Wallet
-            </h3>
+            </h2>
             <span
               style={{
                 fontSize: "11px",
@@ -161,7 +164,7 @@ export function WalletModal({
                   >
                     <img
                       src={w.icon}
-                      alt={w.name}
+                      alt=""
                       width={28}
                       height={28}
                       style={{ borderRadius: "6px", flexShrink: 0 }}
@@ -181,8 +184,8 @@ export function WalletModal({
                       style={{
                         fontSize: "11px",
                         fontFamily: "monospace",
-                        color: busy ? "var(--color-accent)" : "#16a34a",
-                        backgroundColor: busy ? "rgba(255,140,0,0.1)" : "rgba(22,163,74,0.08)",
+                        color: busy ? "var(--color-accent-ink)" : "var(--color-success-ink)",
+                        backgroundColor: busy ? "rgba(255,140,0,0.1)" : "var(--color-success-bg)",
                         padding: "2px 8px",
                         borderRadius: "var(--radius-sm)",
                         fontWeight: 600,
@@ -214,7 +217,7 @@ export function WalletModal({
                   >
                     <img
                       src={w.icon}
-                      alt={w.name}
+                      alt=""
                       width={28}
                       height={28}
                       style={{ borderRadius: "6px", opacity: 0.6, flexShrink: 0 }}
@@ -251,20 +254,21 @@ export function WalletModal({
 
         {err && (
           <div
+            role="alert"
             style={{
               marginTop: "var(--space-4)",
               padding: "10px 12px",
               borderRadius: "var(--radius-sm)",
-              backgroundColor: "rgba(239, 68, 68, 0.08)",
-              border: "1px solid rgba(239, 68, 68, 0.2)",
-              color: "#dc2626",
+              backgroundColor: "var(--color-danger-bg)",
+              border: "1px solid var(--color-danger-border)",
+              color: "var(--color-danger-ink)",
               fontSize: "12px",
               display: "flex",
               alignItems: "center",
               gap: "8px",
             }}
           >
-            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            <AlertCircle size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
             <span>{err}</span>
           </div>
         )}

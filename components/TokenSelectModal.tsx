@@ -110,7 +110,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Pons Launchpad",
     iconBg: "#ffffff",
     iconSvg: (
-      <img src="/tokens/pons.png" alt="PONS" className="w-full h-full object-contain" />
+      <img src="/tokens/pons.png" alt="" className="w-full h-full object-contain" />
     ),
   },
   {
@@ -126,7 +126,7 @@ export const SUPPORTED_TOKENS: TokenItem[] = [
     badge: "Robinhood DeFi",
     iconBg: "#ffffff",
     iconSvg: (
-      <img src="/tokens/quanta.png" alt="QUANTA" className="w-full h-full object-contain" />
+      <img src="/tokens/quanta.png" alt="" className="w-full h-full object-contain" />
     ),
   },
   {
@@ -178,6 +178,7 @@ interface TokenSelectModalProps {
   selectedSymbol: string;
   balances?: Record<string, string>;
   disabledSymbols?: string[];
+  ariaLabel?: string;
 }
 
 export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
@@ -187,6 +188,7 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
   selectedSymbol,
   balances = {},
   disabledSymbols = [],
+  ariaLabel = "Select a token",
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -208,6 +210,7 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="460px"
+      ariaLabel={ariaLabel}
       contentStyle={{
         maxHeight: "85vh",
         display: "flex",
@@ -237,7 +240,7 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                 borderRadius: "var(--radius-sm)",
                 background: "rgba(255, 140, 0, 0.12)",
                 border: "1px solid rgba(255, 140, 0, 0.3)",
-                color: "var(--color-accent)",
+                color: "var(--color-accent-ink)",
                 fontWeight: 600,
               }}
             >
@@ -270,9 +273,11 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
             <Search className="w-4 h-4" style={{ position: "absolute", left: "14px", color: "var(--color-faint)", pointerEvents: "none" }} />
             <input
               type="text"
+              data-autofocus
               placeholder="Search by name, symbol, or paste address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search tokens"
               style={{
                 width: "100%",
                 paddingLeft: "42px",
@@ -282,14 +287,13 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                 backgroundColor: "rgba(26, 26, 26, 0.04)",
                 borderRadius: "var(--radius-md)",
                 border: "1px solid var(--color-border-strong)",
-                fontSize: "var(--text-body-sm)",
+                fontSize: "16px",
                 color: "var(--color-text)",
                 outline: "none",
                 boxSizing: "border-box",
                 fontFamily: "var(--font-body)",
                 transition: "border-color var(--duration-fast)",
               }}
-              autoFocus
             />
           </div>
         </div>
@@ -409,7 +413,7 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
           }}
         >
           <span>Shielded Pool Denominations Supported</span>
-          <span style={{ color: "var(--color-accent)", fontFamily: "monospace", fontWeight: 600 }}>LeanIMT Verified</span>
+          <span style={{ color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>LeanIMT Verified</span>
         </div>
     </ModalWrapper>
   );

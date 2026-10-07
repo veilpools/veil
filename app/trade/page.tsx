@@ -11,6 +11,9 @@ import {
   ArrowDown,
   Check,
   Lock,
+  AlertTriangle,
+  Loader2,
+  X,
 } from "lucide-react";
 import { createShieldedNote, type ShieldedNote } from "../../lib/note";
 import { ShieldNoteBackupModal } from "../../components/ShieldNoteBackupModal";
@@ -191,6 +194,15 @@ export default function SwapToShieldPage() {
   const [proverCommitment, setProverCommitment] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
 
+  // Inline flow error (replaces blocking alert() dialogs).
+  const [flowError, setFlowError] = useState<string | null>(null);
+
+  function switchTab(tab: "buy_and_shield" | "shielded_swap" | "withdraw" | "vault") {
+    setActiveTab(tab);
+    setIsNoteDropdownOpen(false);
+    setFlowError(null);
+  }
+
   // Load notes from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -300,6 +312,7 @@ export default function SwapToShieldPage() {
     Math.abs(parsedInput - parseFloat(formatEther(liveDenomination))) < 1e-9;
 
   async function handleBuyAndShield() {
+    setFlowError(null);
     if (!connectedAddress) {
       setIsWalletModalOpen(true);
       return;
@@ -307,7 +320,9 @@ export default function SwapToShieldPage() {
 
     if (!inputAmount || parsedInput <= 0) return;
     if (!inputMatchesDenomination) {
-      alert("Enter the exact pool denomination shown under You Shield.");
+      setFlowError(
+        `Enter the exact pool denomination shown under You Shield (${liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "live value"}).`
+      );
       return;
     }
 
@@ -430,41 +445,49 @@ export default function SwapToShieldPage() {
         prev[2],
         { ...prev[3], status: "completed" },
       ]);
+      // Surface the result even if the user hid the modal mid-proof.
+      setIsProverOpen(true);
     } catch (e: unknown) {
       console.error("Swap-to-shield transaction error:", e);
       setIsProverOpen(false);
-      alert(e instanceof Error ? e.message : "Transaction cancelled or failed on-chain.");
+      setFlowError(
+        e instanceof Error
+          ? e.message
+          : "Transaction cancelled or failed on-chain. Check your wallet and try again."
+      );
     } finally {
       setIsExecuting(false);
     }
   }
 
   async function handleShieldedSwap() {
+    setFlowError(null);
     if (!connectedAddress) {
       setIsWalletModalOpen(true);
       return;
     }
     if (notes.length === 0) {
-      alert("No shielded notes available in vault to spend.");
+      setFlowError("No shielded notes available in vault to spend. Create one via Swap-to-Shield first.");
       return;
     }
-    alert(
+    setFlowError(
       "Shielded Swap needs a liquid v4 route plus full Groth16 binding — available after F3/F4. Your funds stay safe in the pool, use Withdraw for now."
     );
   }
 
   async function handleWithdraw() {
+    setFlowError(null);
     if (!connectedAddress) {
       setIsWalletModalOpen(true);
       return;
     }
 
     if (!cleanRecipient) {
-      alert("Please provide a clean recipient address.");
+      setFlowError("Please provide a clean recipient address for the unlinkable withdrawal.");
       return;
     }
     if (notes.length === 0) {
-      alert("No shielded notes available in local storage.");
+      setFlowError("No shielded notes available in local storage. Create one via Swap-to-Shield first.");
       return;
     }
 
@@ -554,7 +577,7 @@ export default function SwapToShieldPage() {
       } catch (e: unknown) {
         console.error("0xbow testnet withdrawal error:", e);
         setIsProverOpen(false);
-        alert(e instanceof Error ? e.message : "0xbow testnet withdrawal failed.");
+        setFlowError(e instanceof Error ? e.message : "0xbow testnet withdrawal failed. Try again.");
       } finally {
         setIsExecuting(false);
       }
@@ -567,7 +590,7 @@ export default function SwapToShieldPage() {
     if (connectedChainId === MAINNET_CHAIN_ID) {
       const suite = getBowSuite(MAINNET_CHAIN_ID);
       if (!suite) {
-        alert(
+        setFlowError(
           "Mainnet 0xbow suite pending migration — withdrawals open after `pnpm migrate:mainnet`. No transaction was sent."
         );
         return;
@@ -609,7 +632,7 @@ export default function SwapToShieldPage() {
       } catch (e: unknown) {
         console.error("0xbow mainnet withdrawal error:", e);
         setIsProverOpen(false);
-        alert(e instanceof Error ? e.message : "0xbow mainnet withdrawal failed.");
+        setFlowError(e instanceof Error ? e.message : "0xbow mainnet withdrawal failed. Try again.");
       } finally {
         setIsExecuting(false);
       }
@@ -742,11 +765,17 @@ export default function SwapToShieldPage() {
         prev[2],
         { ...prev[3], status: "completed" },
       ]);
+      // Surface the result even if the user hid the modal mid-proof.
+      setIsProverOpen(true);
       setCleanRecipient("");
     } catch (e: unknown) {
       console.error("Withdrawal transaction error:", e);
       setIsProverOpen(false);
-      alert(e instanceof Error ? e.message : "Withdrawal transaction cancelled or failed on-chain.");
+      setFlowError(
+        e instanceof Error
+          ? e.message
+          : "Withdrawal transaction cancelled or failed on-chain. Check your wallet and try again."
+      );
     } finally {
       setIsExecuting(false);
     }
@@ -818,6 +847,7 @@ export default function SwapToShieldPage() {
           style={{
             display: "inline-flex",
             alignItems: "center",
+            flexWrap: "wrap",
             gap: "var(--space-3)",
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
@@ -836,7 +866,7 @@ export default function SwapToShieldPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(460px, 100%), 1fr))",
           gap: "var(--space-6)",
           alignItems: "start",
           width: "100%",
@@ -878,14 +908,13 @@ export default function SwapToShieldPage() {
                 padding: "4px",
                 borderRadius: "var(--radius-md)",
                 border: "1px solid var(--color-border)",
+                flexWrap: "wrap",
               }}
             >
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab("buy_and_shield");
-                  setIsNoteDropdownOpen(false);
-                }}
+                onClick={() => switchTab("buy_and_shield")}
+                aria-current={activeTab === "buy_and_shield" ? "true" : undefined}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -906,10 +935,8 @@ export default function SwapToShieldPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab("shielded_swap");
-                  setIsNoteDropdownOpen(false);
-                }}
+                onClick={() => switchTab("shielded_swap")}
+                aria-current={activeTab === "shielded_swap" ? "true" : undefined}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -930,10 +957,8 @@ export default function SwapToShieldPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab("withdraw");
-                  setIsNoteDropdownOpen(false);
-                }}
+                onClick={() => switchTab("withdraw")}
+                aria-current={activeTab === "withdraw" ? "true" : undefined}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -954,10 +979,8 @@ export default function SwapToShieldPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab("vault");
-                  setIsNoteDropdownOpen(false);
-                }}
+                onClick={() => switchTab("vault")}
+                aria-current={activeTab === "vault" ? "true" : undefined}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1012,10 +1035,49 @@ export default function SwapToShieldPage() {
                 transition: "all var(--duration-fast)",
               }}
             >
-              <Settings className="w-3.5 h-3.5 text-neutral-400" />
+              <Settings className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
               <span>{slippage}%</span>
             </button>
           </div>
+
+          {/* Inline flow error — non-blocking, screen-reader announced */}
+          {flowError && (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "var(--space-2)",
+                padding: "10px 12px",
+                borderRadius: "var(--radius-sm)",
+                backgroundColor: "var(--color-danger-bg)",
+                border: "1px solid var(--color-danger-border)",
+                color: "var(--color-danger-ink)",
+                fontSize: "var(--text-caption)",
+                fontFamily: "var(--font-body)",
+                lineHeight: 1.5,
+              }}
+            >
+              <AlertTriangle size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <span style={{ flex: 1, overflowWrap: "anywhere" }}>{flowError}</span>
+              <button
+                type="button"
+                onClick={() => setFlowError(null)}
+                aria-label="Dismiss error message"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "inherit",
+                  cursor: "pointer",
+                  display: "flex",
+                  padding: "2px",
+                  flexShrink: 0,
+                }}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
+          )}
 
           {/* TAB 1: SWAP-TO-SHIELD */}
           {activeTab === "buy_and_shield" && (
@@ -1044,16 +1106,21 @@ export default function SwapToShieldPage() {
                       {[0.25, 0.5, 0.75, 1.0].map((pct) => (
                         <button
                           key={pct}
+                          type="button"
                           onClick={() => handlePercentage(pct)}
+                          aria-label={`Set amount to ${pct === 1 ? "max" : `${pct * 100} percent`} of balance`}
                           className="hover:border-[#FF8C00] hover:text-[#FF8C00] active:scale-95 transition-all"
                           style={{
-                            padding: "3px 8px",
+                            padding: "4px 8px",
+                            minHeight: "24px",
+                            display: "inline-flex",
+                            alignItems: "center",
                             borderRadius: "var(--radius-sm)",
                             backgroundColor: "#ffffff",
                             border: "1px solid var(--color-border-strong)",
                             color: "var(--color-text)",
                             fontFamily: "monospace",
-                            fontSize: "10.5px",
+                            fontSize: "11px",
                             cursor: "pointer",
                             fontWeight: 600,
                             boxShadow: "0 1px 2px rgba(26, 26, 26, 0.04)",
@@ -1071,6 +1138,8 @@ export default function SwapToShieldPage() {
                   <input
                     type="number"
                     step="any"
+                    inputMode="decimal"
+                    aria-label="Amount to pay"
                     value={inputAmount}
                     onChange={(e) => setInputAmount(e.target.value)}
                     placeholder="0.0"
@@ -1131,7 +1200,7 @@ export default function SwapToShieldPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "var(--color-accent)",
+                    color: "var(--color-accent-ink)",
                     boxShadow: "0 4px 12px rgba(26, 26, 26, 0.1)",
                     cursor: "pointer",
                   }}
@@ -1289,7 +1358,7 @@ export default function SwapToShieldPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--color-muted)" }}>VeilHook Protocol Fee:</span>
-                  <span style={{ color: "var(--color-accent)", fontWeight: 600 }}>30 bps (Buyback &amp; Burn)</span>
+                  <span style={{ color: "var(--color-accent-ink)", fontWeight: 600 }}>30 bps (Buyback &amp; Burn)</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--color-muted)" }}>Zero-Custody Guarantee:</span>
@@ -1315,10 +1384,13 @@ export default function SwapToShieldPage() {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <label
+                    htmlFor="shielded-swap-note-select"
+                    style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}
+                  >
                     Spend Shielded Note (Private)
                   </label>
-                  <span style={{ fontSize: "11px", color: "var(--color-accent)", fontFamily: "monospace", fontWeight: 600 }}>
+                  <span style={{ fontSize: "11px", color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>
                     {notes.length} Notes Available
                   </span>
                 </div>
@@ -1346,17 +1418,18 @@ export default function SwapToShieldPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => setActiveTab("buy_and_shield")}
+                      onClick={() => switchTab("buy_and_shield")}
                       style={{
                         marginTop: "var(--space-2)",
                         padding: "6px 14px",
                         borderRadius: "var(--radius-sm)",
                         backgroundColor: "rgba(255, 140, 0, 0.15)",
                         border: "1px solid rgba(255, 140, 0, 0.35)",
-                        color: "var(--color-accent)",
+                        color: "var(--color-accent-ink)",
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
+                        minHeight: "24px",
                       }}
                     >
                       Go to Swap-to-Shield ➔
@@ -1366,7 +1439,11 @@ export default function SwapToShieldPage() {
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
+                      id="shielded-swap-note-select"
                       onClick={() => setIsNoteDropdownOpen(!isNoteDropdownOpen)}
+                      aria-haspopup="true"
+                      aria-expanded={isNoteDropdownOpen}
+                      aria-label="Selected shielded note, change note"
                       style={{
                         width: "100%",
                         padding: "12px 14px",
@@ -1398,7 +1475,7 @@ export default function SwapToShieldPage() {
                             flexShrink: 0,
                           }}
                         >
-                          <Lock className="w-4 h-4" />
+                          <Lock className="w-4 h-4" aria-hidden="true" />
                         </div>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1427,13 +1504,13 @@ export default function SwapToShieldPage() {
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                        <span style={{ fontFamily: "monospace", fontSize: "var(--text-body)", color: "var(--color-accent)", fontWeight: 700 }}>
+                        <span style={{ fontFamily: "monospace", fontSize: "var(--text-body)", color: "var(--color-accent-ink)", fontWeight: 700 }}>
                           {formatNoteAmount(activeNoteItem.denomination, activeNoteItem.asset)}
                         </span>
                         {isNoteDropdownOpen ? (
-                          <ChevronUp className="w-4 h-4 text-neutral-400" />
+                          <ChevronUp className="w-4 h-4 text-neutral-400" aria-hidden="true" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 text-neutral-400" />
+                          <ChevronDown className="w-4 h-4 text-neutral-400" aria-hidden="true" />
                         )}
                       </div>
                     </button>
@@ -1540,7 +1617,10 @@ export default function SwapToShieldPage() {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <label
+                    htmlFor="pool-target-select"
+                    style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}
+                  >
                     Target Shielded Pool
                   </label>
                   <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
@@ -1550,7 +1630,9 @@ export default function SwapToShieldPage() {
 
                 <button
                   type="button"
+                  id="pool-target-select"
                   onClick={() => setIsOutputTokenModalOpen(true)}
+                  aria-label="Target shielded pool, change pool"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1605,7 +1687,7 @@ export default function SwapToShieldPage() {
                       style={{
                         fontFamily: "monospace",
                         fontSize: "11px",
-                        color: "var(--color-accent)",
+                        color: "var(--color-accent-ink)",
                         backgroundColor: "rgba(255, 140, 0, 0.08)",
                         padding: "3px 8px",
                         borderRadius: "var(--radius-sm)",
@@ -1680,10 +1762,13 @@ export default function SwapToShieldPage() {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <label
+                    htmlFor="withdraw-note-select"
+                    style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}
+                  >
                     Select Shielded Note to Withdraw
                   </label>
-                  <span style={{ fontSize: "11px", color: "var(--color-accent)", fontFamily: "monospace", fontWeight: 600 }}>
+                  <span style={{ fontSize: "11px", color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>
                     {notes.length} Available
                   </span>
                 </div>
@@ -1714,7 +1799,11 @@ export default function SwapToShieldPage() {
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
+                      id="withdraw-note-select"
                       onClick={() => setIsNoteDropdownOpen(!isNoteDropdownOpen)}
+                      aria-haspopup="true"
+                      aria-expanded={isNoteDropdownOpen}
+                      aria-label="Selected shielded note, change note"
                       style={{
                         width: "100%",
                         padding: "12px 14px",
@@ -1746,7 +1835,7 @@ export default function SwapToShieldPage() {
                             flexShrink: 0,
                           }}
                         >
-                          <Lock className="w-4 h-4" />
+                          <Lock className="w-4 h-4" aria-hidden="true" />
                         </div>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1775,13 +1864,13 @@ export default function SwapToShieldPage() {
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                        <span style={{ fontFamily: "monospace", fontSize: "var(--text-body)", color: "var(--color-accent)", fontWeight: 700 }}>
+                        <span style={{ fontFamily: "monospace", fontSize: "var(--text-body)", color: "var(--color-accent-ink)", fontWeight: 700 }}>
                           {formatNoteAmount(activeNoteItem.denomination, activeNoteItem.asset)}
                         </span>
                         {isNoteDropdownOpen ? (
-                          <ChevronUp className="w-4 h-4 text-neutral-400" />
+                          <ChevronUp className="w-4 h-4 text-neutral-400" aria-hidden="true" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 text-neutral-400" />
+                          <ChevronDown className="w-4 h-4 text-neutral-400" aria-hidden="true" />
                         )}
                       </div>
                     </button>
@@ -1868,7 +1957,10 @@ export default function SwapToShieldPage() {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <label
+                    htmlFor="clean-recipient"
+                    style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}
+                  >
                     Clean Recipient Address (0 Linkage)
                   </label>
                   <span style={{ fontSize: "10px", color: "var(--color-muted)", fontFamily: "monospace", fontWeight: 500 }}>
@@ -1876,7 +1968,16 @@ export default function SwapToShieldPage() {
                   </span>
                 </div>
                 <input
+                  id="clean-recipient"
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={cleanRecipient.length > 0 && !isAddress(cleanRecipient)}
+                  aria-describedby={
+                    cleanRecipient.length > 0 && !isAddress(cleanRecipient)
+                      ? "clean-recipient-error"
+                      : "clean-recipient-help"
+                  }
                   placeholder="0x... (fresh or unlinked wallet address)"
                   value={cleanRecipient}
                   onChange={(e) => setCleanRecipient(e.target.value)}
@@ -1885,23 +1986,36 @@ export default function SwapToShieldPage() {
                     padding: "11px 14px",
                     borderRadius: "var(--radius-md)",
                     backgroundColor: "#ffffff",
-                    border: "1px solid var(--color-border-strong)",
+                    border:
+                      cleanRecipient.length > 0 && !isAddress(cleanRecipient)
+                        ? "1px solid var(--color-danger-border)"
+                        : "1px solid var(--color-border-strong)",
                     color: "var(--color-text)",
-                    fontSize: "var(--text-body-sm)",
+                    fontSize: "16px",
                     fontFamily: "monospace",
                     outline: "none",
                     boxSizing: "border-box",
                     transition: "border-color var(--duration-fast)",
                   }}
                 />
-                <span style={{ fontSize: "11px", color: "var(--color-muted)" }}>
+                {cleanRecipient.length > 0 && !isAddress(cleanRecipient) && (
+                  <span id="clean-recipient-error" role="status" style={{ fontSize: "11px", color: "var(--color-danger-ink)" }}>
+                    Not a valid address — expected 0x followed by 40 hexadecimal characters.
+                  </span>
+                )}
+                <span id="clean-recipient-help" style={{ fontSize: "11px", color: "var(--color-muted)" }}>
                   The withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4).
                 </span>
               </div>
 
               <button
                 onClick={handleWithdraw}
-                disabled={isExecuting || !cleanRecipient || notes.length === 0}
+                disabled={
+                  isExecuting ||
+                  !cleanRecipient ||
+                  !isAddress(cleanRecipient) ||
+                  notes.length === 0
+                }
                 className="group active:scale-[0.99] transition-all"
                 style={{
                   width: "100%",
@@ -1917,8 +2031,20 @@ export default function SwapToShieldPage() {
                   border: "none",
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
-                  cursor: isExecuting || !cleanRecipient || notes.length === 0 ? "not-allowed" : "pointer",
-                  opacity: isExecuting || !cleanRecipient || notes.length === 0 ? 0.45 : 1,
+                  cursor:
+                    isExecuting ||
+                    !cleanRecipient ||
+                    !isAddress(cleanRecipient) ||
+                    notes.length === 0
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity:
+                    isExecuting ||
+                    !cleanRecipient ||
+                    !isAddress(cleanRecipient) ||
+                    notes.length === 0
+                      ? 0.45
+                      : 1,
                   boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
                   transition: "all var(--duration-fast)",
                 }}
@@ -1937,11 +2063,13 @@ export default function SwapToShieldPage() {
                 </span>
                 <button
                   onClick={() => setIsBackupOpen(true)}
+                  type="button"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
                     padding: "5px 12px",
+                    minHeight: "24px",
                     borderRadius: "var(--radius-sm)",
                     backgroundColor: "rgba(26, 26, 26, 0.04)",
                     border: "1px solid var(--color-border)",
@@ -1952,7 +2080,7 @@ export default function SwapToShieldPage() {
                     transition: "all var(--duration-fast)",
                   }}
                 >
-                  <Download className="w-3.5 h-3.5 text-neutral-400" />
+                  <Download className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
                   <span>Backup JSON</span>
                 </button>
               </div>
@@ -2000,7 +2128,7 @@ export default function SwapToShieldPage() {
                               border: "1px solid rgba(255, 140, 0, 0.25)",
                               fontSize: "11px",
                               fontFamily: "monospace",
-                              color: "var(--color-accent)",
+                              color: "var(--color-accent-ink)",
                               fontWeight: 600,
                             }}
                           >
@@ -2021,7 +2149,7 @@ export default function SwapToShieldPage() {
                             Attested · Depth 20
                           </span>
                         </div>
-                        <span style={{ fontFamily: "monospace", fontSize: "1.1rem", color: "var(--color-accent)", fontWeight: 700 }}>
+                        <span style={{ fontFamily: "monospace", fontSize: "1.1rem", color: "var(--color-accent-ink)", fontWeight: 700 }}>
                           {formatNoteAmount(note.denomination, note.asset)}
                         </span>
                       </div>
@@ -2046,22 +2174,25 @@ export default function SwapToShieldPage() {
                               {note.commitment.slice(0, 12)}...{note.commitment.slice(-8)}
                             </span>
                             <button
+                              type="button"
                               onClick={() => handleCopyCommitment(note.commitment)}
                               title="Copy full commitment hash"
+                              aria-label="Copy full commitment hash"
                               style={{
                                 background: "transparent",
                                 border: "none",
-                                color: "var(--color-accent)",
+                                color: "var(--color-accent-ink)",
                                 cursor: "pointer",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "3px",
                                 fontWeight: 600,
-                                padding: "2px 6px",
+                                padding: "4px 8px",
+                                minHeight: "24px",
                                 borderRadius: "4px",
                               }}
                             >
-                              <Copy className="w-3 h-3" />
+                              <Copy className="w-3 h-3" aria-hidden="true" />
                               <span>{copiedCommitment === note.commitment ? "Copied" : "Copy"}</span>
                             </button>
                           </div>
@@ -2080,9 +2211,10 @@ export default function SwapToShieldPage() {
                           Storage: Encrypted Local CSPRNG
                         </span>
                         <button
+                          type="button"
                           onClick={() => {
                             setSelectedNoteNullifier(note.nullifier);
-                            setActiveTab("withdraw");
+                            switchTab("withdraw");
                           }}
                           style={{
                             display: "inline-flex",
@@ -2146,7 +2278,7 @@ export default function SwapToShieldPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", fontSize: "var(--text-body-sm)" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)", padding: "12px 14px", backgroundColor: "rgba(26, 26, 26, 0.02)", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-accent)", fontWeight: 600, marginTop: "2px" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-accent-ink)", fontWeight: 600, marginTop: "2px" }}>
                   01
                 </span>
                 <span style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
@@ -2156,7 +2288,7 @@ export default function SwapToShieldPage() {
               </div>
 
               <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)", padding: "12px 14px", backgroundColor: "rgba(26, 26, 26, 0.02)", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-accent)", fontWeight: 600, marginTop: "2px" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-accent-ink)", fontWeight: 600, marginTop: "2px" }}>
                   02
                 </span>
                 <span style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
@@ -2166,7 +2298,7 @@ export default function SwapToShieldPage() {
               </div>
 
               <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)", padding: "12px 14px", backgroundColor: "rgba(26, 26, 26, 0.02)", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-accent)", fontWeight: 600, marginTop: "2px" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-accent-ink)", fontWeight: 600, marginTop: "2px" }}>
                   03
                 </span>
                 <span style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
@@ -2179,6 +2311,37 @@ export default function SwapToShieldPage() {
         </div>
       </div>
 
+      {/* Background proof progress — visible when the prover modal is hidden */}
+      {isExecuting && !isProverOpen && (
+        <button
+          type="button"
+          onClick={() => setIsProverOpen(true)}
+          style={{
+            position: "fixed",
+            right: "var(--page-gutter, 24px)",
+            bottom: "24px",
+            zIndex: 60,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "10px 16px",
+            minHeight: "44px",
+            borderRadius: "var(--radius-full)",
+            backgroundColor: "var(--color-text)",
+            color: "var(--color-bg)",
+            fontFamily: "var(--font-body)",
+            fontSize: "var(--text-body-sm)",
+            fontWeight: 600,
+            border: "none",
+            cursor: "pointer",
+            boxShadow: "0 8px 24px rgba(26, 26, 26, 0.3)",
+          }}
+        >
+          <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--color-accent)" }} aria-hidden="true" />
+          <span>Proof running — view progress</span>
+        </button>
+      )}
+
       {/* Modals */}
       <TokenSelectModal
         isOpen={isInputTokenModalOpen}
@@ -2187,6 +2350,7 @@ export default function SwapToShieldPage() {
         selectedSymbol={inputToken.symbol}
         balances={tokenBalances}
         disabledSymbols={["VEIL"]}
+        ariaLabel="Select token to pay with"
       />
 
       <TokenSelectModal
@@ -2196,6 +2360,7 @@ export default function SwapToShieldPage() {
         selectedSymbol={outputToken.symbol}
         balances={tokenBalances}
         disabledSymbols={["VEIL"]}
+        ariaLabel="Select token to shield"
       />
 
       <SlippageSettingsModal
@@ -2231,6 +2396,7 @@ export default function SwapToShieldPage() {
           setConnectedAddress(address as Address);
           setIsWalletModalOpen(false);
         }}
+        ariaLabel="Connect a wallet"
       />
     </div>
   );

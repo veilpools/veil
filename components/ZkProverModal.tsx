@@ -37,6 +37,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="460px"
+      ariaLabel={title}
       closeOnBackdropClick={isAllCompleted}
       closeOnEsc={isAllCompleted}
       contentStyle={{
@@ -69,13 +70,13 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--color-accent)",
+                color: "var(--color-accent-ink)",
               }}
             >
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <h3
+              <h2
                 style={{
                   margin: 0,
                   fontFamily: "var(--font-headline)",
@@ -85,7 +86,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
                 }}
               >
                 {title}
-              </h3>
+              </h2>
               <p
                 style={{
                   margin: "1px 0 0 0",
@@ -98,26 +99,34 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
               </p>
             </div>
           </div>
-          {isAllCompleted && (
-            <button
-              onClick={onClose}
-              aria-label="Close prover modal"
-              style={{
-                background: "rgba(26, 26, 26, 0.05)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-sm)",
-                cursor: "pointer",
-                padding: "6px",
-                color: "var(--color-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "all var(--duration-fast)",
-              }}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            aria-label={
+              isAllCompleted
+                ? "Close prover modal"
+                : "Hide prover progress — proving continues in the background"
+            }
+            title={
+              isAllCompleted
+                ? "Close"
+                : "Hide — the proof keeps running and will reopen on completion"
+            }
+            style={{
+              background: "rgba(26, 26, 26, 0.05)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+              padding: "6px",
+              color: "var(--color-muted)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all var(--duration-fast)",
+              flexShrink: 0,
+            }}
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Prover Steps Timeline */}
@@ -162,7 +171,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
                       step.status === "completed"
                         ? "var(--color-text)"
                         : step.status === "running"
-                        ? "var(--color-accent)"
+                        ? "var(--color-accent-ink)"
                         : "var(--color-faint)",
                   }}
                 >
@@ -175,7 +184,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
                     fontFamily: "monospace",
                     color:
                       step.status === "pending"
-                        ? "rgba(26, 26, 26, 0.4)"
+                        ? "var(--color-faint)"
                         : "var(--color-muted)",
                   }}
                 >
@@ -202,7 +211,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
           >
             <div style={{ display: "flex", justifyContent: "space-between", color: "var(--color-muted)", fontWeight: 500 }}>
               <span>Commitment:</span>
-              <span style={{ color: "var(--color-accent)", fontFamily: "monospace", fontWeight: 600 }}>Leaf Inserted</span>
+              <span style={{ color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>Leaf Inserted</span>
             </div>
             <div
               style={{
@@ -236,7 +245,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
               borderRadius: "var(--radius-md)",
               backgroundColor: "rgba(255, 140, 0, 0.08)",
               border: "1px solid rgba(255, 140, 0, 0.3)",
-              color: "var(--color-accent)",
+              color: "var(--color-accent-ink)",
               textDecoration: "none",
               fontSize: "var(--text-body-sm)",
               fontFamily: "monospace",

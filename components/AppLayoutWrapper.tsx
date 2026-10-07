@@ -16,9 +16,36 @@ export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <a
+        href="#main-content"
+        style={{
+          position: "absolute",
+          left: "12px",
+          top: "-48px",
+          zIndex: 100,
+          padding: "8px 14px",
+          borderRadius: "var(--radius-sm)",
+          backgroundColor: "var(--color-text)",
+          color: "#fff",
+          fontSize: "13px",
+          fontWeight: 600,
+          textDecoration: "none",
+          transition: "top var(--duration-fast)",
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.top = "12px";
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.top = "-48px";
+        }}
+      >
+        Skip to main content
+      </a>
       <PrivacyGridCanvas />
       <Navbar />
       <main
+        id="main-content"
+        tabIndex={-1}
         style={{
           flex: 1,
           width: "100%",

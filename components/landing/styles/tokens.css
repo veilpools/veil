@@ -171,7 +171,7 @@
 
   --color-text: #1a1a1a;
   --color-muted: #3a3a3a;
-  --color-faint: rgba(26, 26, 26, 0.55);
+  --color-faint: rgba(26, 26, 26, 0.65);
   --color-border: rgba(26, 26, 26, 0.12);
   --color-border-strong: rgba(26, 26, 26, 0.22);
   --color-hairline: rgba(26, 26, 26, 0.08);
@@ -179,6 +179,9 @@
   --color-brand: #FF8C00;
   --color-brand-ring: rgba(255, 140, 0, 0.12);
   --color-accent: #FF8C00;
+  /* Text-safe accent for light surfaces: #FF8C00 on white is only 2.3:1,
+     this ink variant reaches >=4.5:1 (WCAG AA) on white and #EBE1F0. */
+  --color-accent-ink: #92400e;
   --color-accent-hover: #e69900;
   --color-accent-contrast: #1a1a1a;
   --color-accent-1: #FF8C00;

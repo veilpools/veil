@@ -129,6 +129,14 @@ export const ZkShieldRadar: React.FC = () => {
   const burnShareLabel = buybackBps === null ? "—" : `${Number(buybackBps) / 100}% Burn`;
   const capacityLabel = treeDepth === null ? "—" : formatNumber(2 ** treeDepth);
   const depthLabel = treeDepth === null ? "—" : `${treeDepth} Levels`;
+  const statusLabel = rpcError
+    ? isLiveLoaded
+      ? "Reconnecting…"
+      : "RPC unreachable"
+    : isLiveLoaded
+    ? "Hook live"
+    : "Syncing…";
+  const statusDotColor = rpcError ? "#b45309" : isLiveLoaded ? "#16a34a" : "#ca8a04";
 
   return (
     <div
@@ -157,7 +165,7 @@ export const ZkShieldRadar: React.FC = () => {
         }}
       >
         <div>
-          <h3
+          <h2
             style={{
               margin: 0,
               fontFamily: "var(--font-headline)",
@@ -167,7 +175,7 @@ export const ZkShieldRadar: React.FC = () => {
             }}
           >
             Cryptographic Telemetry
-          </h3>
+          </h2>
           <p style={{ margin: "4px 0 0 0", fontSize: "var(--text-body-sm)", color: "var(--color-muted)", fontFamily: "var(--font-body)" }}>
             Live on-chain state validation of Robinhood privacy pools &amp; Uniswap v4 hook.
           </p>
@@ -175,17 +183,18 @@ export const ZkShieldRadar: React.FC = () => {
 
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)" }}>
           <span
+            aria-hidden="true"
             style={{
               width: "6px",
               height: "6px",
               borderRadius: "50%",
-              backgroundColor: isLiveLoaded ? "#16a34a" : "#ca8a04",
+              backgroundColor: statusDotColor,
               display: "inline-block",
             }}
           />
           <span>Robinhood {APP_CHAIN_ID}</span>
-          <span style={{ opacity: 0.4 }}>/</span>
-          <span>Hook live</span>
+          <span aria-hidden="true" style={{ opacity: 0.4 }}>/</span>
+          <span>{statusLabel}</span>
         </div>
       </div>
 
@@ -337,7 +346,7 @@ export const ZkShieldRadar: React.FC = () => {
           <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
             Current Merkle Root (live)
           </span>
-          <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-accent)", fontWeight: 600 }}>
+          <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-accent-ink)", fontWeight: 600 }}>
             {isLiveLoaded ? "Live Sync" : "Syncing…"}
           </span>
         </div>
@@ -368,14 +377,17 @@ export const ZkShieldRadar: React.FC = () => {
           </span>
 
           <button
+            type="button"
             onClick={handleCopyRoot}
             disabled={!isLiveLoaded || nextIndex === 0}
             title="Copy Merkle Root"
+            aria-label="Copy full Merkle root hash"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
               padding: "4px 8px",
+              minHeight: "24px",
               borderRadius: "var(--radius-sm)",
               backgroundColor: "rgba(26, 26, 26, 0.04)",
               border: "1px solid var(--color-border)",
@@ -389,12 +401,12 @@ export const ZkShieldRadar: React.FC = () => {
           >
             {copiedRoot ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <Check className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
                 <span>Copied</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                <Copy className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
                 <span>Copy</span>
               </>
             )}
