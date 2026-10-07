@@ -21,6 +21,7 @@ import {
   createBowNote,
   isBowNote,
   getWithdrawPath,
+  generateRandomBytes32,
   serializeNotesList,
   deserializeNotesList,
   type ShieldedNote,
@@ -40,6 +41,7 @@ import {
   createWalletClient,
   custom,
   parseAbi,
+  parseEther,
   isAddress,
   type Address,
 } from "viem";
@@ -48,7 +50,24 @@ import { loadWallet, getActiveEvmProvider, subscribeWalletChange } from "../../l
 import { fetchAllTokenBalances, publicClient } from "../../lib/balances";
 import { waitForTransactionReceipt } from "viem/actions";
 import { buildWithdrawArgs } from "../../lib/withdraw-args";
-import { CONTRACT_ADDRESSES } from "../../lib/contracts";
+import { CONTRACT_ABIS, CONTRACT_ADDRESSES } from "../../lib/contracts";
+import {
+  buildSwapToShieldParams,
+  findSwapToShieldExecuted,
+  mapRouterSwapError,
+  parseSlippagePercent,
+  quoteSwapToShieldOutput,
+  readSwapGuards,
+  readVeilAllowance,
+  readVeilBalance,
+  PROVEN_SCRIPT_VEIL_AMOUNT_IN,
+  TESTNET_LEGACY_ETH_POOL,
+  TESTNET_ROUTER_ADDRESS,
+  TESTNET_VEIL_TOKEN,
+  UINT128_MAX,
+  VEIL_ERC20_ABI,
+} from "../../lib/router-swap";
+import { calculateSlippageBound } from "../../lib/router-client";
 import {
   TESTNET_0XBOW,
   TESTNET_CHAIN_ID,
@@ -183,6 +202,22 @@ export default function SwapToShieldPage() {
   const [slippage, setSlippage] = useState("0.5");
   const [deadlineMinutes, setDeadlineMinutes] = useState("20");
 
+  // Testnet router path (Task 2): Buy & Shield defaults to the REAL
+  // VeilShieldRouter.swapToShield route (VEIL -> ETH -> shielded ETH) on
+  // chain 46630. Direct pool deposit stays as an explicit, honestly labeled
+  // fallback only (forceDirect).
+  const isTestnetBuild = APP_CHAIN_ID === TESTNET_CHAIN_ID;
+  const [forceDirect, setForceDirect] = useState(false);
+  const isTestnetRouterMode = isTestnetBuild && !forceDirect;
+  const [veilAmountIn, setVeilAmountIn] = useState(PROVEN_SCRIPT_VEIL_AMOUNT_IN);
+  const [routerQuote, setRouterQuote] = useState<{
+    quotedOut: bigint;
+    minAmountOut: bigint;
+  } | null>(null);
+  const [routerQuoteNote, setRouterQuoteNote] = useState<string | null>(null);
+  const [isQuoting, setIsQuoting] = useState(false);
+  const [veilBalance, setVeilBalance] = useState<string | null>(null);
+
   // Form Inputs
   const [inputAmount, setInputAmount] = useState("0.001");
   const [cleanRecipient, setCleanRecipient] = useState("");
@@ -292,6 +327,84 @@ export default function SwapToShieldPage() {
     loadDenomination();
   }, []);
 
+  // Testnet router live quote (R1/R2): a REAL exact-output simulation — an
+  // eth_call of the router's own swapToShield (minAmountOut = 0) against the
+  // latest block. No hardcoded output. A random commitment is used because the
+  // simulation persists nothing; execution re-simulates with the real note
+  // commitment inside the send window before deriving minAmountOut.
+  useEffect(() => {
+    if (!isTestnetRouterMode || activeTab !== "buy_and_shield") return;
+    let veilIn: bigint;
+    try {
+      veilIn = parseEther(veilAmountIn);
+    } catch {
+      setRouterQuote(null);
+      setRouterQuoteNote("Enter a valid VEIL amount to simulate the live router output.");
+      return;
+    }
+    if (veilIn <= 0n || veilIn > UINT128_MAX) {
+      setRouterQuote(null);
+      setRouterQuoteNote("Enter a VEIL amount greater than zero to simulate the live router output.");
+      return;
+    }
+    if (!connectedAddress) {
+      setRouterQuote(null);
+      setRouterQuoteNote("Connect a wallet to simulate the live router output.");
+      return;
+    }
+    let cancelled = false;
+    setIsQuoting(true);
+    const timer = setTimeout(() => {
+      (async () => {
+        let preAllow = 0n;
+        try {
+          const [bal, allow] = await Promise.all([
+            readVeilBalance(publicClient, connectedAddress),
+            readVeilAllowance(publicClient, connectedAddress),
+          ]);
+          preAllow = allow;
+          if (!cancelled) setVeilBalance(formatEther(bal));
+          const quotedOut = await quoteSwapToShieldOutput(publicClient, {
+            account: connectedAddress,
+            amountIn: veilIn,
+            commitment: generateRandomBytes32(),
+          });
+          let slippagePct = 0.5;
+          try {
+            slippagePct = parseSlippagePercent(slippage);
+          } catch {
+            slippagePct = 0.5;
+          }
+          const minAmountOut = calculateSlippageBound(quotedOut, slippagePct);
+          if (cancelled) return;
+          setRouterQuote({ quotedOut, minAmountOut });
+          setRouterQuoteNote(
+            quotedOut < (liveDenomination ?? 1000000000000000n)
+              ? "Live simulated output is below the 0.001 ETH note denomination. Increase the VEIL input; execution stays disabled until the route can fund a full note."
+              : null
+          );
+        } catch (e: unknown) {
+          if (cancelled) return;
+          setRouterQuote(null);
+          // Honest signal, never a fabricated number: without a VEIL
+          // approval the simulation cannot run from this wallet (the node
+          // returns a bare revert), so say so instead of guessing.
+          setRouterQuoteNote(
+            preAllow < veilIn
+              ? "The router is not approved to spend this VEIL yet, so the live simulation cannot run from this wallet. Approve VEIL for the router during execution — the quote refreshes automatically afterwards."
+              : mapRouterSwapError(e)
+          );
+        } finally {
+          if (!cancelled) setIsQuoting(false);
+        }
+      })();
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isTestnetRouterMode, activeTab, veilAmountIn, connectedAddress, slippage, liveDenomination]);
+
   function saveNoteLocally(newNote: AnyShieldedNote) {
     const updated = [newNote, ...notes.filter((n) => n.nullifier !== newNote.nullifier)];
     setNotes(updated);
@@ -321,18 +434,218 @@ export default function SwapToShieldPage() {
     liveDenomination !== null &&
     Math.abs(parsedInput - parseFloat(formatEther(liveDenomination))) < 1e-9;
 
+  // Router-path VEIL input validity (uint128-bounded, R1). Null disables
+  // execution; the reason is shown in the quote panel, never an alert().
+  let parsedVeilIn: bigint | null = null;
+  try {
+    const candidate = parseEther(veilAmountIn);
+    if (candidate > 0n && candidate <= UINT128_MAX) parsedVeilIn = candidate;
+  } catch {
+    parsedVeilIn = null;
+  }
+  const routerQuoteBelowDenomination =
+    routerQuote !== null &&
+    liveDenomination !== null &&
+    routerQuote.quotedOut < liveDenomination;
+
+  // Testnet router execution (Task 2): REAL VeilShieldRouter.swapToShield via
+  // the connected wallet on chain 46630 — VEIL in, ETH out, exact-denomination
+  // deposit into the legacy ETH shielded pool. Mirrors the proven
+  // scripts/router-swap-testnet.mjs route (poolKey, sqrtPriceLimitX96,
+  // zeroForOne=false, empty hookData). Withdraw/attest/shieldedSwap untouched.
+  async function handleRouterSwapToShield(
+    activeProvider: NonNullable<ReturnType<typeof getActiveEvmProvider>>,
+    connectedChainId: number | null
+  ) {
+    if (connectedChainId !== null && connectedChainId !== TESTNET_CHAIN_ID) {
+      setFlowError(
+        "The router swap-to-shield route lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
+      );
+      return;
+    }
+    let slippagePct: number;
+    try {
+      slippagePct = parseSlippagePercent(slippage);
+    } catch (e: unknown) {
+      setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
+      return;
+    }
+    if (parsedVeilIn === null) {
+      setFlowError("Enter a valid VEIL amount greater than zero.");
+      return;
+    }
+    const veilIn = parsedVeilIn;
+
+    setIsExecuting(true);
+    setProverTitle("Executing Router Swap-to-Shield (Testnet)");
+    setProverTxHash(null);
+    setProverCommitment(null);
+    setProverSteps([
+      {
+        title: "1. Client-Side Commitment Key Derivation",
+        detail: "Generating secret & nullifier with CSPRNG entropy for the exact-denomination note",
+        status: "running",
+      },
+      {
+        title: "2. Live Guards & Output Simulation",
+        detail: "Reading pool denomination, pause and cap, then simulating swapToShield via eth_call",
+        status: "pending",
+      },
+      {
+        title: "3. VeilShieldRouter.swapToShield Execution",
+        detail: "Approving VEIL when needed, then swapping VEIL to ETH into the shielded pool",
+        status: "pending",
+      },
+      {
+        title: "4. Invariant Assert & Vault Storage",
+        detail: "Verifying SwapToShieldExecuted and the router zero-balance invariant, then persisting the note",
+        status: "pending",
+      },
+    ]);
+    setIsProverOpen(true);
+
+    try {
+      // Live cap/pause pre-checks stay (R5).
+      const guards = await readSwapGuards(publicClient);
+      if (guards.paused) {
+        throw new Error("Shielded ETH pool deposits are paused. No transaction was sent.");
+      }
+      if (guards.total + guards.denomination > guards.cap) {
+        throw new Error("Shielded ETH pool cap is reached. No transaction was sent.");
+      }
+      const veilBal = await readVeilBalance(publicClient, connectedAddress as Address);
+      if (veilBal < veilIn) {
+        throw new Error(
+          `Insufficient test VEIL balance. The router route needs ${formatEther(veilIn)} test VEIL (${TESTNET_VEIL_TOKEN}) already in your wallet — the proven script ran on a pre-funded operator balance and there is no onchain faucet. Fund test VEIL and try again.`
+        );
+      }
+      setProverSteps((prev) => [
+        { ...prev[0], status: "completed" },
+        { ...prev[1], status: "running" },
+        prev[2],
+        prev[3],
+      ]);
+
+      const walletClient = createWalletClient({
+        account: connectedAddress as Address,
+        chain: appChain,
+        transport: custom(activeProvider),
+      });
+      // Approval BEFORE simulation: the quote runs `from` this wallet, so
+      // without allowance the simulation reverts and no honest number exists.
+      const allowance = await readVeilAllowance(publicClient, connectedAddress as Address);
+      if (allowance < veilIn) {
+        const approveHash = await walletClient.writeContract({
+          address: TESTNET_VEIL_TOKEN,
+          abi: VEIL_ERC20_ABI,
+          functionName: "approve",
+          args: [TESTNET_ROUTER_ADDRESS, veilIn],
+        });
+        const approveReceipt = await waitForTransactionReceipt(publicClient, {
+          hash: approveHash,
+        });
+        if (approveReceipt.status !== "success") {
+          throw new Error("VEIL approval reverted onchain. No swap was sent.");
+        }
+      }
+
+      // Exact-denomination commitment (kind legacy) into the legacy ETH pool.
+      const note = createShieldedNote(guards.denomination, ETH_ZERO_ADDRESS);
+      setProverCommitment(note.commitment);
+
+      // Router balance invariant: read before/after, must be untouched (R4).
+      const routerBalBefore = await publicClient.getBalance({
+        address: TESTNET_ROUTER_ADDRESS,
+      });
+      // Fresh live quote inside the send window; minAmountOut derives from it
+      // and the user's slippage setting — never hardcoded (R1).
+      const freshOut = await quoteSwapToShieldOutput(publicClient, {
+        account: connectedAddress as Address,
+        amountIn: veilIn,
+        commitment: note.commitment,
+      });
+      if (freshOut < guards.denomination) {
+        throw new Error(
+          "Live simulated output is below the 0.001 ETH shielded-note denomination (InsufficientOutputForDenomination). Increase the VEIL input and try again. No transaction was sent."
+        );
+      }
+      const minAmountOut = calculateSlippageBound(freshOut, slippagePct);
+      setRouterQuote({ quotedOut: freshOut, minAmountOut });
+      setProverSteps((prev) => [
+        prev[0],
+        { ...prev[1], status: "completed" },
+        { ...prev[2], status: "running" },
+        prev[3],
+      ]);
+
+      const params = buildSwapToShieldParams({
+        amountIn: veilIn,
+        quotedOut: freshOut,
+        slippagePercent: slippagePct,
+        commitment: note.commitment,
+      });
+      const swapHash = await walletClient.writeContract({
+        address: TESTNET_ROUTER_ADDRESS,
+        abi: CONTRACT_ABIS.VeilShieldRouter,
+        functionName: "swapToShield",
+        args: [params],
+      });
+      setProverTxHash(swapHash);
+      setProverSteps((prev) => [
+        prev[0],
+        prev[1],
+        { ...prev[2], status: "completed" },
+        { ...prev[3], status: "running" },
+      ]);
+
+      const receipt = await waitForTransactionReceipt(publicClient, { hash: swapHash });
+      if (receipt.status !== "success") {
+        throw new Error("Router swap-to-shield transaction reverted onchain.");
+      }
+      const executed = findSwapToShieldExecuted(receipt.logs, note.commitment);
+      if (!executed) {
+        throw new Error(
+          "SwapToShieldExecuted event not found for this commitment. Treating the deposit as unverified: the note was NOT saved. Check the transaction in your wallet history."
+        );
+      }
+      if (executed.shieldedPool.toLowerCase() !== TESTNET_LEGACY_ETH_POOL.toLowerCase()) {
+        throw new Error(
+          "Swap settled into an unexpected shielded pool. The note was NOT saved. Check the transaction on the explorer before retrying."
+        );
+      }
+      const routerBalAfter = await publicClient.getBalance({
+        address: TESTNET_ROUTER_ADDRESS,
+      });
+      if (routerBalAfter !== routerBalBefore) {
+        throw new Error(
+          "Router safety invariant failed: router ETH balance changed across the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
+        );
+      }
+
+      setLiveDenomination(guards.denomination);
+      setSelectedNote(note);
+      saveNoteLocally(note);
+      setProverSteps((prev) => [
+        prev[0],
+        prev[1],
+        prev[2],
+        { ...prev[3], status: "completed" },
+      ]);
+      // Surface the result even if the user hid the modal mid-proof.
+      setIsProverOpen(true);
+    } catch (e: unknown) {
+      console.error("Router swap-to-shield transaction error:", e);
+      setIsProverOpen(false);
+      setFlowError(mapRouterSwapError(e, slippagePct));
+    } finally {
+      setIsExecuting(false);
+    }
+  }
+
   async function handleBuyAndShield() {
     setFlowError(null);
     if (!connectedAddress) {
       setIsWalletModalOpen(true);
-      return;
-    }
-
-    if (!inputAmount || parsedInput <= 0) return;
-    if (!inputMatchesDenomination) {
-      setFlowError(
-        `Enter the exact pool denomination shown under You Shield (${liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "live value"}).`
-      );
       return;
     }
 
@@ -343,6 +656,21 @@ export default function SwapToShieldPage() {
     }
 
     const connectedChainId = await getConnectedChainId(activeProvider);
+    // Testnet default (Task 2): the REAL router path
+    // (VeilShieldRouter.swapToShield). Direct pool deposit remains available
+    // only through the honestly labeled fallback toggle.
+    if (isTestnetRouterMode) {
+      await handleRouterSwapToShield(activeProvider, connectedChainId);
+      return;
+    }
+
+    if (!inputAmount || parsedInput <= 0) return;
+    if (!inputMatchesDenomination) {
+      setFlowError(
+        `Enter the exact pool denomination shown under You Shield (${liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "live value"}).`
+      );
+      return;
+    }
     const useTestnetBow =
       (connectedChainId === TESTNET_CHAIN_ID || (!connectedChainId && APP_CHAIN_ID === TESTNET_CHAIN_ID)) &&
       isTestnetBowConfigured();
@@ -1453,8 +1781,9 @@ export default function SwapToShieldPage() {
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                     <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                      Bal: {inputToken.balance} {inputToken.symbol}
+                      Bal: {isTestnetRouterMode ? `${veilBalance ?? "…"} VEIL` : `${inputToken.balance} ${inputToken.symbol}`}
                     </span>
+                    {!isTestnetRouterMode && (
                     <div style={{ display: "flex", gap: "4px" }}>
                       {[0.25, 0.5, 0.75, 1.0].map((pct) => (
                         <button
@@ -1483,6 +1812,7 @@ export default function SwapToShieldPage() {
                         </button>
                       ))}
                     </div>
+                    )}
                   </div>
                 </div>
 
@@ -1492,9 +1822,9 @@ export default function SwapToShieldPage() {
                     type="number"
                     step="any"
                     inputMode="decimal"
-                    aria-label="Amount to pay"
-                    value={inputAmount}
-                    onChange={(e) => setInputAmount(e.target.value)}
+                    aria-label={isTestnetRouterMode ? "VEIL amount to swap and shield" : "Amount to pay"}
+                    value={isTestnetRouterMode ? veilAmountIn : inputAmount}
+                    onChange={(e) => (isTestnetRouterMode ? setVeilAmountIn(e.target.value) : setInputAmount(e.target.value))}
                     placeholder="0.0"
                     style={{
                       background: "transparent",
@@ -1509,7 +1839,32 @@ export default function SwapToShieldPage() {
                     }}
                   />
 
-                  {/* Token Button */}
+                  {/* Token Button: on the testnet router path the input is fixed
+                      to test VEIL — the only liquid v4 route ends in ETH. */}
+                  {isTestnetRouterMode ? (
+                    <div
+                      role="status"
+                      aria-label="Paying with test VEIL, fixed route"
+                      title="Only the VEIL to ETH router route exists on testnet"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "var(--space-2)",
+                        padding: "8px 14px",
+                        borderRadius: "var(--radius-md)",
+                        backgroundColor: "rgba(255, 140, 0, 0.08)",
+                        border: "1px solid rgba(255, 140, 0, 0.3)",
+                        color: "var(--color-text)",
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
+                        VEIL
+                      </span>
+                      <span style={{ fontSize: "10px", fontFamily: "monospace", color: "var(--color-accent-ink)", fontWeight: 600 }}>
+                        test route
+                      </span>
+                    </div>
+                  ) : (
                   <button
                     onClick={() => setIsInputTokenModalOpen(true)}
                     style={{
@@ -1534,11 +1889,12 @@ export default function SwapToShieldPage() {
                     </span>
                     <ChevronDown className="w-4 h-4 text-[#FF8C00]" />
                   </button>
+                  )}
                 </div>
               </div>
 
-              {/* Swap Direction Divider with Flip Action */}
-              <div style={{ display: "flex", justifyContent: "center", margin: "-10px 0", position: "relative", zIndex: 10 }}>
+              {/* Swap Direction Divider with Flip Action (hidden on the fixed testnet VEIL route) */}
+              <div style={{ display: isTestnetRouterMode ? "none" : "flex", justifyContent: "center", margin: "-10px 0", position: "relative", zIndex: 10 }}>
                 <button
                   type="button"
                   onClick={handleFlipTokens}
@@ -1626,7 +1982,11 @@ export default function SwapToShieldPage() {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                  <span>Direct ShieldedPool deposit — no swap route yet</span>
+                  <span>
+                    {isTestnetRouterMode
+                      ? "VeilShieldRouter.swapToShield — VEIL to ETH to 0.001 ETH note (live simulation quote)"
+                      : "Direct ShieldedPool deposit — no swap route yet"}
+                  </span>
                   <span style={{ color: "var(--color-muted)", fontSize: "11px" }}>
                     Provisional Proof Payload
                   </span>
@@ -1635,16 +1995,68 @@ export default function SwapToShieldPage() {
 
               {/* Route Inspector */}
               <RouteInspector
-                inputAmount={inputAmount}
-                inputToken={inputToken.symbol}
+                inputAmount={isTestnetRouterMode ? veilAmountIn : inputAmount}
+                inputToken={isTestnetRouterMode ? "VEIL" : inputToken.symbol}
                 outputToken={outputToken.symbol}
                 slippage={slippage}
               />
 
+              {/* Testnet router live quote + faucet guidance (R1/R3) */}
+              {isTestnetRouterMode && (
+                <div
+                  role="status"
+                  style={{
+                    padding: "var(--space-3) var(--space-4)",
+                    borderRadius: "var(--radius-sm)",
+                    backgroundColor: "rgba(26, 26, 26, 0.025)",
+                    border: "1px solid var(--color-border)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    fontSize: "var(--text-caption)",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--color-muted)" }}>Live simulated output:</span>
+                    <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
+                      {isQuoting
+                        ? "Simulating…"
+                        : routerQuote !== null
+                        ? `${formatEther(routerQuote.quotedOut)} ETH`
+                        : "Unavailable"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--color-muted)" }}>Minimum accepted ({slippage}%):</span>
+                    <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
+                      {routerQuote !== null ? `${formatEther(routerQuote.minAmountOut)} ETH` : "—"}
+                    </span>
+                  </div>
+                  {routerQuoteNote && (
+                    <span style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
+                      {routerQuoteNote}
+                    </span>
+                  )}
+                  <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
+                    Needs test VEIL already in your wallet — there is no onchain faucet; the proven
+                    route ran on a pre-funded operator balance. Test VEIL: {TESTNET_VEIL_TOKEN}.
+                  </span>
+                </div>
+              )}
+
               {/* Main Action Button */}
               <button
                 onClick={handleBuyAndShield}
-                disabled={isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination))}
+                disabled={
+                  isTestnetRouterMode
+                    ? isExecuting ||
+                      (Boolean(connectedAddress) &&
+                        (parsedVeilIn === null || routerQuoteBelowDenomination))
+                    : isExecuting ||
+                      (Boolean(connectedAddress) &&
+                        (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination))
+                }
                 className="group active:scale-[0.99] transition-all"
                 style={{
                   width: "100%",
@@ -1660,14 +2072,38 @@ export default function SwapToShieldPage() {
                   border: "none",
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
-                  cursor: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? "not-allowed" : "pointer",
-                  opacity: isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? 0.45 : 1,
+                  cursor: isTestnetRouterMode
+                    ? isExecuting ||
+                      (Boolean(connectedAddress) &&
+                        (parsedVeilIn === null || routerQuoteBelowDenomination))
+                      ? "not-allowed"
+                      : "pointer"
+                    : isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? "not-allowed" : "pointer",
+                  opacity: isTestnetRouterMode
+                    ? isExecuting ||
+                      (Boolean(connectedAddress) &&
+                        (parsedVeilIn === null || routerQuoteBelowDenomination))
+                      ? 0.45
+                      : 1
+                    : isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? 0.45 : 1,
                   boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
                   transition: "all var(--duration-fast)",
                 }}
               >
                 <span>
-                  {isExecuting
+                  {isTestnetRouterMode
+                    ? isExecuting
+                      ? "Swapping VEIL to Shielded ETH..."
+                      : !connectedAddress
+                      ? "Connect Wallet to Trade"
+                      : parsedVeilIn === null
+                      ? "Enter VEIL Amount"
+                      : routerQuoteBelowDenomination
+                      ? "Output Below Note Size"
+                      : isQuoting || routerQuote === null
+                      ? "Simulating Live Output…"
+                      : "Execute Router Swap-to-Shield"
+                    : isExecuting
                     ? "Synthesizing Proof & Routing..."
                     : !connectedAddress
                     ? "Connect Wallet to Trade"
@@ -1696,7 +2132,7 @@ export default function SwapToShieldPage() {
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--color-muted)" }}>You Pay:</span>
                   <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                    {inputAmount} {inputToken.symbol}
+                    {isTestnetRouterMode ? `${veilAmountIn} VEIL` : `${inputAmount} ${inputToken.symbol}`}
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -1718,6 +2154,36 @@ export default function SwapToShieldPage() {
                   <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Router Balance = 0 Invariant</span>
                 </div>
               </div>
+
+              {/* Honest fallback toggle (testnet only): direct pool deposit
+                  without the swap route, for use only when the VEIL router
+                  route is unavailable. The router stays the default path. */}
+              {isTestnetBuild && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForceDirect((v) => !v);
+                    setFlowError(null);
+                  }}
+                  aria-pressed={forceDirect}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "4px",
+                    minHeight: "24px",
+                    fontSize: "var(--text-caption)",
+                    fontFamily: "monospace",
+                    color: "var(--color-muted)",
+                    textDecoration: "underline",
+                    textAlign: "center",
+                  }}
+                >
+                  {forceDirect
+                    ? "Fallback active: direct ShieldedPool deposit (no swap). Switch back to the router route."
+                    : "Router route unavailable? Fall back to direct ShieldedPool deposit (no swap)."}
+                </button>
+              )}
             </div>
           )}
 
