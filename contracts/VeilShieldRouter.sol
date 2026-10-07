@@ -288,12 +288,17 @@ contract VeilShieldRouter is ReentrancyGuard {
         poolManager.sync(currency);
         address assetAddr = Currency.unwrap(currency);
         if (assetAddr == address(0)) {
-            (bool ok, ) = address(poolManager).call{value: amount}("");
-            require(ok, "eth settle failed");
+            // Root cause (R1): PoolManager has no receive()/fallback()
+            // (v4-core PoolManager.sol), so a bare value call to it always
+            // reverts. Native settlement MUST go through the payable
+            // settle() entrypoint (IPoolManager.sol:183), where
+            // paid = msg.value (PoolManager.sol `_settle`).
+            uint256 paid = poolManager.settle{value: amount}();
+            require(paid == amount, "eth settle failed");
         } else {
             IERC20(assetAddr).safeTransfer(address(poolManager), amount);
+            poolManager.settle();
         }
-        poolManager.settle();
     }
 
     receive() external payable {}
