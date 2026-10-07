@@ -119,6 +119,7 @@ Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approv
 | **Recipient +0.001 ETH, nullifier spent** | verified onchain |
 | **Honesty test (garbage proof)** | rejected onchain — the verifier genuinely checks Groth16 |
 | **Hook gating (fresh 0x20c4 hook)** | [`0x65d99bb9eb99c008ef4b738cdd652800796d60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), attestation verified `true` |
+| **Third-party relay** | [`0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d`](https://explorer.testnet.chain.robinhood.com/tx/0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d) submitted by an ephemeral relayer key, not the depositor |
 
 Pending (needs testnet funds): relayer-with-fee run, v4 router swap demo (pool initialized, PositionManager version on testnet differs from mainnet so PM mint needs a helper contract).
 

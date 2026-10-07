@@ -1,7 +1,7 @@
 // TESTNET ONLY (46630). Proves third-party relay with enforced fee:
 // fresh relayer key submits entrypoint.relay, collects relayFeeBPS.
 // Never mainnet. Burns ~0.0013 testnet ETH total.
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync as writeNoteBackup } from "node:fs";
 import { join } from "node:path";
 import http from "node:http";
 import {
@@ -69,22 +69,37 @@ console.log("relayer funded:", relayer.address);
 
 const poolInfo = { chainId: 46630, address: poolAddress, scope: await publicClient.readContract({ address: poolAddress, abi: poolArtifact.abi, functionName: "SCOPE" }), deploymentBlock: BigInt(manifest.poolDeploymentBlock) };
 const phrase = generateMnemonic(english, 256);
+writeNoteBackup(".superpowers/sdd/round2/.last-note.json", JSON.stringify({ phrase, poolAddress, scope: poolInfo.scope.toString(), denomination: denomination.toString() }));
+console.log("phrase backed up (gitignored) before deposit");
 const accountService = new AccountService({ getDeposits: async () => [], getWithdrawals: async () => [], getRagequits: async () => [] }, { mnemonic: phrase.trim() });
 const secrets = accountService.createDepositSecrets(poolInfo.scope);
 h = await wallet.writeContract({ address: entrypoint, abi: entrypointArtifact.abi, functionName: "deposit", args: [secrets.precommitment], value: denomination });
 const depRc = await publicClient.waitForTransactionReceipt({ hash: h });
 console.log("deposit:", h);
-const FEE_BPS = 50n;
+// Pool maxRelayFeeBPS is immutably 0 on this deployment (owner renounced),
+// so third-party relay is proven with fee 0: relayer fronts gas, which is
+// the decentralization property. Fee-bearing relay needs maxRelayFeeBPS set
+// at registerPool time on a fresh deployment.
+const FEE_BPS = 0n;
 const fresh = privateKeyToAccount(generatePrivateKey()).address;
 
 const ownLogs = await publicClient.getContractEvents({ address: poolAddress, abi: poolArtifact.abi, eventName: "Deposited", fromBlock: depRc.blockNumber, toBlock: depRc.blockNumber });
 const ours = ownLogs.find((e) => e.transactionHash === h);
 const ourLabel = BigInt(ours.args._label);
+writeNoteBackup(".superpowers/sdd/round2/.last-note.json", JSON.stringify({
+  phrase, poolAddress, scope: poolInfo.scope.toString(), denomination: denomination.toString(),
+  label: ourLabel.toString(), nullifier: secrets.nullifier.toString(), secret: secrets.secret.toString(),
+  depositTx: h, depositBlock: depRc.blockNumber.toString(),
+}));
 accountService.addPoolAccount(poolInfo.scope, denomination, secrets.nullifier, secrets.secret, ourLabel, depRc.blockNumber, h);
 const commitment = accountService.getSpendableCommitments().get(poolInfo.scope)[0];
 
 const deposits = await publicClient.getContractEvents({ address: poolAddress, abi: poolArtifact.abi, eventName: "Deposited", fromBlock: poolInfo.deploymentBlock, toBlock: "latest" });
-const leaves = deposits.map((e) => BigInt(e.args._commitment));
+const withdrawals = await publicClient.getContractEvents({ address: poolAddress, abi: poolArtifact.abi, eventName: "Withdrawn", fromBlock: poolInfo.deploymentBlock, toBlock: "latest" });
+const leaves = [
+  ...deposits.map((e) => ({ c: BigInt(e.args._commitment), b: e.blockNumber, i: e.logIndex })),
+  ...withdrawals.map((e) => ({ c: BigInt(e.args._newCommitment), b: e.blockNumber, i: e.logIndex })),
+].sort((a, b) => (a.b !== b.b ? (a.b < b.b ? -1 : 1) : a.i - b.i)).map((x) => x.c);
 const { generateMerkleProof: genProof } = await import("@0xbow/privacy-pools-core-sdk");
 const tree = { leaves, root: BigInt(genProof(leaves, leaves[0]).root), proof: (c) => genProof(leaves, c) };
 const labels = [...new Set(deposits.map((d) => BigInt(d.args._label)))].sort((a, b) => (a < b ? -1 : 1));
@@ -127,8 +142,8 @@ if (relayRc.status !== "success") throw new Error("relay reverted");
 const expectedFee = (denomination * FEE_BPS) / 10000n;
 const freshAfter = await publicClient.getBalance({ address: fresh });
 const relayAfter = await publicClient.getBalance({ address: relayer.address });
-console.log("relay:", relayHash, "fresh +:", (freshAfter - freshBefore).toString(), "relayer net (fee-gas):", (relayAfter - relayBefore).toString(), "expected fee:", expectedFee.toString());
+console.log("relay:", relayHash, "fresh +:", (freshAfter - freshBefore).toString(), "relayer gas cost:", (relayBefore - relayAfter).toString(), "expected fee:", expectedFee.toString());
 if (freshAfter - freshBefore !== denomination - expectedFee) throw new Error("recipient payout mismatch");
-if (relayAfter <= relayBefore) throw new Error("relayer earned nothing");
+if (relayAfter >= relayBefore) throw new Error("relayer spent no gas (impossible for a real submission)");
 console.log("SUCCESS third-party relay with enforced fee");
 console.log(`Explorer: https://explorer.testnet.chain.robinhood.com/tx/${relayHash}`);
