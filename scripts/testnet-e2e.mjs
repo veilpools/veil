@@ -29,7 +29,8 @@ async function main() {
   const manifest = JSON.parse(readFileSync("deployments/testnet-latest.json", "utf-8"));
   console.log(`Loaded testnet manifest from ${manifest.deployedAt}`);
 
-  const privateKey = process.env.PRIVATE_KEY || "0xf5c33329c4bcc3b612af9a5e1134816782188d1107f54c58a48c236bf744995f";
+  const privateKey = process.env.PRIVATE_KEY;
+  if (!privateKey) throw new Error("Missing PRIVATE_KEY in env. Never hardcode keys.");
   const account = privateKeyToAccount(privateKey);
   const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "https://rpc.testnet.chain.robinhood.com";
 
@@ -108,8 +109,6 @@ async function main() {
   const commitment = keccak256(encodePacked(["bytes32", "bytes32"], [secret, nullifier]));
   const nullifierHash = keccak256(encodePacked(["bytes32"], [nullifier]));
 
-  console.log(`  - Generated Secret    : ${secret.slice(0, 10)}...${secret.slice(-8)}`);
-  console.log(`  - Generated Nullifier : ${nullifier.slice(0, 10)}...${nullifier.slice(-8)}`);
   console.log(`  - Commitment Hash     : ${commitment}`);
   console.log(`  - Nullifier Hash      : ${nullifierHash}`);
 

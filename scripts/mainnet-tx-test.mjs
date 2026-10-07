@@ -24,7 +24,8 @@ async function main() {
   const manifest = JSON.parse(readFileSync("deployments/mainnet-latest.json", "utf-8"));
   const rpcUrl = robinhoodMainnet.rpcUrls.default.http[0];
 
-  const privateKey = process.env.PRIVATE_KEY || "0xf5c33329c4bcc3b612af9a5e1134816782188d1107f54c58a48c236bf744995f";
+  const privateKey = process.env.MAINNET_PRIVATE_KEY || process.env.PRIVATE_KEY;
+  if (!privateKey) throw new Error("Missing MAINNET_PRIVATE_KEY or PRIVATE_KEY in env. Never hardcode keys.");
   const account = privateKeyToAccount(privateKey);
 
   const publicClient = createPublicClient({
