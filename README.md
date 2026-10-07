@@ -121,6 +121,13 @@ Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approv
 | **Hook gating (fresh 0x20c4 hook)** | [`0x65d99bb9eb99c008ef4b738cdd652800796d60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), attestation verified `true` |
 | **Third-party relay** | [`0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d`](https://explorer.testnet.chain.robinhood.com/tx/0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d) submitted by an ephemeral relayer key, not the depositor |
 
+### 🪝 Hook Gating + Protocol Fee From Real Usage (Testnet, proven 2026-10-07)
+
+- **Hooked pool** ETH/VEIL fee 3000 with `VeilHook` [`0x65d9...60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), gated 600s launch window
+- **Ungated swap reverts** (`GatingActiveUserNotAttested` enforced onchain)
+- **Attested swap:** [`0x2a076f288e8ea8f5554593410b3839d0c5ae026cb7e00aeb7bbf68fd48cdd04b`](https://explorer.testnet.chain.robinhood.com/tx/0x2a076f288e8ea8f5554593410b3839d0c5ae026cb7e00aeb7bbf68fd48cdd04b) with attested `hookData`
+- **Treasury fee from usage:** 0 → 2706559470897 wei collected by the hook on a real swap
+
 Pending (needs testnet funds): fee-bearing relay run (`maxRelayFeeBPS` is immutably 0 on this deployment).
 
 ### 🔀 Router Swap-to-Shield (Testnet, proven 2026-10-07)
