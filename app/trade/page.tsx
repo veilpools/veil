@@ -167,7 +167,7 @@ export default function SwapToShieldPage() {
   const [isInputTokenModalOpen, setIsInputTokenModalOpen] = useState(false);
   const [isOutputTokenModalOpen, setIsOutputTokenModalOpen] = useState(false);
   const [inputToken, setInputToken] = useState<TokenItem>(SUPPORTED_TOKENS[0]); // ETH
-  const [outputToken, setOutputToken] = useState<TokenItem>(SUPPORTED_TOKENS[2]); // VEIL
+  const [outputToken, setOutputToken] = useState<TokenItem>(SUPPORTED_TOKENS[0]); // ETH (only live pool)
 
   // Execution & Slippage Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -175,7 +175,7 @@ export default function SwapToShieldPage() {
   const [deadlineMinutes, setDeadlineMinutes] = useState("20");
 
   // Form Inputs
-  const [inputAmount, setInputAmount] = useState("0.05");
+  const [inputAmount, setInputAmount] = useState("0.001");
   const [cleanRecipient, setCleanRecipient] = useState("");
   const [copiedCommitment, setCopiedCommitment] = useState<string | null>(null);
 

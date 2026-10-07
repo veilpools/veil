@@ -4,7 +4,9 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, LogOut, Copy, Check, ChevronDown } from "lucide-react";
 import { WalletModal } from "./WalletModal";
-import { APP_CHAIN_ID } from "@/lib/chains";
+import { APP_CHAIN_ID, appChain } from "@/lib/chains";
+import { fetchAllTokenBalances } from "@/lib/balances";
+import { SUPPORTED_TOKENS } from "./TokenSelectModal";
 import {
   EVM_WALLETS,
   loadWallet,
@@ -19,6 +21,25 @@ export function Navbar() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [balances, setBalances] = useState<Record<string, string>>({});
+  const [balancesLoading, setBalancesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isMenuOpen || !wallet?.address) return;
+    let cancelled = false;
+    setBalancesLoading(true);
+    fetchAllTokenBalances(wallet.address as `0x${string}`, SUPPORTED_TOKENS)
+      .then((b) => {
+        if (!cancelled) setBalances(b);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setBalancesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isMenuOpen, wallet?.address]);
 
   useEffect(() => {
     const sync = () => {
@@ -221,7 +242,7 @@ export function Navbar() {
                       position: "absolute",
                       right: 0,
                       top: "calc(100% + 8px)",
-                      width: "220px",
+                      width: "250px",
                       backgroundColor: "#ffffff",
                       borderRadius: "var(--radius-md)",
                       border: "1px solid var(--color-border-strong)",
@@ -240,7 +261,43 @@ export function Navbar() {
                         marginBottom: "4px",
                       }}
                     >
-                      Connected via {walletMeta?.name || "EVM Wallet"}
+                      <div>Connected via {walletMeta?.name || "EVM Wallet"}</div>
+                      <div style={{ marginTop: "2px", color: "var(--color-text)", fontWeight: 600 }}>
+                        {appChain.name} ({APP_CHAIN_ID})
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "4px 10px 8px 10px",
+                        borderBottom: "1px solid var(--color-border)",
+                        marginBottom: "4px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "2px",
+                      }}
+                    >
+                      {balancesLoading ? (
+                        <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)" }}>
+                          Loading balances…
+                        </span>
+                      ) : (
+                        SUPPORTED_TOKENS.map((t) => (
+                          <div
+                            key={t.symbol}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: "11px",
+                              fontFamily: "monospace",
+                              color: "var(--color-text)",
+                            }}
+                          >
+                            <span style={{ color: "var(--color-muted)" }}>{t.symbol}</span>
+                            <span>{balances[t.symbol] ?? "—"}</span>
+                          </div>
+                        ))
+                      )}
                     </div>
 
                     <button
