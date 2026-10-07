@@ -128,6 +128,37 @@ const leaves = [SNARK_FIELD - 1n];
 const aspRoot = BigInt(generateMerkleProof(leaves, leaves[0]).root);
 await call(entrypoint, epAbi, "updateRoot", [aspRoot, "local-mainnet-asp-sentinel-00000000"]);
 
+const TREASURY_MAINNET = process.env.NEXT_PUBLIC_VEIL_TREASURY || "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34";
+const CREATE2_MAINNET = process.env.NEXT_PUBLIC_VEIL_CREATE2_DEPLOYER || "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008";
+const V4_PM_MAINNET = "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+let registryV2 = `0x${"33".repeat(20)}`;
+let hookV2 = `0x${"44".repeat(20)}`;
+let hookSalt = `0x${"00".repeat(32)}`;
+if (!EXECUTE) {
+  console.log("[dry-run] would deploy VeilAttestationRegistry + mine/deploy VeilHook v2");
+} else {
+  const { VEIL_ATTESTATION_REGISTRY_ABI, VEIL_ATTESTATION_REGISTRY_BYTECODE, VEIL_HOOK_ABI, VEIL_HOOK_BYTECODE, VEIL_CREATE2_DEPLOYER_ABI } =
+    await import("../lib/veil-artifact.mjs");
+  const { mineHookSalt } = await import("./mine-hook.mjs");
+  const { encodeAbiParameters: enc } = await import("viem");
+  let hh = await wallet.deployContract({ abi: VEIL_ATTESTATION_REGISTRY_ABI, bytecode: VEIL_ATTESTATION_REGISTRY_BYTECODE, args: [account.address] });
+  let rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+  if (rrc.status !== "success") throw new Error("registry v2 deploy reverted");
+  registryV2 = rrc.contractAddress;
+  console.log("registry v2:", registryV2);
+  const mined = mineHookSalt(CREATE2_MAINNET, V4_PM_MAINNET, TREASURY_MAINNET, registryV2, account.address);
+  hookSalt = mined.salt;
+  hookV2 = mined.address;
+  const ctor = enc(
+    [{ type: "address" }, { type: "address" }, { type: "address" }, { name: "o", type: "address" }],
+    [V4_PM_MAINNET, TREASURY_MAINNET, registryV2, account.address]
+  ).slice(2);
+  hh = await wallet.writeContract({ address: CREATE2_MAINNET, abi: VEIL_CREATE2_DEPLOYER_ABI, functionName: "deploy", args: [hookSalt, `${VEIL_HOOK_BYTECODE}${ctor}`] });
+  rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+  if (rrc.status !== "success") throw new Error("hook v2 deploy reverted");
+  console.log("hook v2:", hookV2);
+}
+
 if (!EXECUTE) {
   console.log("DRY-RUN COMPLETE — no gas spent. Re-run with --execute once funded.");
   process.exit(0);
@@ -136,6 +167,7 @@ const out = {
   chainId: 4663, entrypoint, ethPool, veilPool, veilToken: VEIL,
   withdrawalVerifier: wdr, commitmentVerifier: cmt,
   poseidonT3: libs.PoseidonT3, poseidonT4: libs.PoseidonT4,
+  registryV2, hookV2, hookSalt, treasury: TREASURY_MAINNET,
   aspRoot: aspRoot.toString(), owner: account.address, maxRelayFeeBPS: 100,
 };
 writeFileSync(join(root, "deployments", "privacy-pools-mainnet-latest.json"), JSON.stringify(out, null, 2));
@@ -149,6 +181,8 @@ for (const f of [".env.local", ".env.mainnet.local"]) {
   set("NEXT_PUBLIC_0XBOW_ENTRYPOINT", entrypoint);
   set("NEXT_PUBLIC_0XBOW_POOL_ETH", ethPool);
   set("NEXT_PUBLIC_0XBOW_POOL_VEIL", veilPool);
+  set("NEXT_PUBLIC_VEIL_ATTESTATION_REGISTRY", registryV2);
+  set("NEXT_PUBLIC_VEIL_HOOK", hookV2);
   writeFileSync(f, txt);
   console.log("env updated:", f);
 }
