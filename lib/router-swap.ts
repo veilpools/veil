@@ -1,6 +1,10 @@
 import { decodeEventLog, type Address, type Hash, type PublicClient } from "viem";
 import { VEIL_SHIELD_ROUTER_ABI } from "./veil-artifact";
-import { calculateSlippageBound, type SwapToShieldParams } from "./router-client";
+import {
+  calculateSlippageBound,
+  MIN_SQRT_RATIO,
+  type SwapToShieldParams,
+} from "./router-client";
 
 // ---------------------------------------------------------------------------
 // Task 2 (testnet end-to-end UI): VeilShieldRouter.swapToShield via the trade
@@ -30,12 +34,30 @@ import { calculateSlippageBound, type SwapToShieldParams } from "./router-client
 
 export const TESTNET_CHAIN_ID = 46630;
 
+// Fixed router (Task R3, replaces 0xb1baee8d519a7a2edbaff99eec0ba10948670d68
+// everywhere hardcoded on testnet): identical ABI/bytecode-shape redeploy with
+// the R1 `_settleCurrency` fix (native ETH via PoolManager.settle{value}).
+// Proven live 2026-10-07 (R2 live A/B): ETH->VEIL swapToShield (~1.35 VEIL)
+// and ETH->VEIL shieldedSwap (~1.07 VEIL), both invariant-clean.
 export const TESTNET_ROUTER_ADDRESS =
-  "0xb1baee8d519a7a2edbaff99eec0ba10948670d68" as Address;
+  "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27" as Address;
 export const TESTNET_LEGACY_ETH_POOL =
   "0x1b1d39e4da649747ecc0e93e7a06452a3061de17" as Address;
 export const TESTNET_VEIL_TOKEN =
   "0x019086f63407fadf0ccb89516e465baef5031aa9" as Address;
+// Legacy VEIL-denominated pools (R2 live-A/B destinations): 0.5 VEIL is the
+// preferred destination, 2 VEIL the fallback. Preference ORDER only — the
+// actual choice is decided LIVE from the quote every time (never hardcoded),
+// via pickVeilDestinationPool.
+export const TESTNET_VEIL_POOL_05 =
+  "0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address;
+export const TESTNET_VEIL_POOL_2 =
+  "0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address;
+export const TESTNET_VEIL_POOL_05_DENOMINATION = 500000000000000000n;
+export const TESTNET_VEIL_DEST_POOLS = [
+  TESTNET_VEIL_POOL_05,
+  TESTNET_VEIL_POOL_2,
+] as const;
 export const ETH_ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as Address;
 
@@ -60,6 +82,10 @@ export const TESTNET_ROUTER_POOL_KEY = {
 export const TESTNET_ROUTER_SQRT_PRICE_LIMIT =
   14614467034852101032872730522039888242097890n;
 export const TESTNET_ROUTER_HOOK_DATA = "0x" as const;
+// ETH-input leg (zeroForOne=true, proven live in R2 live A/B):
+// MIN_SQRT_RATIO + 1, mirroring scripts/router-eth-*-live.mjs.
+// (The VEIL-input leg keeps TESTNET_ROUTER_SQRT_PRICE_LIMIT verbatim.)
+export const TESTNET_ROUTER_SQRT_PRICE_LIMIT_ETH_IN = MIN_SQRT_RATIO + 1n;
 
 export const TESTNET_EXPLORER_TX_BASE =
   "https://explorer.testnet.chain.robinhood.com/tx/";
@@ -68,6 +94,9 @@ export const UINT128_MAX = (1n << 128n) - 1n;
 
 /** Default VEIL input shown in the UI — mirrors the proven script amount. */
 export const PROVEN_SCRIPT_VEIL_AMOUNT_IN = "2";
+
+/** Default ETH input shown in the UI — mirrors the R2 live-A proven amount. */
+export const PROVEN_SCRIPT_ETH_AMOUNT_IN = "0.001";
 
 export const VEIL_ERC20_ABI = [
   {
@@ -160,24 +189,61 @@ export interface BuildSwapToShieldArgs {
   quotedOut: bigint;
   slippagePercent: number;
   commitment: `0x${string}`;
+  zeroForOne?: boolean;
+  shieldedPool?: Address;
+}
+
+export interface VeilPoolState {
+  pool: Address;
+  denomination: bigint;
+  asset: Address;
+  paused: boolean;
+  cap: bigint;
+  total: bigint;
+}
+
+/**
+ * Pick destination from the live quote: 0.5 pool preferred (R2 live evidence),
+ * fallback to 2 VEIL pool if output covers. Decisions are live, never hardcoded.
+ */
+export function pickVeilDestinationPool(
+  quotedOut: bigint,
+  pools: readonly VeilPoolState[]
+): VeilPoolState | null {
+  for (const s of pools) {
+    if (!s.paused && quotedOut >= s.denomination && s.cap - s.total >= s.denomination) {
+      return s;
+    }
+  }
+  return null;
 }
 
 /**
  * Pure builder for the router `swapToShield` params on the proven testnet
  * route. minAmountOut is ALWAYS derived from the live simulated output and
  * the user's slippage setting — never hardcoded.
+ * Handles both VEIL -> ETH (zeroForOne: false) and ETH -> VEIL (zeroForOne: true).
  */
 export function buildSwapToShieldParams(
   args: BuildSwapToShieldArgs
 ): SwapToShieldParams {
-  if (args.amountIn <= 0n) throw new Error("VEIL input amount must be greater than zero.");
+  const zeroForOne = args.zeroForOne ?? false;
+  const label = zeroForOne ? "ETH" : "VEIL";
+  if (args.amountIn <= 0n) throw new Error(`${label} input amount must be greater than zero.`);
   if (args.amountIn > UINT128_MAX)
-    throw new Error("VEIL input amount exceeds the router uint128 limit.");
+    throw new Error(`${label} input amount exceeds the router uint128 limit.`);
   if (args.quotedOut <= 0n)
     throw new Error("Live simulated output must be greater than zero before building swap params.");
   if (!/^0x[0-9a-fA-F]{64}$/.test(args.commitment))
     throw new Error("Commitment must be a 32-byte hash.");
   const minAmountOut = calculateSlippageBound(args.quotedOut, args.slippagePercent);
+  const sqrtPriceLimitX96 = zeroForOne
+    ? TESTNET_ROUTER_SQRT_PRICE_LIMIT_ETH_IN
+    : TESTNET_ROUTER_SQRT_PRICE_LIMIT;
+  const shieldedPool =
+    args.shieldedPool ??
+    (zeroForOne ? TESTNET_VEIL_POOL_05 : TESTNET_LEGACY_ETH_POOL);
+
   return {
     key: {
       currency0: TESTNET_ROUTER_POOL_KEY.currency0,
@@ -186,12 +252,12 @@ export function buildSwapToShieldParams(
       tickSpacing: TESTNET_ROUTER_POOL_KEY.tickSpacing,
       hooks: TESTNET_ROUTER_POOL_KEY.hooks,
     },
-    zeroForOne: false,
+    zeroForOne,
     amountIn: args.amountIn,
     minAmountOut,
-    sqrtPriceLimitX96: TESTNET_ROUTER_SQRT_PRICE_LIMIT,
+    sqrtPriceLimitX96,
     commitment: args.commitment,
-    shieldedPool: TESTNET_LEGACY_ETH_POOL,
+    shieldedPool,
     hookData: TESTNET_ROUTER_HOOK_DATA,
   };
 }
@@ -344,22 +410,28 @@ export interface QuoteSwapArgs {
   account: Address;
   amountIn: bigint;
   commitment: `0x${string}`;
+  zeroForOne?: boolean;
+  shieldedPool?: Address;
 }
 
 /**
  * REAL quote: eth_call simulation of the exact `swapToShield` calldata with
- * minAmountOut = 0. Returns the exact live ETH output for the given VEIL
- * input. Reverts (like the real tx would) when the route cannot serve it.
+ * minAmountOut = 0. Returns the exact live output for the given input.
+ * Reverts (like the real tx would) when the route cannot serve it.
+ * When zeroForOne is true (ETH in -> VEIL out), passes value: amountIn.
  */
 export async function quoteSwapToShieldOutput(
   client: PublicClient,
   args: QuoteSwapArgs
 ): Promise<bigint> {
+  const zeroForOne = args.zeroForOne ?? false;
   const params = buildSwapToShieldParams({
     amountIn: args.amountIn,
     quotedOut: 1n,
     slippagePercent: 0,
     commitment: args.commitment,
+    zeroForOne,
+    shieldedPool: args.shieldedPool,
   });
   const zeroMin = { ...params, minAmountOut: 0n };
   const { result } = await client.simulateContract({
@@ -368,6 +440,7 @@ export async function quoteSwapToShieldOutput(
     functionName: "swapToShield",
     args: [zeroMin],
     account: args.account,
+    ...(zeroForOne ? { value: args.amountIn } : {}),
   });
   return result as bigint;
 }
@@ -384,13 +457,17 @@ export interface SwapToShieldExecuted {
 /**
  * Assert the SwapToShieldExecuted event for our commitment exists in the
  * mined receipt logs. Returns null when absent (caller fails closed).
+ * When `swapper` is provided, the event must also come from that address
+ * (self-relay: our own wallet) — commitment collisions are infeasible, this
+ * is defense in depth against log confusion in multi-tx receipts.
  */
 export function findSwapToShieldExecuted(
   logs: readonly {
     data: `0x${string}`;
     topics: readonly `0x${string}`[];
   }[],
-  commitment: `0x${string}`
+  commitment: `0x${string}`,
+  swapper?: Address
 ): Omit<SwapToShieldExecuted, "txHash"> | null {
   for (const log of logs) {
     try {
@@ -402,6 +479,7 @@ export function findSwapToShieldExecuted(
       if (decoded.eventName !== "SwapToShieldExecuted") continue;
       const evt = decoded.args as unknown as SwapToShieldExecuted;
       if (evt.commitment.toLowerCase() === commitment.toLowerCase()) {
+        if (swapper && evt.swapper.toLowerCase() !== swapper.toLowerCase()) continue;
         return {
           swapper: evt.swapper,
           shieldedPool: evt.shieldedPool,
@@ -417,6 +495,4 @@ export function findSwapToShieldExecuted(
   return null;
 }
 
-export function explorerTxUrl(hash: string): string {
-  return `${TESTNET_EXPLORER_TX_BASE}${hash}`;
-}
+export { explorerTxUrl } from "./chains";

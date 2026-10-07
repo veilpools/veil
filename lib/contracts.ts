@@ -23,7 +23,7 @@ export const CONTRACT_ABIS = {
 // NOTE: testnet reads TESTNET_-prefixed vars first and ignores the generic
 // NEXT_PUBLIC_* vars (those hold MAINNET addresses in .env.local).
 export const TESTNET_CONTRACT_ADDRESSES = {
-  router: process.env.NEXT_PUBLIC_TESTNET_VEIL_SHIELD_ROUTER || "0xb1baee8d519a7a2edbaff99eec0ba10948670d68",
+  router: process.env.NEXT_PUBLIC_TESTNET_VEIL_SHIELD_ROUTER || "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27",
   hook: process.env.NEXT_PUBLIC_TESTNET_VEIL_HOOK || "0xc0bd5e335651394b57a9277411f65e149e73e0c4",
   poolEth: process.env.NEXT_PUBLIC_TESTNET_PRIVACY_POOL_ETH || "0x1b1d39e4da649747ecc0e93e7a06452a3061de17",
   treasury: process.env.NEXT_PUBLIC_TESTNET_VEIL_TREASURY || "0x491413119a4adb0ea23b902c7fc7cee3845542b2",

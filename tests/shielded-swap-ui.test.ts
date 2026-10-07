@@ -120,6 +120,16 @@ describe("ShieldedSwap tab adapter (Task 4b: §7 #5 #6, R2/R3/R4)", () => {
     expect(status.unblock).toBeNull();
   });
 
+  it("reports the executable ETH -> VEIL route status when ETH pool is source (Task R3)", () => {
+    const status = getShieldedSwapRouteStatus(TESTNET_LEGACY_ETH_POOL);
+    expect(status.executable).toBe(true);
+    expect(status.destination).toBe("0xd73920a3cbfdf3f6be530cab73fc9c876619517a");
+    expect(status.sourcePool).toBe(TESTNET_LEGACY_ETH_POOL);
+    expect(status.sourceDenomination).toBe(1000000000000000n);
+    expect(status.zeroForOne).toBe(true);
+    expect(status.missingPool).toBeNull();
+  });
+
   it("pending message names the missing pool and keeps funds-safe guidance", () => {
     const pending = {
       ...getShieldedSwapRouteStatus(),

@@ -125,39 +125,50 @@ export interface ShieldedSwapRouteStatus {
 
 /**
  * Single source of truth for the ShieldedSwap tab state (config-level plan).
- * executable derives from the pool inventory — never a hardcoded flag — and
+ * Supports both VEIL -> ETH (zeroForOne=false) and ETH -> VEIL (zeroForOne=true)
+ * via the fixed router (Task R3).
+ * Executable derives from the pool inventory — never a hardcoded flag — and
  * the execution handler additionally enforces the LIVE gate
  * (readShieldedSwapRouteStatusLive) before any transaction is built.
  */
-export function getShieldedSwapRouteStatus(): ShieldedSwapRouteStatus {
-  const destination = resolveShieldedSwapDestination();
+export function getShieldedSwapRouteStatus(
+  sourcePool: Address = SHIELDED_SWAP_SOURCE_POOL
+): ShieldedSwapRouteStatus {
+  const isEthSource =
+    sourcePool.toLowerCase() === TESTNET_LEGACY_ETH_POOL.toLowerCase();
+  const actualSourcePool = isEthSource
+    ? TESTNET_LEGACY_ETH_POOL
+    : SHIELDED_SWAP_SOURCE_POOL;
+  const destination = resolveShieldedSwapDestination(actualSourcePool);
+  const zeroForOne = isEthSource;
+  const sourceDenomination = isEthSource
+    ? 1000000000000000n
+    : SHIELDED_SWAP_SOURCE_DENOMINATION;
+
   if (destination === null) {
     return {
       executable: false,
       chainId: SHIELDED_SWAP_CHAIN_ID,
       router: SHIELDED_SWAP_ROUTER,
-      sourcePool: SHIELDED_SWAP_SOURCE_POOL,
-      sourceDenomination: SHIELDED_SWAP_SOURCE_DENOMINATION,
+      sourcePool: actualSourcePool,
+      sourceDenomination,
       poolKey: SHIELDED_SWAP_POOL_KEY,
-      zeroForOne: SHIELDED_SWAP_ZERO_FOR_ONE,
+      zeroForOne,
       destination: null,
       missingPool: SHIELDED_SWAP_MISSING_POOL_LABEL,
       unblock:
-        "Deploy a VEIL-denominated legacy ShieldedPool exposing the router's " +
-        "IShieldedPool interface (withdraw(bytes,bytes32,bytes32,address,uint256), " +
-        "denomination(), asset(), deposit(bytes32)) on chain 46630, then list it in " +
-        "KNOWN_TESTNET_LEGACY_POOLS. The ShieldedSwap tab enables automatically — " +
-        "no UI rewrite needed.",
+        "Deploy a second legacy ShieldedPool on chain 46630 and list it in " +
+        "KNOWN_TESTNET_LEGACY_POOLS. The ShieldedSwap tab enables automatically.",
     };
   }
   return {
     executable: true,
     chainId: SHIELDED_SWAP_CHAIN_ID,
     router: SHIELDED_SWAP_ROUTER,
-    sourcePool: SHIELDED_SWAP_SOURCE_POOL,
-    sourceDenomination: SHIELDED_SWAP_SOURCE_DENOMINATION,
+    sourcePool: actualSourcePool,
+    sourceDenomination,
     poolKey: SHIELDED_SWAP_POOL_KEY,
-    zeroForOne: SHIELDED_SWAP_ZERO_FOR_ONE,
+    zeroForOne,
     destination,
     missingPool: null,
     unblock: null,

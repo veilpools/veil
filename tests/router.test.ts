@@ -4,7 +4,8 @@ import {
   calculateSlippageBound,
   encodeHookAttestationData,
 } from "../lib/router-client";
-import { decodeAbiParameters, parseAbiParameters, parseEther } from "viem";
+import { findSwapToShieldExecuted } from "../lib/router-swap";
+import { decodeAbiParameters, encodeAbiParameters, keccak256, pad, parseAbiParameters, parseEther, toHex } from "viem";
 import { WANTED_FLAGS, PERMISSION_MASK } from "../scripts/mine-hook.mjs";
 
 describe("Router & Hook Math Verification", () => {
@@ -48,8 +49,40 @@ describe("Router & Hook Math Verification", () => {
     expect(calculateSlippageBound(expected, 99.99)).toBeGreaterThan(0n);
   });
 
-  it("encodes and decodes hook attestation data correctly", () => {
-    const user = "0xCdbdc82A021071eE445d9f897433a7E4B4EAfD8d" as const;
+  it("event finder optionally matches the swapper (M-4 hardening)", () => {
+    const swapper = "0x1111111111111111111111111111111111111111" as const;
+    const other = "0x2222222222222222222222222222222222222222" as const;
+    const pool = "0x1b1d39e4da649747ecc0e93e7a06452a3061de17" as const;
+    const commitment =
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
+    // Manual log encoding (this viem build has no encodeEventLog):
+    // SwapToShieldExecuted(address,address,bytes32,uint256,uint256), first
+    // three params indexed.
+    const topics = [
+      keccak256(
+        toHex("SwapToShieldExecuted(address,address,bytes32,uint256,uint256)")
+      ),
+      pad(swapper),
+      pad(pool),
+      commitment,
+    ] as readonly `0x${string}`[];
+    const data = encodeAbiParameters(
+      [{ type: "uint256" }, { type: "uint256" }],
+      [100n, 200n]
+    );
+    const logs = [{ data, topics }];
+    // No filter: commitment match suffices (backward compatible).
+    expect(findSwapToShieldExecuted(logs, commitment)?.swapper.toLowerCase()).toBe(
+      swapper.toLowerCase()
+    );
+    // Matching swapper passes; another address is rejected (fail closed).
+    expect(
+      findSwapToShieldExecuted(logs, commitment, swapper)?.amountOut
+    ).toBe(200n);
+    expect(findSwapToShieldExecuted(logs, commitment, other)).toBeNull();
+  });
+
+  it("encodes and decodes hook attestation data correctly", () => {    const user = "0xCdbdc82A021071eE445d9f897433a7E4B4EAfD8d" as const;
     const encoded = encodeHookAttestationData(user);
 
     const [decoded] = decodeAbiParameters(parseAbiParameters("address user"), encoded);
