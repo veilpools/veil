@@ -1,6 +1,11 @@
 import { formatEther, formatUnits } from "viem";
 import { SUPPORTED_TOKENS } from "../components/TokenSelectModal";
 
+// Canonical zero address for native-ETH notes/pools (moved from
+// app/trade/page.tsx during modularization).
+export const ETH_ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000" as const;
+
 // Display helpers for shielded-note amounts/symbols. Pure (read-only token
 // registry); extracted from app/trade/page.tsx during modularization.
 

@@ -25,6 +25,8 @@ import { ShieldNoteBackupModal } from "../../components/ShieldNoteBackupModal";
 import { VaultPanel } from "../../components/trade/VaultPanel";
 import { WithdrawPanel } from "../../components/trade/WithdrawPanel";
 import { ShieldedSwapPanel } from "../../components/trade/ShieldedSwapPanel";
+import { BuyAndShieldPanel } from "../../components/trade/BuyAndShieldPanel";
+import { AttestPanel } from "../../components/trade/AttestPanel";
 import { ZkShieldRadar } from "../../components/ZkShieldRadar";
 import { TokenSelectModal, SUPPORTED_TOKENS, type TokenItem } from "../../components/TokenSelectModal";
 import { SlippageSettingsModal } from "../../components/SlippageSettingsModal";
@@ -631,6 +633,31 @@ export default function SwapToShieldPage() {
     (isEthRouterInput
       ? routerQuote.quotedOut < TESTNET_VEIL_POOL_05_DENOMINATION
       : (liveDenomination !== null && routerQuote.quotedOut < liveDenomination));
+  // Buy CTA state, computed once and shared with BuyAndShieldPanel.
+  const buyCtaDisabled = isTestnetRouterMode
+    ? isRouterExecuteDisabled({
+        isExecuting,
+        connected: Boolean(connectedAddress),
+        veilInValid: parsedVeilIn !== null,
+        quoteBelowDenomination: routerQuoteBelowDenomination,
+        isQuoting,
+        hasQuote: routerQuote !== null,
+      })
+    : isExecuting ||
+      (Boolean(connectedAddress) &&
+        (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination));
+
+  // Router pay-token toggle target (R3): full TokenItem so balances follow.
+  function selectRouterPayToken(sym: "VEIL" | "ETH") {
+    if (sym === "ETH") {
+      setInputToken({ ...SUPPORTED_TOKENS[0] });
+    } else {
+      const veilEntry = SUPPORTED_TOKENS.find((t) => t.symbol === "VEIL");
+      if (veilEntry) {
+        setInputToken({ ...veilEntry, address: TESTNET_VEIL_TOKEN });
+      }
+    }
+  }
 
   // Task 3 gated-path VEIL input validity. Null disables gated execution;
   // the reason is shown in the gated panel, never an alert().
@@ -2644,753 +2671,73 @@ export default function SwapToShieldPage() {
 
           {/* TAB 1: SWAP-TO-SHIELD */}
           {activeTab === "buy_and_shield" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-              {/* Pay / Deposit Surface */}
-              <div
-                style={{
-                  padding: "var(--space-4)",
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: "rgba(26, 26, 26, 0.025)",
-                  border: "1px solid var(--color-border)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-3)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    You Pay (Public Wallet)
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                    <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                      Bal: {isTestnetRouterMode ? (isEthRouterInput ? `${inputToken.balance} ETH` : `${veilBalance ?? "…"} VEIL`) : `${inputToken.balance} ${inputToken.symbol}`}
-                    </span>
-                    {!isTestnetRouterMode && (
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      {[0.25, 0.5, 0.75, 1.0].map((pct) => (
-                        <button
-                          key={pct}
-                          type="button"
-                          onClick={() => handlePercentage(pct)}
-                          aria-label={`Set amount to ${pct === 1 ? "max" : `${pct * 100} percent`} of balance`}
-                          className="hover:border-[#FF8C00] hover:text-[#FF8C00] active:scale-95 transition-all"
-                          style={{
-                            padding: "4px 8px",
-                            minHeight: "24px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            borderRadius: "var(--radius-sm)",
-                            backgroundColor: "#ffffff",
-                            border: "1px solid var(--color-border-strong)",
-                            color: "var(--color-text)",
-                            fontFamily: "monospace",
-                            fontSize: "11px",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                            boxShadow: "0 1px 2px rgba(26, 26, 26, 0.04)",
-                          }}
-                        >
-                          {pct === 1.0 ? "MAX" : `${pct * 100}%`}
-                        </button>
-                      ))}
-                    </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Amount Input & Token Selector Row */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
-                  <input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    aria-label={isTestnetRouterMode ? (isEthRouterInput ? "ETH amount to swap and shield" : "VEIL amount to swap and shield") : "Amount to pay"}
-                    value={isTestnetRouterMode ? (isEthRouterInput ? inputAmount : veilAmountIn) : inputAmount}
-                    onChange={(e) => (isTestnetRouterMode ? (isEthRouterInput ? setInputAmount(e.target.value) : setVeilAmountIn(e.target.value)) : setInputAmount(e.target.value))}
-                    placeholder="0.0"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      outline: "none",
-                      fontSize: "clamp(1.75rem, 2.5vw, 2.35rem)",
-                      fontFamily: "var(--font-headline)",
-                      fontWeight: 600,
-                      color: "var(--color-text)",
-                      width: "60%",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  />
-
-                  {/* Pay-token toggle (R3): ETH (faucet-funded) or test VEIL
-                      (pre-held, no faucet). Direction drives quote and value. */}
-                  {isTestnetRouterMode ? (
-                    <div
-                      role="group"
-                      aria-label="Router pay token: test VEIL or test ETH"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "var(--space-2)",
-                        padding: "8px 14px",
-                        borderRadius: "var(--radius-md)",
-                        backgroundColor: "rgba(255, 140, 0, 0.08)",
-                        border: "1px solid rgba(255, 140, 0, 0.3)",
-                        color: "var(--color-text)",
-                      }}
-                    >
-                      {(
-                        ["VEIL", "ETH"] as const
-                      ).map((sym) => {
-                        const active = routerPaySymbol === sym;
-                        return (
-                          <button
-                            key={sym}
-                            type="button"
-                            aria-pressed={active}
-                            aria-label={`Pay with test ${sym}`}
-                            onClick={() => {
-                              if (sym === "ETH") {
-                                setInputToken({ ...SUPPORTED_TOKENS[0] });
-                              } else {
-                                const veilEntry = SUPPORTED_TOKENS.find(
-                                  (t) => t.symbol === "VEIL"
-                                );
-                                if (veilEntry) {
-                                  setInputToken({ ...veilEntry, address: TESTNET_VEIL_TOKEN });
-                                }
-                              }
-                            }}
-                            style={{
-                              padding: "6px 12px",
-                              minHeight: "28px",
-                              borderRadius: "var(--radius-sm)",
-                              fontFamily: "var(--font-body)",
-                              fontSize: "var(--text-body-sm)",
-                              fontWeight: active ? 700 : 500,
-                              cursor: "pointer",
-                              border: active
-                                ? "1px solid var(--color-accent)"
-                                : "1px solid transparent",
-                              backgroundColor: active ? "#ffffff" : "transparent",
-                              color: active ? "var(--color-accent-ink)" : "var(--color-muted)",
-                              transition: "all var(--duration-fast)",
-                            }}
-                          >
-                            {sym}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                  <button
-                    onClick={() => setIsInputTokenModalOpen(true)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-2)",
-                      padding: "8px 14px",
-                      borderRadius: "var(--radius-md)",
-                      backgroundColor: "#ffffff",
-                      border: "1px solid var(--color-border-strong)",
-                      color: "var(--color-text)",
-                      cursor: "pointer",
-                      boxShadow: "0 2px 6px rgba(26, 26, 26, 0.06)",
-                      transition: "all var(--duration-fast)",
-                    }}
-                  >
-                    <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                      {inputToken.iconSvg}
-                    </div>
-                    <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
-                      {inputToken.symbol}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-[#FF8C00]" />
-                  </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Swap Direction Divider with Flip Action (hidden on the fixed testnet VEIL route) */}
-              <div style={{ display: isTestnetRouterMode ? "none" : "flex", justifyContent: "center", margin: "-10px 0", position: "relative", zIndex: 10 }}>
-                <button
-                  type="button"
-                  onClick={handleFlipTokens}
-                  title="Flip token direction"
-                  className="hover:scale-110 hover:border-[#FF8C00] active:rotate-180 transition-all duration-300"
-                  style={{
-                    width: "38px",
-                    height: "38px",
-                    borderRadius: "var(--radius-full)",
-                    backgroundColor: "#ffffff",
-                    border: "1px solid var(--color-border-strong)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-accent-ink)",
-                    boxShadow: "0 4px 12px rgba(26, 26, 26, 0.1)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <ArrowDown className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Receive / Shield Output Surface */}
-              <div
-                style={{
-                  padding: "var(--space-4)",
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: "rgba(26, 26, 26, 0.025)",
-                  border: "1px solid var(--color-border)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-3)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    You Shield (LeanIMT Pool)
-                  </span>
-                  <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                    Fixed {isTestnetRouterMode && isEthRouterInput ? (routerDestDenom !== null ? `${formatEther(routerDestDenom)} VEIL` : "…") : (liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "…")} / note
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
-                  <div
-                    style={{
-                      fontSize: "clamp(1.75rem, 2.5vw, 2.35rem)",
-                      fontFamily: "var(--font-headline)",
-                      fontWeight: 600,
-                      color: "var(--color-text)",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {isTestnetRouterMode && isEthRouterInput
-                      ? (routerDestDenom !== null ? `${formatEther(routerDestDenom)} VEIL` : "Loading live denomination…")
-                      : liveDenomination !== null
-                      ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS)
-                      : "Loading live denomination…"}
-                  </div>
-
-                  {/* Token Button */}
-                  <button
-                    onClick={() => setIsOutputTokenModalOpen(true)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-2)",
-                      padding: "8px 14px",
-                      borderRadius: "var(--radius-md)",
-                      backgroundColor: "#ffffff",
-                      border: "1px solid var(--color-border-strong)",
-                      color: "var(--color-text)",
-                      cursor: "pointer",
-                      boxShadow: "0 2px 6px rgba(26, 26, 26, 0.06)",
-                      transition: "all var(--duration-fast)",
-                    }}
-                  >
-                    <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                      {outputToken.iconSvg}
-                    </div>
-                    <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
-                      {outputToken.symbol}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-[#FF8C00]" />
-                  </button>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                  <span>
-                    {isTestnetRouterMode
-                      ? (isEthRouterInput
-                        ? "VeilShieldRouter.swapToShield — ETH to VEIL note (live simulation quote)"
-                        : "VeilShieldRouter.swapToShield — VEIL to ETH to 0.001 ETH note (live simulation quote)")
-                      : "Direct ShieldedPool deposit — no swap route yet"}
-                  </span>
-                  <span style={{ color: "var(--color-muted)", fontSize: "11px" }}>
-                    Provisional Proof Payload
-                  </span>
-                </div>
-              </div>
-
-              {/* Route Inspector */}
-                <RouteInspector
-                  inputAmount={isTestnetRouterMode ? (isEthRouterInput ? inputAmount : veilAmountIn) : inputAmount}
-                  inputToken={isTestnetRouterMode ? (isEthRouterInput ? "ETH" : "VEIL") : inputToken.symbol}
-                  outputToken={outputToken.symbol}
-                  slippage={slippage}
-                />
-
-              {/* Testnet router live quote + faucet guidance (R1/R3) */}
-              {isTestnetRouterMode && (
-                <div
-                  role="status"
-                  style={{
-                    padding: "var(--space-3) var(--space-4)",
-                    borderRadius: "var(--radius-sm)",
-                    backgroundColor: "rgba(26, 26, 26, 0.025)",
-                    border: "1px solid var(--color-border)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    fontSize: "var(--text-caption)",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--color-muted)" }}>Live simulated output:</span>
-                    <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                      {isQuoting
-                        ? "Simulating…"
-                        : routerQuote !== null
-                        ? `${formatEther(routerQuote.quotedOut)} ${isEthRouterInput ? "VEIL" : "ETH"}`
-                        : "Unavailable"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--color-muted)" }}>Minimum accepted ({slippage}%):</span>
-                    <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                      {routerQuote !== null ? `${formatEther(routerQuote.minAmountOut)} ${isEthRouterInput ? "VEIL" : "ETH"}` : "—"}
-                    </span>
-                  </div>
-                  {routerQuoteNote && (
-                    <span style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
-                      {routerQuoteNote}
-                    </span>
-                  )}
-                  <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
-                    Needs test VEIL already in your wallet — there is no onchain faucet; the proven
-                    route ran on a pre-funded operator balance. Test VEIL: {TESTNET_VEIL_TOKEN}.
-                  </span>
-                </div>
-              )}
-
-              {/* Main Action Button */}
-              <button
-                onClick={handleBuyAndShield}
-                disabled={
-                  isTestnetRouterMode
-                    ? isRouterExecuteDisabled({
-                        isExecuting,
-                        connected: Boolean(connectedAddress),
-                        veilInValid: parsedVeilIn !== null,
-                        quoteBelowDenomination: routerQuoteBelowDenomination,
-                        isQuoting,
-                        hasQuote: routerQuote !== null,
-                      })
-                    : isExecuting ||
-                      (Boolean(connectedAddress) &&
-                        (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination))
-                }
-                className="group active:scale-[0.99] transition-all"
-                style={{
-                  width: "100%",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "var(--space-2)",
-                  fontFamily: "var(--font-body)",
-                  fontSize: "var(--text-body)",
-                  fontWeight: 600,
-                  minHeight: "3.25rem",
-                  borderRadius: "var(--radius-md)",
-                  border: "none",
-                  backgroundColor: "var(--color-accent)",
-                  color: "var(--color-accent-contrast)",
-                  cursor: isTestnetRouterMode
-                    ? isRouterExecuteDisabled({
-                        isExecuting,
-                        connected: Boolean(connectedAddress),
-                        veilInValid: parsedVeilIn !== null,
-                        quoteBelowDenomination: routerQuoteBelowDenomination,
-                        isQuoting,
-                        hasQuote: routerQuote !== null,
-                      })
-                      ? "not-allowed"
-                      : "pointer"
-                    : isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? "not-allowed" : "pointer",
-                  opacity: isTestnetRouterMode
-                    ? isRouterExecuteDisabled({
-                        isExecuting,
-                        connected: Boolean(connectedAddress),
-                        veilInValid: parsedVeilIn !== null,
-                        quoteBelowDenomination: routerQuoteBelowDenomination,
-                        isQuoting,
-                        hasQuote: routerQuote !== null,
-                      })
-                      ? 0.45
-                      : 1
-                    : isExecuting || (Boolean(connectedAddress) && (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination)) ? 0.45 : 1,
-                  boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
-                  transition: "all var(--duration-fast)",
-                }}
-              >
-                <span>
-                  {isTestnetRouterMode
-                    ? isExecuting
-                      ? "Swapping VEIL to Shielded ETH..."
-                      : !connectedAddress
-                      ? "Connect Wallet to Trade"
-                      : parsedVeilIn === null
-                      ? "Enter VEIL Amount"
-                      : routerQuoteBelowDenomination
-                      ? "Output Below Note Size"
-                      : isQuoting || routerQuote === null
-                      ? "Simulating Live Output…"
-                      : "Execute Router Swap-to-Shield"
-                    : isExecuting
-                    ? "Synthesizing Proof & Routing..."
-                    : !connectedAddress
-                    ? "Connect Wallet to Trade"
-                    : !inputAmount || parsedInput <= 0
-                    ? "Enter Amount"
-                    : !inputMatchesDenomination
-                    ? "Enter Exact Denomination"
-                    : "Execute 1-Tx Swap-to-Shield"}
-                </span>
-              </button>
-
-              {/* Quote Breakdown Details */}
-              <div
-                style={{
-                  padding: "var(--space-3) var(--space-4)",
-                  borderRadius: "var(--radius-sm)",
-                  backgroundColor: "rgba(26, 26, 26, 0.025)",
-                  border: "1px solid var(--color-border)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                  fontSize: "var(--text-caption)",
-                  fontFamily: "monospace",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>You Pay:</span>
-                  <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                    {isTestnetRouterMode ? `${veilAmountIn} VEIL` : `${inputAmount} ${inputToken.symbol}`}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>You Shield:</span>
-                  <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                    fixed {liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "Loading live denomination…"}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>Slippage:</span>
-                  <span style={{ color: "var(--color-text)", fontWeight: 600 }}>{slippage}%</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>VeilHook Protocol Fee:</span>
-                  <span style={{ color: "var(--color-accent-ink)", fontWeight: 600 }}>30 bps (Buyback &amp; Burn)</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>Zero-Custody Guarantee:</span>
-                  <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Router Balance = 0 Invariant</span>
-                </div>
-              </div>
-
-              {/* Honest fallback toggle (testnet only): direct pool deposit
-                  without the swap route, for use only when the VEIL router
-                  route is unavailable. The router stays the default path. */}
-              {isTestnetBuild && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForceDirect((v) => !v);
-                    setFlowError(null);
-                  }}
-                  aria-pressed={forceDirect}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "4px",
-                    minHeight: "24px",
-                    fontSize: "var(--text-caption)",
-                    fontFamily: "monospace",
-                    color: "var(--color-muted)",
-                    textDecoration: "underline",
-                    textAlign: "center",
-                  }}
-                >
-                  {forceDirect
-                    ? "Fallback active: direct ShieldedPool deposit (no swap). Switch back to the router route."
-                    : "Router route unavailable? Fall back to direct ShieldedPool deposit (no swap)."}
-                </button>
-              )}
-
-              {/* Self-attestation + gated pool (Task 3, testnet only): the
-                  user self-attests onchain and trades through the gated
-                  ETH/VEIL pool. All status reads live from chain. */}
-              {isTestnetBuild && activeTab === "buy_and_shield" && (
-                <div
-                  role="region"
-                  aria-label="Self-attestation and gated pool"
-                  style={{
-                    padding: "var(--space-4)",
-                    borderRadius: "var(--radius-md)",
-                    backgroundColor: "rgba(26, 26, 26, 0.025)",
-                    border: "1px solid var(--color-border)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "var(--space-3)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "var(--text-caption)", fontWeight: 700, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Self-Attestation &amp; Gated Pool
-                    </span>
-                    <span style={{ fontSize: "11px", color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>
-                      Testnet 46630
-                    </span>
-                  </div>
-                  <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
-                    Self-attestation is permissionless: anyone can attest, with no eligibility
-                    conditions (
-                    <a href="/docs/decisions" style={{ color: "var(--color-accent-ink)" }}>
-                      docs/DECISIONS.md
-                    </a>
-                    ; association-set policy:{" "}
-                    <a href="/docs/asp-policy" style={{ color: "var(--color-accent-ink)" }}>
-                      docs/ASP-POLICY.md
-                    </a>
-                    ).
-                    Pool gating is an anti-bot speedbump plus launch windows only — nothing
-                    claimed here beyond what the hook reports onchain below.
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "var(--text-caption)", fontFamily: "monospace" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                      <span style={{ color: "var(--color-muted)" }}>Registry:</span>
-                      <a href={`${GATED_EXPLORER_ADDRESS_BASE}${GATED_REGISTRY_ADDRESS}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)", overflowWrap: "anywhere" }}>
-                        {`${GATED_REGISTRY_ADDRESS.slice(0, 6)}…${GATED_REGISTRY_ADDRESS.slice(-4)}`}
-                      </a>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                      <span style={{ color: "var(--color-muted)" }}>Hook:</span>
-                      <a href={`${GATED_EXPLORER_ADDRESS_BASE}${GATED_HOOK_ADDRESS}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)", overflowWrap: "anywhere" }}>
-                        {`${GATED_HOOK_ADDRESS.slice(0, 6)}…${GATED_HOOK_ADDRESS.slice(-4)}`}
-                      </a>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                      <span style={{ color: "var(--color-muted)" }}>Your attestation:</span>
-                      <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
-                        {!connectedAddress
-                          ? "Connect a wallet to read status"
-                          : isAttestLoading && attestation === null
-                          ? "Reading from chain…"
-                          : attestation?.attested
-                          ? "Attested — gated pool unlocked"
-                          : "Not attested — self-attest below"}
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                      <span style={{ color: "var(--color-muted)" }}>Pool gating:</span>
-                      <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
-                        {!gating
-                          ? "Reading from chain…"
-                          : !gating.gated
-                          ? "Not gated — any address can swap"
-                          : gating.active
-                          ? `Active — temporary test window, ends ${gating.windowEndsAt !== null ? new Date(Number(gating.windowEndsAt) * 1000).toUTCString() : "never (permanent)"}`
-                          : "Window elapsed — pool currently accepts any address"}
-                      </span>
-                    </div>
-                    {gating?.gated && (
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                        <span style={{ color: "var(--color-muted)" }}>Gated pool:</span>
-                        <span style={{ color: "var(--color-muted)", textAlign: "right" }}>
-                          {`ETH/VEIL 0.3% · id ${GATED_POOL_ID.slice(0, 10)}… · window ${(Number(gating.duration) / 86400).toFixed(1)} days`}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={handleSelfAttest}
-                      disabled={isAttesting || (Boolean(connectedAddress) && attestation?.attested === true)}
-                      aria-label="Self-attest the connected address onchain"
-                      style={{
-                        flex: 1,
-                        minHeight: "44px",
-                        padding: "8px 14px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--color-border)",
-                        backgroundColor: "var(--color-accent)",
-                        color: "var(--color-accent-contrast)",
-                        fontWeight: 600,
-                        fontSize: "var(--text-body-sm)",
-                        cursor: isAttesting || (Boolean(connectedAddress) && attestation?.attested === true) ? "not-allowed" : "pointer",
-                        opacity: isAttesting || (Boolean(connectedAddress) && attestation?.attested === true) ? 0.45 : 1,
-                      }}
-                    >
-                      {!connectedAddress
-                        ? "Connect Wallet to Attest"
-                        : isAttesting
-                        ? "Attesting…"
-                        : attestation?.attested
-                        ? "Already Attested"
-                        : "Self-Attest (1 Transaction)"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFlowError(null);
-                        void refreshAttestationState();
-                      }}
-                      disabled={isAttestLoading || !connectedAddress}
-                      aria-label="Refresh attestation and gating status from chain"
-                      style={{
-                        minHeight: "44px",
-                        padding: "8px 14px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--color-border)",
-                        backgroundColor: "transparent",
-                        color: "var(--color-text)",
-                        fontWeight: 600,
-                        fontSize: "var(--text-body-sm)",
-                        cursor: isAttestLoading || !connectedAddress ? "not-allowed" : "pointer",
-                        opacity: isAttestLoading || !connectedAddress ? 0.45 : 1,
-                      }}
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                  {attestNote && (
-                    <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
-                      {attestNote}
-                    </span>
-                  )}
-                  {attestTxHash && (
-                    <span style={{ fontSize: "var(--text-caption)", fontFamily: "monospace", overflowWrap: "anywhere" }}>
-                      <span style={{ color: "var(--color-muted)" }}>Attestation tx: </span>
-                      <a href={`${GATED_EXPLORER_TX_BASE}${attestTxHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)" }}>
-                        {attestTxHash}
-                      </a>
-                    </span>
-                  )}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
-                    <label htmlFor="gated-veil-amount" style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Gated Swap Amount (VEIL in, ETH out)
-                    </label>
-                    <input
-                      id="gated-veil-amount"
-                      type="text"
-                      inputMode="decimal"
-                      value={gatedAmountIn}
-                      onChange={(e) => setGatedAmountIn(e.target.value)}
-                      placeholder={PROVEN_GATED_VEIL_AMOUNT_IN}
-                      aria-describedby="gated-swap-hint"
-                      style={{
-                        minHeight: "44px",
-                        padding: "8px 12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--color-border)",
-                        backgroundColor: "var(--color-surface)",
-                        color: "var(--color-text)",
-                        fontFamily: "monospace",
-                        fontSize: "var(--text-body)",
-                      }}
-                    />
-                    <span id="gated-swap-hint" style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
-                      Minimum accepted is 1 wei, verbatim from the proven script — no slippage
-                      protection on this testnet path. Needs test VEIL already in your wallet;
-                      there is no onchain faucet.
-                    </span>
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={handleSimulateGatedSwap}
-                        disabled={isSimulatingGated}
-                        aria-label="Simulate the gated swap gas-free via eth_call"
-                        style={{
-                          flex: 1,
-                          minHeight: "44px",
-                          padding: "8px 14px",
-                          borderRadius: "var(--radius-sm)",
-                          border: "1px solid var(--color-border)",
-                          backgroundColor: "transparent",
-                          color: "var(--color-text)",
-                          fontWeight: 600,
-                          fontSize: "var(--text-body-sm)",
-                          cursor: isSimulatingGated ? "not-allowed" : "pointer",
-                          opacity: isSimulatingGated ? 0.45 : 1,
-                        }}
-                      >
-                        {isSimulatingGated ? "Simulating…" : "Simulate Gated Swap (Gas-Free)"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleGatedSwap}
-                        disabled={isGatedExecuteDisabled({
-                          isSwapping: isGatedSwapping,
-                          connected: Boolean(connectedAddress),
-                          veilInValid: parsedGatedIn !== null,
-                          attested: attestation?.attested ?? null,
-                          isSimulating: isSimulatingGated,
-                        })}
-                        aria-label="Execute the gated pool swap"
-                        style={{
-                          flex: 1,
-                          minHeight: "44px",
-                          padding: "8px 14px",
-                          borderRadius: "var(--radius-sm)",
-                          border: "none",
-                          backgroundColor: "var(--color-accent)",
-                          color: "var(--color-accent-contrast)",
-                          fontWeight: 600,
-                          fontSize: "var(--text-body-sm)",
-                          cursor: isGatedExecuteDisabled({
-                            isSwapping: isGatedSwapping,
-                            connected: Boolean(connectedAddress),
-                            veilInValid: parsedGatedIn !== null,
-                            attested: attestation?.attested ?? null,
-                            isSimulating: isSimulatingGated,
-                          })
-                            ? "not-allowed"
-                            : "pointer",
-                          opacity: isGatedExecuteDisabled({
-                            isSwapping: isGatedSwapping,
-                            connected: Boolean(connectedAddress),
-                            veilInValid: parsedGatedIn !== null,
-                            attested: attestation?.attested ?? null,
-                            isSimulating: isSimulatingGated,
-                          })
-                            ? 0.45
-                            : 1,
-                        }}
-                      >
-                        {!connectedAddress
-                          ? "Connect Wallet to Trade"
-                          : parsedGatedIn === null
-                          ? "Enter VEIL Amount"
-                          : attestation?.attested !== true
-                          ? "Attest First to Unlock"
-                          : isGatedSwapping
-                          ? "Swapping Through Gated Pool…"
-                          : "Execute Gated Swap"}
-                      </button>
-                    </div>
-                    {gatedSimNote && (
-                      <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
-                        {gatedSimNote}
-                      </span>
-                    )}
-                    {gatedTxHash && (
-                      <span style={{ fontSize: "var(--text-caption)", fontFamily: "monospace", overflowWrap: "anywhere" }}>
-                        <span style={{ color: "var(--color-muted)" }}>Gated swap tx: </span>
-                        <a href={`${GATED_EXPLORER_TX_BASE}${gatedTxHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)" }}>
-                          {gatedTxHash}
-                        </a>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <BuyAndShieldPanel
+              isTestnetRouterMode={isTestnetRouterMode}
+              isEthRouterInput={isEthRouterInput}
+              routerPaySymbol={routerPaySymbol}
+              onSelectPayToken={selectRouterPayToken}
+              inputToken={inputToken}
+              outputToken={outputToken}
+              inputAmount={inputAmount}
+              veilAmountIn={veilAmountIn}
+              onInputAmount={setInputAmount}
+              onVeilAmountIn={setVeilAmountIn}
+              veilBalance={veilBalance}
+              onOpenInputTokenModal={() => setIsInputTokenModalOpen(true)}
+              onOpenOutputTokenModal={() => setIsOutputTokenModalOpen(true)}
+              onPercentage={handlePercentage}
+              onFlipTokens={handleFlipTokens}
+              liveDenomination={liveDenomination}
+              routerDestDenom={routerDestDenom}
+              routerQuote={routerQuote}
+              routerQuoteNote={routerQuoteNote}
+              isQuoting={isQuoting}
+              slippage={slippage}
+              routerInputValid={parsedVeilIn !== null}
+              routerQuoteBelowDenomination={routerQuoteBelowDenomination}
+              parsedInput={parsedInput}
+              inputMatchesDenomination={inputMatchesDenomination}
+              connectedAddress={connectedAddress}
+              isExecuting={isExecuting}
+              executeDisabled={buyCtaDisabled}
+              onExecute={handleBuyAndShield}
+              forceDirect={forceDirect}
+              onToggleForceDirect={() => {
+                setForceDirect((v) => !v);
+                setFlowError(null);
+              }}
+              isTestnetBuild={isTestnetBuild}
+            />
           )}
+          {/* Buy & Shield tab body lives in components/trade/BuyAndShieldPanel.tsx */}
+
+              {/* Self-attestation + gated pool (Task 3, testnet only) */}
+              {isTestnetBuild && activeTab === "buy_and_shield" && (
+                <AttestPanel
+                  connectedAddress={connectedAddress}
+                  attestation={attestation}
+                  gating={gating}
+                  isAttestLoading={isAttestLoading}
+                  isAttesting={isAttesting}
+                  onSelfAttest={handleSelfAttest}
+                  onRefresh={() => {
+                    setFlowError(null);
+                    void refreshAttestationState();
+                  }}
+                  attestNote={attestNote}
+                  attestTxHash={attestTxHash}
+                  gatedAmountIn={gatedAmountIn}
+                  onGatedAmountIn={setGatedAmountIn}
+                  gatedValid={parsedGatedIn !== null}
+                  isSimulatingGated={isSimulatingGated}
+                  isGatedSwapping={isGatedSwapping}
+                  onSimulate={handleSimulateGatedSwap}
+                  onGatedSwap={handleGatedSwap}
+                  gatedSimNote={gatedSimNote}
+                  gatedTxHash={gatedTxHash}
+                />
+              )}
+          {/* attest body lives in components/trade/AttestPanel.tsx */}
 
           {/* TAB 2: SHIELDED SWAP */}
           {activeTab === "shielded_swap" && (
@@ -3416,10 +2763,7 @@ export default function SwapToShieldPage() {
               onExecute={handleShieldedSwap}
             />
           )}
-          {/* swap body lives in components/trade/ShieldedSwapPanel.tsx (remainder below) */}
-          {/* swap note surface + divider live in components/trade/ShieldedSwapPanel.tsx */}
-
-          {/* swap target-pool + route + CTA live in components/trade/ShieldedSwapPanel.tsx */}
+          {/* Shielded-swap tab body lives in components/trade/ShieldedSwapPanel.tsx */}
 
           {/* TAB 3: WITHDRAW */}
           {activeTab === "withdraw" && (
