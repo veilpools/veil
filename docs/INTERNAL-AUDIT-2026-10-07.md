@@ -24,7 +24,11 @@
 - `uint128` truncation on swap amounts (`contracts/VeilShieldRouter.sol:202,255`): revert-only above ~3.4e20 ETH — unreachable. Accept.
 - Attestations never expire (`contracts/VeilAttestationRegistry.sol:49-55`): fine for launch windows (gating is time-boxed instead). Accept.
 
-## 4. Mainnet conditions
+## 4. Post-audit actions taken
+
+- Mainnet `ShieldedPool_ETH` deposits paused by guardian (`0x3a34660dec5279612b7a6317f5717f99fbdda6939e52b936a0f1a0e7c5de997b`) — the Mock suite cannot accept funds pending 0xbow migration. UI already surfaces pool pause state before depositing.
+
+## 5. Mainnet conditions
 
 1. Fund the new deployer, redeploy the 0xbow suite + veil contracts under it (old-compromised-key ownership must not persist anywhere).
 2. Publish the association-set policy (sentinel-only is a placeholder, not a policy).

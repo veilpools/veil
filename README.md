@@ -63,6 +63,8 @@
 | **VeilAttestationRegistry** | `0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855) |
 | **VeilHook (0x20c4)** | `0x9df0b52bf290a13e11c73c56c4c533e3887760c4` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x9df0b52bf290a13e11c73c56c4c533e3887760c4) |
 | **VeilShieldRouter** | `0x01a05f87c2c227a1b382cbc2e7e63b186538c86d` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0x01a05f87c2c227a1b382cbc2e7e63b186538c86d) |
+
+> **Safety notice:** deposits into the Mock-verifier `ShieldedPool_ETH` are **paused** by guardian action ([tx](https://explorer.mainnet.chain.robinhood.com/tx/0x3a34660dec5279612b7a6317f5717f99fbdda6939e52b936a0f1a0e7c5de997b)) after the internal audit found the Mock accepts arbitrary proofs. Withdrawals were never pausable and need no action (pool holds 0 deposits). New deposits will open only on the 0xbow suite after migration.
 | **VeilToken (temporary)** | `0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a) |
 
 ### 🚀 Mainnet 0xbow Migration (ready, waiting on funds)
