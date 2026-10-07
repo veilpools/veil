@@ -2590,7 +2590,15 @@ export default function SwapToShieldPage() {
                   </div>
                   <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
                     Self-attestation is permissionless: anyone can attest, with no eligibility
-                    conditions (docs/DECISIONS.md; association-set policy: docs/ASP-POLICY.md).
+                    conditions (
+                    <a href="/docs/decisions" style={{ color: "var(--color-accent-ink)" }}>
+                      docs/DECISIONS.md
+                    </a>
+                    ; association-set policy:{" "}
+                    <a href="/docs/asp-policy" style={{ color: "var(--color-accent-ink)" }}>
+                      docs/ASP-POLICY.md
+                    </a>
+                    ).
                     Pool gating is an anti-bot speedbump plus launch windows only — nothing
                     claimed here beyond what the hook reports onchain below.
                   </p>
@@ -2627,7 +2635,7 @@ export default function SwapToShieldPage() {
                           : !gating.gated
                           ? "Not gated — any address can swap"
                           : gating.active
-                          ? `Active — window ends ${gating.windowEndsAt !== null ? new Date(Number(gating.windowEndsAt) * 1000).toUTCString() : "never (permanent)"}`
+                          ? `Active — temporary test window, ends ${gating.windowEndsAt !== null ? new Date(Number(gating.windowEndsAt) * 1000).toUTCString() : "never (permanent)"}`
                           : "Window elapsed — pool currently accepts any address"}
                       </span>
                     </div>

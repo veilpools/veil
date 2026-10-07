@@ -32,6 +32,7 @@ import {
   readGatingConfig,
   simulateGatedSwapCall,
 } from "../lib/gated-attest";
+import gatedSimFixture from "./fixtures/gated-simulation.json";
 
 const USER = "0x1111111111111111111111111111111111111111" as const;
 const ROOT =
@@ -268,6 +269,27 @@ describe("gas-free simulation decoding (R4)", () => {
     ).toMatch(/GatingActiveUserNotAttested/);
   });
 
+  it("decodes multi-selector blobs by innermost (most specific) match", () => {
+    // M-4: a blob containing two gating selectors must not always report
+    // GatingActiveUserNotAttested. The innermost (last-appearing) selector
+    // wins, matching the deepest revert in nested WrappedError data.
+    const gatingThenExpired =
+      "0xbc7aea4f00000000000000000000000000000000000000000000000000000000203d82d8" as const;
+    expect(decodeGatingRevert({ cause: { data: gatingThenExpired } })).toBe(
+      "Expired"
+    );
+    const expiredThenGating =
+      "0x203d82d800000000000000000000000000000000000000000000000000000000bc7aea4f" as const;
+    expect(decodeGatingRevert({ cause: { data: expiredThenGating } })).toBe(
+      "GatingActiveUserNotAttested"
+    );
+    const gatingThenInvalidSig =
+      "0xbc7aea4f000000000000000000000000000000000000000000000000000000008baa579f" as const;
+    expect(
+      decodeGatingRevert({ cause: { data: gatingThenInvalidSig } })
+    ).toBe("InvalidSignature");
+  });
+
   it("simulateGatedSwapCall sends the funding override and surfaces rejection", async () => {
     const hookData = encodeGatedHookData({
       user: USER,
@@ -336,5 +358,48 @@ describe("gated error mapping + execute gating", () => {
     expect(isGatedExecuteDisabled({ ...ready, veilInValid: false })).toBe(true);
     expect(isGatedExecuteDisabled({ ...ready, isSimulating: true })).toBe(true);
     expect(isGatedExecuteDisabled({ ...ready, connected: false })).toBe(false);
+  });
+});
+
+describe("live simulation transcripts fixture (I-1, zero gas)", () => {
+  it("pins the verbatim eth_call reject + pass legs from testnet", () => {
+    // Fixture: tests/fixtures/gated-simulation.json (live 2026-10-07,
+    // head 130555038, eth_call only). No private keys stored.
+    expect(gatedSimFixture.chainId).toBe(46630);
+    expect(gatedSimFixture.poolId).toBe(GATED_POOL_ID);
+    expect(gatedSimFixture.poolKey.hooks).toBe(GATED_HOOK_ADDRESS);
+    // REJECT leg: unattested fresh address reverts GatingActive nested in
+    // WrappedError (0x90bfb865…bc7aea4f…).
+    const rejectData = (
+      gatedSimFixture.rejectLeg.response as { error: { data: string } }
+    ).error.data.toLowerCase();
+    expect(rejectData).toContain("90bfb865");
+    expect(rejectData).toContain("bc7aea4f");
+    expect(
+      decodeGatingRevert({ cause: { data: (gatedSimFixture.rejectLeg.response as { error: { data: string } }).error.data } })
+    ).toBe("GatingActiveUserNotAttested");
+    expect(gatedSimFixture.rejectLeg.verifyAttestationRawBefore).toBe(
+      "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    // PASS leg: attested operator succeeds with amountOut bytes.
+    expect(
+      gatedSimFixture.passLeg.verifyAttestationRawBefore
+    ).toBe("0x0000000000000000000000000000000000000000000000000000000000000001");
+    const passResult = (gatedSimFixture.passLeg.response as { result: string })
+      .result.toLowerCase();
+    expect(passResult.startsWith("0x")).toBe(true);
+    expect(passResult.length).toBeGreaterThan(10);
+    // Both requests are eth_call with virtual-funding state override.
+    for (const leg of [gatedSimFixture.rejectLeg, gatedSimFixture.passLeg]) {
+      expect(leg.request.method).toBe("eth_call");
+      expect(leg.request.params[1]).toBe("latest");
+      const override = leg.request.params[2] as unknown as Record<
+        string,
+        { stateDiff: Record<string, string> }
+      >;
+      expect(
+        Object.keys(override[GATED_VEIL_TOKEN].stateDiff)
+      ).toHaveLength(2);
+    }
   });
 });

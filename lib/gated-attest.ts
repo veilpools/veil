@@ -395,12 +395,31 @@ export function decodeGatingRevert(error: unknown): GatedSimReason {
   if (data) {
     // The v4 PoolManager wraps hook reverts in WrappedError, so the gating
     // selector sits NESTED inside the revert blob (verified live 2026-10-07:
-    // 0x90bfb865…bc7aea4f…). Substring search, most specific first.
-    if (data.includes(GATING_REVERT_SELECTORS.GatingActiveUserNotAttested.slice(2)))
-      return "GatingActiveUserNotAttested";
-    if (data.includes(GATING_REVERT_SELECTORS.Expired.slice(2))) return "Expired";
-    if (data.includes(GATING_REVERT_SELECTORS.InvalidSignature.slice(2)))
-      return "InvalidSignature";
+    // 0x90bfb865…bc7aea4f…, see tests/fixtures/gated-simulation.json).
+    // Precedence is positional: when a blob contains several known selectors
+    // (nested multi-error data), the innermost (last-appearing) selector wins
+    // as the most specific match, not a fixed GatingActive-first order (M-4).
+    const candidates = [
+      {
+        reason: "GatingActiveUserNotAttested",
+        selector: GATING_REVERT_SELECTORS.GatingActiveUserNotAttested,
+      },
+      { reason: "Expired", selector: GATING_REVERT_SELECTORS.Expired },
+      {
+        reason: "InvalidSignature",
+        selector: GATING_REVERT_SELECTORS.InvalidSignature,
+      },
+    ] as const;
+    let best: GatedSimReason | null = null;
+    let bestIndex = -1;
+    for (const candidate of candidates) {
+      const index = data.indexOf(candidate.selector.slice(2).toLowerCase());
+      if (index !== -1 && index > bestIndex) {
+        bestIndex = index;
+        best = candidate.reason;
+      }
+    }
+    if (best) return best;
     const selector = data.slice(0, 10);
     if (selector === GATING_REVERT_SELECTORS.GatingActiveUserNotAttested)
       return "GatingActiveUserNotAttested";
@@ -486,6 +505,9 @@ export function buildGatedSwapTxArgs(args: GatedSimCallArgs) {
  * With it, the REAL hook logic runs: pre-attest the call reverts with
  * GatingActiveUserNotAttested (wrapped in the manager's WrappedError);
  * post-attest the same call succeeds. Overrides change nothing onchain.
+ *
+ * Live transcripts (zero-gas eth_call request/response for both legs,
+ * head 130555038): tests/fixtures/gated-simulation.json.
  */
 export async function simulateGatedSwapCall(
   client: PublicClient,
