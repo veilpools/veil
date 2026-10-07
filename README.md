@@ -140,6 +140,14 @@ Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approv
 - **Attested swap:** [`0x2a076f288e8ea8f5554593410b3839d0c5ae026cb7e00aeb7bbf68fd48cdd04b`](https://explorer.testnet.chain.robinhood.com/tx/0x2a076f288e8ea8f5554593410b3839d0c5ae026cb7e00aeb7bbf68fd48cdd04b) with attested `hookData`
 - **Treasury fee from usage:** 0 → 2706559470897 wei collected by the hook on a real swap
 
+### ✍️ Self-Attestation Without Owner (Testnet, proven 2026-10-07)
+
+`VeilAttestationRegistry.selfAttest` (EIP-191 signature, nonce + deadline, no owner/attester involved) and `VeilHook` signature-bound `hookData` (user, deadline, signature over hook + chain + user + pool + deadline):
+
+- **Self-attest, no owner:** [`0xaa9b89921095859339fef741de1d48d83c0c117a4ef2b23e7fc398b98f`](https://explorer.testnet.chain.robinhood.com/tx/0xaa9b89921095859339fef741de1d48d83c0c117a4ef2b23e7fc398b98f), `verifyAttestation == true`
+- **Spoofed hookData reverts** (fake user/signature rejected onchain)
+- **Self-attested swap passes, fee accrues:** [`0x74770b993ce5fe46c115395dfd029e2aa3faf171628e10aad5d1c6f9f5d78fde`](https://explorer.testnet.chain.robinhood.com/tx/0x74770b993ce5fe46c115395dfd029e2aa3faf171628e10aad5d1c6f9f5d78fde), treasury ETH 17457976132009682 → 17929662035599539
+
 Pending (needs testnet funds): fee-bearing relay run on v1 (its `maxRelayFeeBPS` is immutably 0; v3 suite sets 100).
 
 ### 🔀 Full Shielded Swap ETH → VEIL (Testnet, proven 2026-10-07)

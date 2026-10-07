@@ -10,6 +10,8 @@ import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 interface IVeilAttestationRegistry {
     function verifyAttestation(address user) external view returns (bool);
@@ -39,6 +41,8 @@ contract VeilHook is BaseHook {
     error GatingActiveUserNotAttested();
     error FeeOverflow();
     error ZeroAddress();
+    error Expired();
+    error InvalidSignature();
 
     event ProtocolFeeCollected(bytes32 indexed poolId, address indexed currency, uint256 feeAmount);
     event PoolGatingConfigured(bytes32 indexed poolId, bool gated, uint256 gatingDuration);
@@ -121,9 +125,21 @@ contract VeilHook is BaseHook {
 
             // If gating duration is active
             if (duration == 0 || block.timestamp < launch + duration) {
-                // Must pass user in hookData
-                if (hookData.length < 20) revert GatingActiveUserNotAttested();
-                address user = abi.decode(hookData, (address));
+                // hookData binds the swapper: (user, deadline, signature).
+                // The signature must be the user's EIP-191 signature over
+                // (hook, chain, user, poolId, deadline), so hookData cannot
+                // be spoofed or moved across pools.
+                (address user, uint256 deadline, bytes memory signature) = abi.decode(
+                    hookData,
+                    (address, uint256, bytes)
+                );
+                if (user == address(0)) revert GatingActiveUserNotAttested();
+                if (block.timestamp > deadline) revert Expired();
+                bytes32 inner = keccak256(
+                    abi.encode(address(this), block.chainid, user, poolId, deadline)
+                );
+                address signer = ECDSA.recover(MessageHashUtils.toEthSignedMessageHash(inner), signature);
+                if (signer != user) revert InvalidSignature();
                 if (!IVeilAttestationRegistry(registry).verifyAttestation(user)) {
                     revert GatingActiveUserNotAttested();
                 }

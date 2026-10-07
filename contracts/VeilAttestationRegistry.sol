@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.37;
 
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
 /// @title VeilAttestationRegistry
 /// @notice Registry for addresses verified via ZK attestations (proof-of-clean-funds / proof-of-human).
 /// Used by VeilHook to enforce anti-bot gating during launch windows or pool lifespans.
@@ -15,6 +18,9 @@ contract VeilAttestationRegistry {
     // Authorized verifiers / postmen who can register verified attestations
     mapping(address => bool) public authorizedAttesters;
 
+    // Per-user nonce for self-attestation signatures (replay protection).
+    mapping(address => uint256) public attestationNonce;
+
     event AddressAttested(address indexed user, bytes32 indexed proofRoot, uint256 timestamp);
     event AttestationRevoked(address indexed user);
     event AttesterUpdated(address indexed attester, bool authorized);
@@ -23,6 +29,8 @@ contract VeilAttestationRegistry {
     error OnlyOwner();
     error OnlyAttester();
     error ZeroAddress();
+    error Expired();
+    error InvalidSignature();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert OnlyOwner();
@@ -70,6 +78,24 @@ contract VeilAttestationRegistry {
     function revokeAttestation(address user) external onlyOwner {
         isAttested[user] = false;
         emit AttestationRevoked(user);
+    }
+
+    /// @notice Permissionless self-attestation: the user submits their own
+    /// proof root with an EIP-191 signature over (registry, chain, user,
+    /// root, nonce, deadline). No owner or attester involved.
+    function selfAttest(bytes32 proofRoot, uint256 deadline, bytes calldata signature) external {
+        address user = msg.sender;
+        if (user == address(0)) revert ZeroAddress();
+        if (block.timestamp > deadline) revert Expired();
+        uint256 nonce = attestationNonce[user];
+        bytes32 inner = keccak256(abi.encode(address(this), block.chainid, user, proofRoot, nonce, deadline));
+        address signer = ECDSA.recover(MessageHashUtils.toEthSignedMessageHash(inner), signature);
+        if (signer != user) revert InvalidSignature();
+        attestationNonce[user] = nonce + 1;
+        isAttested[user] = true;
+        attestationTimestamp[user] = block.timestamp;
+        attestationRoot[user] = proofRoot;
+        emit AddressAttested(user, proofRoot, block.timestamp);
     }
 
     function verifyAttestation(address user) external view returns (bool) {
