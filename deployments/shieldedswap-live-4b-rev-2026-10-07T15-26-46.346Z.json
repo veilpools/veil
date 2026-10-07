@@ -53,6 +53,18 @@
     "nullifier": "LOST (run crashed before persisting secrets; 0.001 test ETH locked as unspendable note)",
     "secret": "LOST (see above)"
   },
+  "firstAttemptNote": {
+    "depositTxPrefix": "0x0eec...833d",
+    "depositBlock": 130568058,
+    "approveTxPrefix": "0x1c70...a6c2e",
+    "approveBlock": 130568052,
+    "commitment": "0x7c73...ca9f (prefix only; full value unlogged)",
+    "nullifierHash": "0x0d95...64eb (prefix only; full value unlogged)",
+    "denomination": "1000000000000000",
+    "pool": "0x1b1d39e4da649747ecc0e93e7a06452a3061de17",
+    "fate": "LOST (secrets generated in-memory, never persisted; script stops at sim revert before writing any record; no notes file in deployments/; 0.001 test ETH locked as unspendable note, deployer dust only)",
+    "reference": "task-4b-report.md section 8"
+  },
   "cycleGasWei": "7812580000000",
   "explorer": {
     "approve": "https://explorer.testnet.chain.robinhood.com/tx/0xaf81af92c4c043655b3805b0a00f8d91fbed081286971405326d5280e401b598",
