@@ -134,7 +134,7 @@ Pending (needs testnet funds): fee-bearing relay run on v1 (its `maxRelayFeeBPS`
 
 Fresh 0xbow suite v2 (operator-owned entrypoint, ETH + VEIL pools, `maxRelayFeeBPS=100`):
 
-- **ETH shielded** → **withdrawn (ZK)** → **v4 swap ETH→VEIL** ([0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99](https://explorer.testnet.chain.robinhood.com/tx/0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99)) → **VEIL shielded** ([0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc](https://explorer.testnet.chain.robinhood.com/tx/0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc), 0.001 VEIL note)
+- **ETH shielded** → **withdrawn (ZK)** → **v4 swap ETH→VEIL** ([0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99](https://explorer.testnet.chain.robinhood.com/tx/0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99)) → **VEIL shielded** ([0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc](https://explorer.testnet.chain.robinhood.com/tx/0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc), 0.001 VEIL note) → **VEIL relayed with enforced 50 BPS fee by a third-party key** ([0x33408fc3b3f9ca4d4de07432a1e57ecd76f37937c6011ed1404d0c36b4dcdb20](https://explorer.testnet.chain.robinhood.com/tx/0x33408fc3b3f9ca4d4de07432a1e57ecd76f37937c6011ed1404d0c36b4dcdb20): recipient 0.995, relayer 0.005)
 
 ### 🔀 Router Swap-to-Shield (Testnet, proven 2026-10-07)
 
