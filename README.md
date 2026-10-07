@@ -202,7 +202,7 @@ pnpm build
 | 1 | Normal Buy & Shield | Commitment inserted into Merkle tree, router balance = 0 | ✅ Pass |
 | 2 | Slippage exceeded | Transaction reverts, 100% of user funds refunded | ✅ Pass |
 | 3 | Double-spend same note | Automatically rejected (NullifierAlreadySpent) | ✅ Pass |
-| 4 | Relayer tampers minOut / recipient / fee | ZK Proof validation fails | ✅ Pass |
+| 4 | Relayer tampers minOut / recipient / fee | Groth16 proof binds recipient+fee; swap params caller-side (self-relay only on Mock suite) | ⚠️ Partial (see audit) |
 | 5 | Shielded swap Token A ➔ Token B | Shielded balance B increases, zero public address trace | ✅ Pass |
 | 6 | Relayer offline / unavailable | Fallback direct self-relay operates normally | ✅ Pass |
 | 7 | Unregistered address on gated pool | Swap rejected by hook | ✅ Pass |
