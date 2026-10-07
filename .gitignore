@@ -7,7 +7,7 @@ out/
 e2e-note-backup.json
 .superpowers/
 deployments/*.tmp.json
-deployments/*.pending.json
+deployments/migrate-mainnet-pending.json
 *.tsbuildinfo
 .DS_Store
 DevBrief-Veil.md
