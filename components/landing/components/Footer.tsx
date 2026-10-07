@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { VeilLogo } from "../../VeilLogo";
 
 export const Footer: React.FC = () => {
   return (
@@ -8,9 +9,7 @@ export const Footer: React.FC = () => {
       <div className="landing-footer__inner">
         <div className="landing-footer__grid">
           <div className="landing-footer__brand">
-            <a href="/" aria-label="Veil Protocol home">
-              <img src="/assets/figma/logo.svg" alt="Veil Protocol" width="360" height="97" />
-            </a>
+            <VeilLogo href="/" size="lg" color="#ffffff" />
             <p>Zero-Knowledge privacy layer for Uniswap v4 on Robinhood Chain.</p>
             <a className="landing-footer__email" href="https://x.com/veilpools" target="_blank" rel="noopener noreferrer">
               Follow @veilpools

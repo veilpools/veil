@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, LogOut, Copy, Check, ChevronDown } from "lucide-react";
 import { WalletModal } from "./WalletModal";
+import { VeilLogo } from "./VeilLogo";
 import { APP_CHAIN_ID, appChain } from "@/lib/chains";
 import { fetchAllTokenBalances } from "@/lib/balances";
 import { SUPPORTED_TOKENS } from "./TokenSelectModal";
@@ -137,37 +138,7 @@ export function Navbar() {
               }}
             />
 
-            <Link
-              href="/"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                textDecoration: "none",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-headline)",
-                  fontSize: "1.25rem",
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  color: "var(--color-text)",
-                  textTransform: "uppercase",
-                }}
-              >
-                VEIL
-              </span>
-              <span
-                style={{
-                  width: "5px",
-                  height: "5px",
-                  borderRadius: "50%",
-                  backgroundColor: "var(--color-accent)",
-                  display: "inline-block",
-                }}
-              />
-            </Link>
+            <VeilLogo href="/" size="md" />
           </div>
 
           {/* Right: Network Indicator & Multi-Wallet Connect */}

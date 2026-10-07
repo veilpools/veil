@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { VeilLogo } from "../../VeilLogo";
 
 export const Header: React.FC = () => {
   return (
@@ -19,17 +20,7 @@ export const Header: React.FC = () => {
         boxSizing: "border-box",
       }}
     >
-      <a href="/" style={{ display: "block" }}>
-        <img
-          src="/assets/figma/logo.svg"
-          alt="Veil Protocol"
-          style={{
-            height: "var(--logo-h-header)",
-            width: "auto",
-            display: "block",
-          }}
-        />
-      </a>
+      <VeilLogo href="/" size="md" />
 
       <nav
         aria-label="Primary"
