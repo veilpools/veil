@@ -1,14 +1,14 @@
 import { createPublicClient, http, formatEther, formatUnits, parseAbi, type Address } from "viem";
-import { robinhoodMainnet } from "./chains";
+import { appChain, APP_CHAIN_ID } from "./chains";
 
 // Read from local Next.js proxy route in browser, or direct RPC in server/tests
 const RPC_ENDPOINT =
   typeof window !== "undefined"
-    ? `${window.location.origin}/api/rpc`
-    : process.env.ROBINHOOD_MAINNET_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+    ? `${window.location.origin}/api/rpc?chainId=${APP_CHAIN_ID}`
+    : process.env.ROBINHOOD_MAINNET_RPC_URL || appChain.rpcUrls.default.http[0];
 
 export const publicClient = createPublicClient({
-  chain: robinhoodMainnet,
+  chain: appChain,
   transport: http(RPC_ENDPOINT, {
     fetchOptions: {
       headers: {

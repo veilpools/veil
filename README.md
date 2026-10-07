@@ -174,6 +174,12 @@ Fresh 0xbow suite v2 (operator-owned entrypoint, ETH + VEIL pools, `maxRelayFeeB
 
 ## 🛠️ Quickstart & Local Development
 
+### 0. Try it on testnet (no real funds)
+```bash
+pnpm dev:testnet
+```
+This runs the whole app (wallet, balances, contracts, trade) against Robinhood Testnet 46630 (`NEXT_PUBLIC_CHAIN_ID=46630`). Fund your wallet at `https://faucet.testnet.chain.robinhood.com/` (0.01 testnet ETH, free). Default `pnpm dev` targets mainnet 4663.
+
 ### 1. Install Dependencies
 ```bash
 pnpm install

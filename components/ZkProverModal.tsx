@@ -3,6 +3,7 @@
 import React from "react";
 import { Loader2, Shield, ExternalLink, Download, X, CheckCircle2 } from "lucide-react";
 import { ModalWrapper } from "./ModalWrapper";
+import { explorerTxUrl } from "@/lib/chains";
 
 export interface ZkProverStep {
   title: string;
@@ -224,7 +225,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
         {/* Tx Explorer Output */}
         {txHash && (
           <a
-            href={`https://explorer.mainnet.chain.robinhood.com/tx/${txHash}`}
+            href={explorerTxUrl(txHash)}
             target="_blank"
             rel="noreferrer"
             style={{

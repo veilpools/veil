@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { appChain } from "@/lib/chains";
 
-const EXPLORER = "https://explorer.mainnet.chain.robinhood.com";
+const EXPLORER = appChain.blockExplorers.default.url;
 
 type AddressBook = Record<string, string>;
 

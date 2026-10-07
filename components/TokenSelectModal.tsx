@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Search, X, Check, ShieldCheck } from "lucide-react";
 
 import { ModalWrapper } from "./ModalWrapper";
+import { APP_CHAIN_ID } from "../lib/chains";
 
 export interface TokenItem {
   symbol: string;
@@ -235,7 +236,7 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
                 fontWeight: 600,
               }}
             >
-              Robinhood 4663
+              Robinhood {APP_CHAIN_ID}
             </span>
           </div>
           <button

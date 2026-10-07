@@ -48,6 +48,25 @@ export const robinhoodTestnet = defineChain({
   },
 });
 
+// App network selection. Set NEXT_PUBLIC_CHAIN_ID=46630 to run the whole
+// app (wallet, balances, contracts, trade) against Robinhood Testnet.
+export const APP_CHAIN_ID =
+  process.env.NEXT_PUBLIC_CHAIN_ID === "46630" ? 46630 : 4663;
+
+export const appChain = APP_CHAIN_ID === 46630 ? robinhoodTestnet : robinhoodMainnet;
+
+export function isTestnetMode(): boolean {
+  return APP_CHAIN_ID === 46630;
+}
+
+export function explorerTxUrl(hash: string): string {
+  return `${appChain.blockExplorers.default.url}/tx/${hash}`;
+}
+
+export function explorerAddressUrl(address: string): string {
+  return `${appChain.blockExplorers.default.url}/address/${address}`;
+}
+
 export const V4_MAINNET_POOL_MANAGER = "0x8366a39CC670B4001A1121B8F6A443A643e40951" as const;
 export const V4_MAINNET_POSITION_MANAGER = "0x58daec3116aae6d93017baaea7749052e8a04fa7" as const;
 export const V4_MAINNET_STATE_VIEW = "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b" as const;

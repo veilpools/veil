@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, LogOut, Copy, Check, ChevronDown } from "lucide-react";
 import { WalletModal } from "./WalletModal";
+import { APP_CHAIN_ID } from "@/lib/chains";
 import {
   EVM_WALLETS,
   loadWallet,
@@ -172,7 +173,7 @@ export function Navbar() {
                   backgroundColor: "#16a34a",
                 }}
               />
-              <span>Robinhood 4663</span>
+              <span>Robinhood {APP_CHAIN_ID}</span>
             </div>
 
             {wallet ? (

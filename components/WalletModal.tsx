@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { X, ExternalLink, Check, AlertCircle } from "lucide-react";
 import { ModalWrapper } from "./ModalWrapper";
+import { APP_CHAIN_ID, appChain } from "@/lib/chains";
 import {
   EVM_WALLETS,
   connectEvm,
@@ -100,7 +101,7 @@ export function WalletModal({
                 color: "var(--color-muted)",
               }}
             >
-              Robinhood Chain Mainnet (4663)
+              {appChain.name} ({APP_CHAIN_ID})
             </span>
           </div>
           <button

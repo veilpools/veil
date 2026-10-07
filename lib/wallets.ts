@@ -1,6 +1,7 @@
 // Multi-wallet EVM provider detection & connection registry for Veil Protocol
 // Implements EIP-6963 provider announcements + injected multi-wallet detection
 // Direct provider interaction without heavy 3rd-party wallet adapters
+import { APP_CHAIN_ID, appChain } from "./chains";
 
 export type EvmWalletId = "metamask" | "rabby" | "coinbase" | "okx" | "trust" | "phantom";
 
@@ -253,7 +254,7 @@ export function subscribeWalletChange(cb: () => void): () => void {
 }
 
 export async function ensureRobinhoodChain(provider: EvmProvider): Promise<void> {
-  const chainIdHex = "0x1237"; // 4663
+  const chainIdHex = `0x${APP_CHAIN_ID.toString(16)}`;
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
@@ -270,10 +271,10 @@ export async function ensureRobinhoodChain(provider: EvmProvider): Promise<void>
         params: [
           {
             chainId: chainIdHex,
-            chainName: "Robinhood Chain",
+            chainName: appChain.name,
             nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-            rpcUrls: ["https://rpc.mainnet.chain.robinhood.com"],
-            blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
+            rpcUrls: [appChain.rpcUrls.default.http[0]],
+            blockExplorerUrls: [appChain.blockExplorers.default.url],
           },
         ],
       });

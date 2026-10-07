@@ -29,7 +29,7 @@ import {
   isAddress,
   type Address,
 } from "viem";
-import { robinhoodMainnet, robinhoodTestnet } from "../../lib/chains";
+import { appChain, APP_CHAIN_ID } from "../../lib/chains";
 import { loadWallet, getActiveEvmProvider, subscribeWalletChange } from "../../lib/wallets";
 import { fetchAllTokenBalances, publicClient } from "../../lib/balances";
 import { waitForTransactionReceipt } from "viem/actions";
@@ -397,7 +397,7 @@ export default function SwapToShieldPage() {
       // Step 3: Real On-Chain Transaction Execution via Connected Wallet
       const walletClient = createWalletClient({
         account: connectedAddress,
-        chain: robinhoodMainnet,
+        chain: appChain,
         transport: custom(activeProvider),
       });
 
@@ -702,7 +702,7 @@ export default function SwapToShieldPage() {
       // Step 3: Real On-Chain Withdrawal Dispatch via Connected Wallet
       const walletClient = createWalletClient({
         account: connectedAddress,
-        chain: robinhoodMainnet,
+        chain: appChain,
         transport: custom(activeProvider),
       });
 
@@ -785,7 +785,7 @@ export default function SwapToShieldPage() {
               marginBottom: "var(--space-2)",
             }}
           >
-            Robinhood Chain 4663 // Uniswap v4
+            Robinhood Chain {APP_CHAIN_ID} // Uniswap v4
           </div>
           <h1
             style={{

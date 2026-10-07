@@ -5,6 +5,7 @@ import { Copy, Check } from "lucide-react";
 import { parseAbi, formatEther, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { APP_CHAIN_ID } from "@/lib/chains";
 
 // Live Robinhood Mainnet 4663 deployments via the shared address source.
 // Literals below are fallbacks only and match lib/contracts.ts defaults.
@@ -182,7 +183,7 @@ export const ZkShieldRadar: React.FC = () => {
               display: "inline-block",
             }}
           />
-          <span>Robinhood 4663</span>
+          <span>Robinhood {APP_CHAIN_ID}</span>
           <span style={{ opacity: 0.4 }}>/</span>
           <span>Hook live</span>
         </div>

@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { appChain } from "@/lib/chains";
 
 const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
   "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34") as Address;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const EXPLORER = "https://explorer.mainnet.chain.robinhood.com";
+const EXPLORER = appChain.blockExplorers.default.url;
 
 // Event names verified in lib/veil-artifact.ts VEIL_TREASURY_ABI — never invented.
 const TOKENS_BURNED_EVENT = parseAbiItem(

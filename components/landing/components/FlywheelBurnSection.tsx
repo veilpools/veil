@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS } from "@/lib/contracts";
+import { appChain } from "@/lib/chains";
 import { SectionHeader } from "./SectionHeader";
 import { RevealBox } from "./RevealBox";
 import { CountUp } from "./CountUp";
@@ -12,7 +13,7 @@ const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
   "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34") as Address;
 const HOOK_ADDRESS = (CONTRACT_ADDRESSES.hook ||
   "0x9df0b52bf290a13e11c73c56c4c533e3887760c4") as Address;
-const EXPLORER = "https://explorer.mainnet.chain.robinhood.com";
+const EXPLORER = appChain.blockExplorers.default.url;
 
 // Event name verified in lib/veil-artifact.ts VEIL_TREASURY_ABI — never invented.
 const TOKENS_BURNED_EVENT = parseAbiItem(
