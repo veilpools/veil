@@ -1,0 +1,22 @@
+{
+  "network": "Robinhood Testnet",
+  "chainId": 46630,
+  "deployedAt": "2026-10-07T16:17:22.022Z",
+  "deployer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "task": "R2-R1: fixed router (R1 _settleCurrency via PoolManager.settle{value})",
+  "deployPath": "Faithful equivalent of scripts/deploy.mjs step 7 (same ABI/bytecode/constructor arg); router-only, full-suite redeploy out of scope.",
+  "contracts": {
+    "VeilShieldRouter": {
+      "address": "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27",
+      "tx": "0x020bfb6e0250fda5f60a13ff64ce5d5f1df9ec9fc27feb0886b97615287ecd50",
+      "blockNumber": 130592419,
+      "args": {
+        "poolManager": "0x8366a39CC670B4001A1121B8F6A443A643e40951"
+      },
+      "gasUsed": "1647486",
+      "gasPriceWei": "10000000"
+    }
+  },
+  "status": "completed",
+  "explorer": "https://explorer.testnet.chain.robinhood.com/tx/0x020bfb6e0250fda5f60a13ff64ce5d5f1df9ec9fc27feb0886b97615287ecd50"
+}

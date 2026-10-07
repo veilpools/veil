@@ -1,0 +1,16 @@
+{
+  "network": "Robinhood Testnet",
+  "chainId": 46630,
+  "router": "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27",
+  "poolDestination": "0xd73920a3cbfdf3f6be530cab73fc9c876619517a",
+  "note": {
+    "secret": "0x979135395f89ddcdb6e9339b4b54843752f2fe636788cd14a96ca4aadc9e5472",
+    "nullifier": "0xea69e4cb55753954c3ad9014606ee5926fcbb4dcc73c3a531697965508c63acf",
+    "nullifierHash": "0xb2a411dea9bbbaa355bf36e6e4f03ed5d05ae9cd6082b5baf5bae40d5ea54884",
+    "commitment": "0x12985ac66281f5f89aaee410f5af67b638adffa57be8760541d5fa62897d7383",
+    "denomination": "500000000000000000",
+    "asset": "0x019086f63407fadf0ccb89516e465baef5031aa9",
+    "timestamp": 1791389883073
+  },
+  "warning": "Testnet-only note secrets (mock verifier). Anyone holding this file can spend this note."
+}

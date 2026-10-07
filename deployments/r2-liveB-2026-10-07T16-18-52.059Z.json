@@ -1,0 +1,64 @@
+{
+  "network": "Robinhood Testnet",
+  "chainId": 46630,
+  "ranAt": "2026-10-07T16:18:59.749Z",
+  "deployer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "router": "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27",
+  "direction": "ETH -> VEIL (zeroForOne=true; previously contract-blocked, now fixed)",
+  "poolSource": "0x1b1d39e4da649747ecc0e93e7a06452a3061de17",
+  "poolDestination": "0xd73920a3cbfdf3f6be530cab73fc9c876619517a",
+  "liveSimOutputWei": "1072300781079478661",
+  "minAmountOutWei": "1066939277174081267",
+  "slippagePercent": 0.5,
+  "txs": {
+    "deposit": {
+      "hash": "0x65479bb9b2e0d3dbe99569e0b1132588ad923355d7eabe77c22d4ed42959c8cb",
+      "blockNumber": 130593283
+    },
+    "shieldedSwap": {
+      "hash": "0x9dd1de467190d4475377f9b3936536222eb03db0b5ba0da03ad1b9c6971011ae",
+      "blockNumber": 130593319
+    }
+  },
+  "assertions": {
+    "event": {
+      "relayer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+      "poolSource": "0x1b1d39E4DA649747eCc0e93E7A06452A3061de17",
+      "poolDestination": "0xD73920A3cBfDf3F6be530CaB73FC9C876619517a",
+      "nullifierHash": "0xa39d61050c1b359deab72d0820aa4e77b2613c759f8c491ff08bc742034ac396",
+      "newCommitment": "0x04d8a5f2e3e386512e77052e130d93a4b475c5c70224c17fb0480ffea55cf445",
+      "amountOut": "1072300781079478661"
+    },
+    "srcNextIndexBefore": 4,
+    "srcNextIndexAfter": 5,
+    "destNextIndexBefore": 1,
+    "destNextIndexAfter": 2,
+    "routerEthAfter": "0",
+    "routerVeilUnchanged": "0",
+    "sourceNullifierSpent": true
+  },
+  "sourceNote": {
+    "secret": "0xa806fd79cd0e02566c226534550fd9e697e7e2dcf623ea6f3882bb5ba80f3fd0",
+    "nullifier": "0xfd9fe6799071f6c5ab0554c38643d2e2a8b709431c69cf9576224fe82a2d751c",
+    "nullifierHash": "0xa39d61050c1b359deab72d0820aa4e77b2613c759f8c491ff08bc742034ac396",
+    "commitment": "0x2f9525b7ce8b181c935aab09c8b2a6decd29cda922a8dd90e3b42782dfed3662",
+    "denomination": "1000000000000000",
+    "asset": "0x0000000000000000000000000000000000000000",
+    "timestamp": 1791389933284
+  },
+  "destNote": {
+    "secret": "0xf2b31d4e3353b0bf9d1776a69f6c1270e62782c27d8ba92f246701c6518b2cab",
+    "nullifier": "0x017323a36674f92838eba8d8a2ca58b1636683220bccad685a8b4bd536b7d8e5",
+    "nullifierHash": "0x3f1ced96794725e0445ae21ec139d79faa4ffd04d677e005f4013ad11cbb7ee9",
+    "commitment": "0x04d8a5f2e3e386512e77052e130d93a4b475c5c70224c17fb0480ffea55cf445",
+    "denomination": "500000000000000000",
+    "asset": "0x019086f63407fadf0ccb89516e465baef5031aa9",
+    "timestamp": 1791389936576
+  },
+  "cycleGasWei": "6609162084000",
+  "explorer": {
+    "deposit": "https://explorer.testnet.chain.robinhood.com/tx/0x65479bb9b2e0d3dbe99569e0b1132588ad923355d7eabe77c22d4ed42959c8cb",
+    "shieldedSwap": "https://explorer.testnet.chain.robinhood.com/tx/0x9dd1de467190d4475377f9b3936536222eb03db0b5ba0da03ad1b9c6971011ae"
+  },
+  "status": "completed"
+}
