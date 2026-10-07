@@ -38,7 +38,9 @@ import { CONTRACT_ADDRESSES } from "../../lib/contracts";
 import {
   TESTNET_0XBOW,
   TESTNET_CHAIN_ID,
+  MAINNET_CHAIN_ID,
   isTestnetBowConfigured,
+  getBowSuite,
 } from "../../lib/privacy-pools";
 import {
   createBowSdk,
@@ -553,6 +555,61 @@ export default function SwapToShieldPage() {
         console.error("0xbow testnet withdrawal error:", e);
         setIsProverOpen(false);
         alert(e instanceof Error ? e.message : "0xbow testnet withdrawal failed.");
+      } finally {
+        setIsExecuting(false);
+      }
+      return;
+    }
+
+    // Mainnet 0xbow path: active only after `pnpm migrate:mainnet` populates
+    // the suite. Before that, fail closed with directions instead of touching
+    // the paused Mock-verifier pool.
+    if (connectedChainId === MAINNET_CHAIN_ID) {
+      const suite = getBowSuite(MAINNET_CHAIN_ID);
+      if (!suite) {
+        alert(
+          "Mainnet 0xbow suite pending migration — withdrawals open after `pnpm migrate:mainnet`. No transaction was sent."
+        );
+        return;
+      }
+      setIsExecuting(true);
+      setProverTitle("Preparing 0xbow Shielded Withdrawal (Mainnet)");
+      setProverTxHash(null);
+      setProverCommitment(null);
+      setProverSteps([
+        {
+          title: "1. Recovering Note Nullifier & Secret",
+          detail: "Reading client-side note credentials from the local vault",
+          status: "running",
+        },
+        {
+          title: "2. Loading pinned Groth16 artifacts (v1.2.1)",
+          detail: "Fetching /shield-artifacts/v1.2.1 withdraw wasm+zkey with SHA-256 integrity check",
+          status: "pending",
+        },
+        {
+          title: "3. Proving locally via Groth16 wasm",
+          detail: `Real snarkjs proveWithdrawal against the mainnet pool ${suite.poolEth.slice(0, 10)}… (no Mock)`,
+          status: "pending",
+        },
+        {
+          title: "4. Entrypoint relay dispatch + receipt gating",
+          detail: "Submitting relay() to the mainnet entrypoint on Robinhood Chain 4663",
+          status: "pending",
+        },
+      ]);
+      setIsProverOpen(true);
+      try {
+        if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
+        // Full browser proving wires up after migration verification; the
+        // script path (scripts/privacy-pools-testnet-e2e.mjs pattern) is proven.
+        throw new Error(
+          "Mainnet 0xbow browser proving ships after migration verification. No transaction was sent."
+        );
+      } catch (e: unknown) {
+        console.error("0xbow mainnet withdrawal error:", e);
+        setIsProverOpen(false);
+        alert(e instanceof Error ? e.message : "0xbow mainnet withdrawal failed.");
       } finally {
         setIsExecuting(false);
       }

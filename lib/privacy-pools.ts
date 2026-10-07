@@ -4,6 +4,19 @@ import type { Address } from "viem";
 // Sourced from deployments/privacy-pools-testnet-latest.json (audited v1.2.1 suite).
 // Same env-override pattern as lib/contracts.ts. TESTNET ONLY — do not use for mainnet.
 export const TESTNET_CHAIN_ID = 46630 as const;
+export const MAINNET_CHAIN_ID = 4663 as const;
+
+// 0xbow Privacy Pools MAINNET 4663 address book.
+// Populated by `pnpm migrate:mainnet` (NEXT_PUBLIC_0XBOW_* env). Empty until
+// migration runs — UI treats empty as "mainnet 0xbow pending migration".
+export const MAINNET_0XBOW = {
+  entrypoint:
+    (process.env.NEXT_PUBLIC_0XBOW_ENTRYPOINT as Address | undefined) || ("" as Address),
+  poolEth:
+    (process.env.NEXT_PUBLIC_0XBOW_POOL_ETH as Address | undefined) || ("" as Address),
+  poolVeil:
+    (process.env.NEXT_PUBLIC_0XBOW_POOL_VEIL as Address | undefined) || ("" as Address),
+} as const;
 
 export const TESTNET_0XBOW = {
   withdrawalVerifier:
@@ -48,6 +61,34 @@ export function isTestnetBowConfigured(): boolean {
   return Object.values(TESTNET_0XBOW).every(
     (addr) => isHexAddress(addr) && addr !== "0x0000000000000000000000000000000000000000"
   );
+}
+
+/** True when the mainnet 0xbow suite finished migration (env populated). */
+export function isMainnetBowConfigured(): boolean {
+  return Object.values(MAINNET_0XBOW).every(
+    (addr) => isHexAddress(addr) && addr !== "0x0000000000000000000000000000000000000000"
+  );
+}
+
+export interface BowSuite {
+  entrypoint: Address;
+  poolEth: Address;
+  poolVeil: Address | "";
+}
+
+/** Chain-aware 0xbow suite selector. Returns null when the suite is absent. */
+export function getBowSuite(chainId: number | null): BowSuite | null {
+  if (chainId === TESTNET_CHAIN_ID && isTestnetBowConfigured()) {
+    return { entrypoint: TESTNET_0XBOW.entrypointProxy, poolEth: TESTNET_0XBOW.pool, poolVeil: "" };
+  }
+  if (chainId === MAINNET_CHAIN_ID && isMainnetBowConfigured()) {
+    return {
+      entrypoint: MAINNET_0XBOW.entrypoint,
+      poolEth: MAINNET_0XBOW.poolEth,
+      poolVeil: MAINNET_0XBOW.poolVeil,
+    };
+  }
+  return null;
 }
 
 export function getTestnetPoolAddress(): Address {
