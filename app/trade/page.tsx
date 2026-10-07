@@ -1190,7 +1190,9 @@ export default function SwapToShieldPage() {
               lineHeight: "1.6",
             }}
           >
-            Direct shielded deposits into non-custodial Merkle privacy pools with client-side proof payloads and verifiable Association Sets. Provisional verifier — Groth16 follows (F4).
+            {APP_CHAIN_ID === TESTNET_CHAIN_ID
+              ? "Direct shielded deposits into non-custodial Merkle privacy pools with client-side Groth16 ZK-SNARK proofs and verifiable Association Sets (ASP)."
+              : "Direct shielded deposits into non-custodial Merkle privacy pools with client-side proof payloads and verifiable Association Sets. Provisional verifier — Groth16 follows (F4)."}
           </p>
         </div>
 
@@ -2355,7 +2357,9 @@ export default function SwapToShieldPage() {
                   </span>
                 )}
                 <span id="clean-recipient-help" style={{ fontSize: "11px", color: "var(--color-muted)" }}>
-                  The withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4).
+                  {APP_CHAIN_ID === TESTNET_CHAIN_ID
+                    ? "The withdraw call carries no depositor address. Unlinkable withdrawal with client-side Groth16 ZK-SNARK verification."
+                    : "The withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4)."}
                 </span>
               </div>
 
