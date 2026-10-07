@@ -6,10 +6,12 @@
 // param builders in lib/shielded-swap.ts belong to the parallel agent — they
 // are REUSED here (imported, never edited).
 //
-// ROUTER-VERSION RECONCILIATION (verified 2026-10-07, see task-4-report.md):
+// ROUTER-VERSION RECONCILIATION (verified 2026-10-07, see task-4-report.md,
+// updated R1/R2 2026-10-08):
 // - Current VeilShieldRouter.shieldedSwap (contracts/VeilShieldRouter.sol +
-//   VEIL_SHIELD_ROUTER_ABI, deployed at 0xb1baee8d519a7a2edbaff99eec0ba10948670d68
-//   with code onchain) takes ShieldedSwapParams { poolSource, proof, root,
+//   VEIL_SHIELD_ROUTER_ABI, FIXED router deployed at
+//   0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27 with code onchain) takes
+//   ShieldedSwapParams { poolSource, proof, root,
 //   nullifierHash, relayerFee, key, zeroForOne, minAmountOut, sqrtPriceLimitX96,
 //   newCommitment, poolDestination, hookData }.
 // - scripts/shielded-swap-v2.mjs targets an OLDER SwapHelper contract
@@ -27,15 +29,12 @@
 // - Testnet now deploys THREE legacy pools: ShieldedPool_ETH
 //   (deployments/testnet-latest.json) plus ShieldedPool_VEIL (0.5 VEIL) and
 //   ShieldedPool_VEIL2 (2 VEIL) in deployments/shieldedpool-veil*-latest.json.
-// - DIRECTION CONSTRAINT (proven onchain 2026-10-07, see task-4b-report.md):
-//   the ETH -> VEIL direction is UNEXECUTABLE against the deployed router —
-//   the zero-floor simulation of the exact shieldedSwap calldata reverts with
-//   "eth settle failed" (_settleCurrency pushes native ETH to the PoolManager
-//   with a bare call, but canonical v4 PoolManager has no receive/fallback;
-//   only settle{value} works, which the router never uses). The VEIL -> ETH
-//   direction settles ERC20 via safeTransfer (the proven swapToShield pattern)
-//   and executes fine — proven live in the same report. The tab therefore
-//   plans VEIL2 -> ETH (zeroForOne=false); an ETH source is never offered.
+// - DIRECTIONS (R1 fix + R2 live proofs 2026-10-07/08): BOTH directions
+//   executable via the fixed router, which settles native ETH through payable
+//   PoolManager.settle{value}() instead of the old bare call. VEIL -> ETH was
+//   proven live first (task-4b); ETH -> VEIL was proven live in R2 (live A/B).
+//   The tab default plans VEIL2 -> ETH (zeroForOne=false); an ETH source flips
+//   zeroForOne=true with the ETH pool as source (see getShieldedSwapRouteStatus).
 // ---------------------------------------------------------------------------
 
 import type { Address, Hash, PublicClient } from "viem";
@@ -56,9 +55,9 @@ import type { ShieldedNote } from "./note";
 
 export const SHIELDED_SWAP_CHAIN_ID = TESTNET_CHAIN_ID;
 export const SHIELDED_SWAP_ROUTER = TESTNET_ROUTER_ADDRESS;
-// Executable direction is VEIL -> ETH (see header): source is the 2 VEIL pool
-// (live quote 2 VEIL -> ~0.00157 ETH funds the 0.001 ETH dest note),
-// destination is the legacy ETH pool.
+// Default source is the 2 VEIL pool (live quote 2 VEIL -> ~0.00157 ETH funds
+// the 0.001 ETH dest note); an ETH source is equally supported — the source
+// follows the spend note (see getShieldedSwapRouteStatus).
 export const SHIELDED_SWAP_SOURCE_POOL =
   "0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address;
 export const SHIELDED_SWAP_SOURCE_DENOMINATION = 2000000000000000000n;
@@ -67,9 +66,9 @@ export const SHIELDED_SWAP_DESTINATION_POOL = TESTNET_LEGACY_ETH_POOL;
 export const SHIELDED_SWAP_EXPLORER_TX_BASE = TESTNET_EXPLORER_TX_BASE;
 
 // Proven-liquid v4 route, verbatim from scripts/router-swap-testnet.mjs
-// (VEIL <-> ETH, fee 3000, tickSpacing 60, no hooks). Only the VEIL -> ETH
-// leg is router-executable (zeroForOne=false); the reverse leg cannot settle
-// native input through the deployed router (see header).
+// (VEIL <-> ETH, fee 3000, tickSpacing 60, no hooks). Both legs are
+// router-executable via the fixed router (zeroForOne=false VEIL -> ETH,
+// zeroForOne=true ETH -> VEIL).
 export const SHIELDED_SWAP_POOL_KEY: PoolKey = {
   currency0: TESTNET_ROUTER_POOL_KEY.currency0,
   currency1: TESTNET_ROUTER_POOL_KEY.currency1,
@@ -95,11 +94,12 @@ export const SHIELDED_SWAP_MISSING_POOL_LABEL =
   "ShieldedPool_VEIL (second-asset legacy pool)" as const;
 
 /**
- * Resolves the destination pool for the executable VEIL -> ETH direction:
- * the legacy ETH pool. Returns null only while the inventory holds no
- * distinct pool (R3 gating). A same-pool "swap" is never returned: swapping
- * an asset into itself has no v4 route and cannot fund a new-denomination
- * note.
+ * Resolves the destination pool opposite the source: VEIL source -> the
+ * legacy ETH pool; ETH source -> a live VEIL pool (0.5 preferred, decided
+ * live by quote at execution). Returns null only while the inventory holds
+ * no distinct pool (R3 gating). A same-pool "swap" is never returned:
+ * swapping an asset into itself has no v4 route and cannot fund a
+ * new-denomination note.
  */
 export function resolveShieldedSwapDestination(
   exclude: Address = SHIELDED_SWAP_SOURCE_POOL
@@ -237,7 +237,7 @@ export function buildSelfRelayShieldedSwapArgs(
 ): ShieldedSwapExecutionParams {
   if (args.poolDestination === null) {
     throw new Error(
-      "Shielded swap destination pool is pending: no second shielded pool is deployed on testnet 46630 yet. No params were built and no transaction was sent."
+      "Shielded swap has no live destination pool right now (missing, paused, or no liquid route). No params were built and no transaction was sent."
     );
   }
   if (args.relayerFee !== undefined && args.relayerFee !== 0n) {

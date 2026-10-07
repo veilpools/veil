@@ -171,7 +171,7 @@ describe("ShieldedSwap tab adapter (Task 4b: §7 #5 #6, R2/R3/R4)", () => {
         newCommitment: NEW_COMMITMENT,
         poolDestination: null,
       })
-    ).toThrow(/destination pool is pending/);
+    ).toThrow(/no live destination pool/);
   });
 
   it("rejects nonzero relayerFee on the self-relay path", () => {
