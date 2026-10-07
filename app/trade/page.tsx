@@ -53,6 +53,7 @@ import { buildWithdrawArgs } from "../../lib/withdraw-args";
 import { CONTRACT_ABIS, CONTRACT_ADDRESSES } from "../../lib/contracts";
 import {
   buildSwapToShieldParams,
+  explorerTxUrl,
   findSwapToShieldExecuted,
   isRouterExecuteDisabled,
   mapRouterSwapError,
@@ -122,6 +123,20 @@ import { fetchPinnedBowArtifact } from "../../lib/0xbow-artifacts";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
 import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
 import { generateMnemonic, english } from "viem/accounts";
+import {
+  buildSelfRelayShieldedSwapArgs,
+  getShieldedSwapRouteStatus,
+  isShieldedSwapExecuteDisabled,
+  selectShieldedSwapRelayPath,
+  shieldedSwapPendingMessage,
+  SHIELDED_SWAP_ROUTER,
+  SHIELDED_SWAP_SOURCE_POOL,
+} from "../../lib/shielded-swap-ui";
+import {
+  findShieldedSwapExecuted,
+  generateNewShieldedNoteSecrets,
+  mapShieldedSwapError,
+} from "../../lib/shielded-swap";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
 // Single address source: follows lib/contracts.ts (env override or live mainnet default).
@@ -266,6 +281,15 @@ export default function SwapToShieldPage() {
   const [gatedSimNote, setGatedSimNote] = useState<string | null>(null);
   const [isGatedSwapping, setIsGatedSwapping] = useState(false);
   const [gatedTxHash, setGatedTxHash] = useState<string | null>(null);
+
+  // Testnet shielded swap (Task 4): VeilShieldRouter.shieldedSwap via the
+  // connected wallet with the self-relay fallback (relayerFee 0). Route
+  // status is config-driven (lib/shielded-swap-ui.ts): while the destination
+  // pool is missing on testnet the tab renders the planned route plus the
+  // honest pending state and execution stays disabled (R3 feasibility exit).
+  const [isShieldedSwapping, setIsShieldedSwapping] = useState(false);
+  const [isShieldedProving, setIsShieldedProving] = useState(false);
+  const [shieldedSwapTxHash, setShieldedSwapTxHash] = useState<string | null>(null);
 
   // Form Inputs
   const [inputAmount, setInputAmount] = useState("0.001");
@@ -1299,6 +1323,20 @@ export default function SwapToShieldPage() {
     }
   }
 
+  // Task 4 (R1/R2/R4): the Shielded Swap tab executes REAL
+  // VeilShieldRouter.shieldedSwap via the connected wallet on chain 46630 —
+  // source-pool withdraw with proof-bound params (recipient = router itself)
+  // -> v4 ETH/VEIL swap -> deposit of newCommitment into the destination
+  // pool, with relayerFee 0 (self-relay default: the user pays gas). No
+  // hardcoded minOut: a zero-floor eth_call simulation returns the live
+  // output first, then minAmountOut derives from it and the user's slippage.
+  //
+  // R3 feasibility gate (load-bearing, verified onchain 2026-10-07): the
+  // destination pool MUST exist. Only ShieldedPool_ETH is deployed on
+  // testnet, so getShieldedSwapRouteStatus() reports executable: false and
+  // this handler fails closed with the honest pending state — never a fake
+  // swap. The post-gate execution path below is real (not stubbed) and runs
+  // unchanged once a destination pool deploys.
   async function handleShieldedSwap() {
     setFlowError(null);
     if (!connectedAddress) {
@@ -1309,9 +1347,240 @@ export default function SwapToShieldPage() {
       setFlowError("No shielded notes available in vault to spend. Create one via Swap-to-Shield first.");
       return;
     }
-    setFlowError(
-      "Shielded Swap needs a liquid v4 route plus full Groth16 binding — available after F3/F4. Your funds stay safe in the pool, use Withdraw for now."
-    );
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    if (connectedChainId !== TESTNET_CHAIN_ID) {
+      setFlowError(
+        "Shielded Swap lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
+      );
+      return;
+    }
+
+    const route = getShieldedSwapRouteStatus();
+    if (!route.executable || route.destination === null) {
+      setFlowError(shieldedSwapPendingMessage(route));
+      return;
+    }
+    const destination = route.destination;
+
+    const noteToSwap = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
+    // Router interface gate: shieldedSwap spends via
+    // IShieldedPool.withdraw(bytes,bytes32,bytes32,address,uint256), which
+    // only legacy Veil pools expose. 0xbow notes live in 0xbow pools
+    // (withdraw(tuple,tuple) through Entrypoint.relay with Groth16) and can
+    // never enter this router — fail closed with directions instead of a
+    // revert that burns gas.
+    if (isBowNote(noteToSwap)) {
+      setFlowError(
+        "The selected note is a 0xbow note, and VeilShieldRouter.shieldedSwap only spends legacy-pool notes: its source pool must expose withdraw(bytes,bytes32,bytes32,address,uint256), which 0xbow pools do not. Spend 0xbow notes via Withdraw instead. No transaction was sent."
+      );
+      return;
+    }
+
+    let slippagePct: number;
+    try {
+      slippagePct = parseSlippagePercent(slippage);
+    } catch (e: unknown) {
+      setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
+      return;
+    }
+
+    setIsShieldedSwapping(true);
+    setShieldedSwapTxHash(null);
+    setProverTitle("Executing Shielded Swap (Testnet, Self-Relay)");
+    setProverTxHash(null);
+    setProverCommitment(null);
+    setProverSteps([
+      {
+        title: "1. Source Note & Live Pool Guards",
+        detail: "Checking denomination, pause, cap and nullifier against the source shielded pool",
+        status: "running",
+      },
+      {
+        title: "2. Proof-Bound Params & Live Output Simulation",
+        detail: "Binding the router-recipient proof, fresh root and slippage-bound minOut via eth_call",
+        status: "pending",
+      },
+      {
+        title: "3. VeilShieldRouter.shieldedSwap Execution",
+        detail: "Self-relay: your wallet submits with relayerFee 0 and pays gas",
+        status: "pending",
+      },
+      {
+        title: "4. Event Assert & Vault Rollover",
+        detail: "Verifying ShieldedSwapExecuted, persisting the new note and marking the old note spent",
+        status: "pending",
+      },
+    ]);
+    setIsProverOpen(true);
+
+    try {
+      const guards = await readSwapGuards(publicClient, route.sourcePool);
+      if (guards.paused) {
+        throw new Error("Shielded ETH source pool deposits are paused. No transaction was sent.");
+      }
+      if (noteToSwap.denomination !== guards.denomination) {
+        throw new Error(
+          "Selected note denomination does not match the live source pool denomination. No transaction was sent."
+        );
+      }
+      const spent = await publicClient.readContract({
+        address: route.sourcePool,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "isNullifierSpent",
+        args: [noteToSwap.nullifierHash],
+      });
+      if (spent) throw new Error("Note already spent onchain. No transaction was sent.");
+      const idx = await publicClient.readContract({
+        address: route.sourcePool,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "nextIndex",
+      });
+      if (idx === 0) throw new Error("Source pool is empty, nothing to swap against.");
+      const root = await publicClient.readContract({
+        address: route.sourcePool,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "rootHistory",
+        args: [BigInt(idx - 1)],
+      });
+      const known = await publicClient.readContract({
+        address: route.sourcePool,
+        abi: POOL_WITHDRAW_ABI,
+        functionName: "isKnownRoot",
+        args: [root],
+      });
+      if (!known) throw new Error("Unknown Merkle root for the source pool. No transaction was sent.");
+      setProverSteps((prev) => [
+        { ...prev[0], status: "completed" },
+        { ...prev[1], status: "running" },
+        prev[2],
+        prev[3],
+      ]);
+
+      setIsShieldedProving(true);
+      // Proof-bound withdraw params: the router itself is the recipient and
+      // the fee is 0 (self-relay, bound into the proof context).
+      const withdrawArgs = buildWithdrawArgs(noteToSwap, root, SHIELDED_SWAP_ROUTER);
+      // Destination note kind follows the destination pool: denomination and
+      // asset are read live, never hardcoded.
+      const destDenomination = await publicClient.readContract({
+        address: destination,
+        abi: POOL_DEPOSIT_ABI_EXT,
+        functionName: "denomination",
+      });
+      const destAsset = await publicClient.readContract({
+        address: destination,
+        abi: parseAbi(["function asset() view returns (address)"]),
+        functionName: "asset",
+      });
+      const secrets = generateNewShieldedNoteSecrets(destDenomination, destAsset);
+      setProverCommitment(secrets.commitment);
+
+      // Live output simulation with a zero floor, then slippage-bound params.
+      selectShieldedSwapRelayPath();
+      const simParams = buildSelfRelayShieldedSwapArgs({
+        note: noteToSwap,
+        proof: withdrawArgs.proof,
+        root: withdrawArgs.root,
+        quotedAmountOut: 0n,
+        slippagePercent: 0,
+        newCommitment: secrets.commitment,
+        poolDestination: destination,
+      });
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: appChain,
+        transport: custom(activeProvider),
+      });
+      const { result: simResult } = await publicClient.simulateContract({
+        address: SHIELDED_SWAP_ROUTER,
+        abi: CONTRACT_ABIS.VeilShieldRouter,
+        functionName: "shieldedSwap",
+        args: [simParams],
+        account: connectedAddress,
+      });
+      const expectedOut = simResult as bigint;
+      if (expectedOut < destDenomination) {
+        throw new Error(
+          "Live simulated output is below the destination note denomination (InsufficientOutputForDenomination). No transaction was sent."
+        );
+      }
+      const params = buildSelfRelayShieldedSwapArgs({
+        note: noteToSwap,
+        proof: withdrawArgs.proof,
+        root: withdrawArgs.root,
+        quotedAmountOut: expectedOut,
+        slippagePercent: slippagePct,
+        newCommitment: secrets.commitment,
+        poolDestination: destination,
+      });
+      setIsShieldedProving(false);
+      setProverSteps((prev) => [
+        prev[0],
+        { ...prev[1], status: "completed" },
+        { ...prev[2], status: "running" },
+        prev[3],
+      ]);
+
+      const swapHash = await walletClient.writeContract({
+        address: SHIELDED_SWAP_ROUTER,
+        abi: CONTRACT_ABIS.VeilShieldRouter,
+        functionName: "shieldedSwap",
+        args: [params],
+      });
+      setProverTxHash(swapHash);
+      setShieldedSwapTxHash(swapHash);
+      setProverSteps((prev) => [
+        prev[0],
+        prev[1],
+        { ...prev[2], status: "completed" },
+        { ...prev[3], status: "running" },
+      ]);
+
+      const receipt = await waitForTransactionReceipt(publicClient, { hash: swapHash });
+      if (receipt.status !== "success") {
+        throw new Error("Shielded swap transaction reverted onchain.");
+      }
+      const executed = findShieldedSwapExecuted(receipt.logs, noteToSwap.nullifierHash);
+      if (!executed) {
+        throw new Error(
+          "ShieldedSwapExecuted event not found for this nullifier. Treating the deposit as unverified: the new note was NOT saved. Check the transaction in your wallet history."
+        );
+      }
+      if (executed.poolDestination.toLowerCase() !== destination.toLowerCase()) {
+        throw new Error(
+          "Swap settled into an unexpected destination pool. The new note was NOT saved. Check the transaction on the explorer before retrying."
+        );
+      }
+
+      // Vault rollover: persist the new destination note, mark the old spent.
+      const updated = [secrets.newNote, ...notes.filter((n) => n.nullifier !== noteToSwap.nullifier)];
+      setNotes(updated);
+      setSelectedNote(secrets.newNote);
+      setSelectedNoteNullifier(secrets.newNote.nullifier);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(updated));
+      }
+      setProverSteps((prev) => [
+        prev[0],
+        prev[1],
+        prev[2],
+        { ...prev[3], status: "completed" },
+      ]);
+      // Surface the result even if the user hid the modal mid-proof.
+      setIsProverOpen(true);
+    } catch (e: unknown) {
+      console.error("Shielded swap transaction error:", e);
+      setIsProverOpen(false);
+      setFlowError(mapShieldedSwapError(e, slippagePct));
+    } finally {
+      setIsShieldedSwapping(false);
+      setIsShieldedProving(false);
+    }
   }
 
   async function handleWithdraw() {
@@ -1830,6 +2099,18 @@ export default function SwapToShieldPage() {
   }
 
   const activeNoteItem = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
+
+  // Task 4 route status (config-driven, no RPC in render): the planned
+  // shielded-swap route plus the honest destination-pool pending state while
+  // testnet deploys only one legacy pool (R3 feasibility exit).
+  const shieldedSwapRoute = getShieldedSwapRouteStatus();
+  const shieldedSwapDisabled = isShieldedSwapExecuteDisabled({
+    isExecuting: isShieldedSwapping,
+    connected: Boolean(connectedAddress),
+    hasNotes: notes.length > 0,
+    destinationAvailable: shieldedSwapRoute.destination !== null,
+    isProving: isShieldedProving,
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", width: "100%" }}>
@@ -3168,24 +3449,66 @@ export default function SwapToShieldPage() {
                 </button>
               </div>
 
+              {/* Planned route + honest pending state (Task 4, R3): the router
+                  path is real but the destination pool is not deployed yet,
+                  so execution stays disabled and no swap is faked. */}
               <div
+                role="status"
                 style={{
                   padding: "var(--space-3) var(--space-4)",
                   borderRadius: "var(--radius-sm)",
                   backgroundColor: "rgba(26, 26, 26, 0.025)",
                   border: "1px solid var(--color-border)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
                   fontSize: "var(--text-caption)",
                   fontFamily: "monospace",
-                  color: "var(--color-muted)",
-                  lineHeight: 1.6,
                 }}
               >
-                Shielded Swap needs a liquid v4 route plus full Groth16 binding — available after F3/F4. Your funds stay safe in the pool, use Withdraw for now.
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <span style={{ color: "var(--color-muted)" }}>Source (live):</span>
+                  <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" }}>
+                    {`ShieldedPool_ETH ${SHIELDED_SWAP_SOURCE_POOL.slice(0, 6)}…${SHIELDED_SWAP_SOURCE_POOL.slice(-4)} · 0.001 ETH/note`}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <span style={{ color: "var(--color-muted)" }}>Swap leg:</span>
+                  <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
+                    v4 ETH/VEIL 0.3% via shieldedSwap
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <span style={{ color: "var(--color-muted)" }}>Destination:</span>
+                  <span style={{ color: "var(--color-accent-ink)", fontWeight: 600, textAlign: "right" }}>
+                    Pending — no second shielded pool on testnet
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <span style={{ color: "var(--color-muted)" }}>Relay:</span>
+                  <span style={{ color: "var(--color-text)", fontWeight: 600, textAlign: "right" }}>
+                    Self-relay (you pay gas, fee 0)
+                  </span>
+                </div>
+                <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
+                  No hosted relayer service exists on testnet — and none is claimed. If the
+                  relayer path ever goes down, this self-relay path is the fallback (§7 #6).
+                  Your funds stay safe in the pool; use Withdraw for now.
+                </span>
+                {shieldedSwapTxHash && (
+                  <span style={{ overflowWrap: "anywhere" }}>
+                    <span style={{ color: "var(--color-muted)" }}>Shielded swap tx: </span>
+                    <a href={explorerTxUrl(shieldedSwapTxHash)} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-ink)" }}>
+                      {shieldedSwapTxHash}
+                    </a>
+                  </span>
+                )}
               </div>
 
               <button
                 onClick={handleShieldedSwap}
-                disabled
+                disabled={shieldedSwapDisabled}
+                aria-label="Execute shielded swap via VeilShieldRouter"
                 className="group active:scale-[0.99] transition-all"
                 style={{
                   width: "100%",
@@ -3201,13 +3524,23 @@ export default function SwapToShieldPage() {
                   border: "none",
                   backgroundColor: "var(--color-accent)",
                   color: "var(--color-accent-contrast)",
-                  cursor: "not-allowed",
-                  opacity: 0.45,
+                  cursor: shieldedSwapDisabled ? "not-allowed" : "pointer",
+                  opacity: shieldedSwapDisabled ? 0.45 : 1,
                   boxShadow: "0 6px 20px -2px rgba(255, 140, 0, 0.35)",
                   transition: "all var(--duration-fast)",
                 }}
               >
-                <span>{notes.length === 0 ? "No Notes in Vault" : "Execute Shielded Swap (Private ➔ Private)"}</span>
+                <span>
+                  {!connectedAddress
+                    ? "Connect Wallet to Trade"
+                    : notes.length === 0
+                    ? "No Notes in Vault"
+                    : !shieldedSwapRoute.executable
+                    ? "Destination Pool Pending"
+                    : isShieldedSwapping
+                    ? "Executing Shielded Swap..."
+                    : "Execute Shielded Swap (Private ➔ Private)"}
+                </span>
               </button>
             </div>
           )}
