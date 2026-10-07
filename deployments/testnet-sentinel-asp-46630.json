@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "protocol": "0xbow-privacy-pools-core-v1.2.1",
+  "chainId": 46630,
+  "policy": "Local testnet genesis sentinel only; withdrawals require postman-published labels.",
+  "snapshotBlock": "0",
+  "labels": [
+    "21888242871839275222246405745257275088548364400416034343698204186575808495616"
+  ],
+  "root": "21888242871839275222246405745257275088548364400416034343698204186575808495616"
+}

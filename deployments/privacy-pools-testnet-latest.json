@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "status": "testnet",
+  "chainId": 46630,
+  "protocol": "0xbow-privacy-pools-core-v1.2.1",
+  "sourceCommit": "a80836a47451e662f127af17e11430ffa976c234",
+  "compiler": "solc 0.8.28",
+  "denominationWei": "1000000000000000",
+  "lifetimeDepositCapWei": "10000000000000000000",
+  "protocolFeeBps": 0,
+  "relayFeeBps": 0,
+  "deployer": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "aspPostman": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "guardian": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "associationSet": {
+    "root": "21888242871839275222246405745257275088548364400416034343698204186575808495616",
+    "cid": "local-testnet-sentinel-46630-v1-0xbow-v1.2.1",
+    "origin": "local/testnet (sentinel-only, chainId 46630, snapshotBlock 0, not IPFS-pinned)"
+  },
+  "contracts": {
+    "withdrawalVerifier": {
+      "address": "0xeea9d0f7ee0958c6d59f25162be4e69ba60a0f71",
+      "transactionHash": "0x4c9fd0730ac27056cf48ab45ce113647fda51fbf63856a840a08f06ee8b7d4b7",
+      "blockNumber": "129953536"
+    },
+    "commitmentVerifier": {
+      "address": "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008",
+      "transactionHash": "0x282325da553b6b19f4a7cf8e8fe6d4be33d96aca93f9dfc826c1a0e1cd1ab567",
+      "blockNumber": "129953609"
+    },
+    "entrypointImplementation": {
+      "address": "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
+      "transactionHash": "0x855562b11d9eee5649787fd5ff0ad5235465d4cc2820e4f3c4351e038a0cd5a8",
+      "blockNumber": "129953679"
+    },
+    "entrypointProxy": {
+      "address": "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0",
+      "transactionHash": "0x784089fdb910260cef4040e91a0f896536eab1502dee5f3a6401c2a8ac91f245",
+      "blockNumber": "129953774"
+    },
+    "pool": {
+      "address": "0x2bea7094f77e3f9a21397c688de8ef105d4848bc",
+      "transactionHash": "0x2fde277d905fda6ab571ead6b15e0ce3ab5177988a595a16cf6aea7443122098",
+      "blockNumber": "129954000"
+    },
+    "libraries": {
+      "PoseidonT3": {
+        "address": "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34",
+        "transactionHash": "0x994da68e831ed09a032c8c2123fffea7e060a437542b0380906c2b1690422d8c",
+        "blockNumber": "129953835"
+      },
+      "PoseidonT4": {
+        "address": "0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
+        "transactionHash": "0xa37519b88bdf415c1524f89237fa986301632c2bb603d13a5d89d3a92d851034",
+        "blockNumber": "129953891"
+      }
+    }
+  },
+  "transactions": {
+    "rootTx": "0x45f94e1feb4c44a74d4043a9bd7046ada0c208e3a754330806ccab95697c9e27",
+    "registerTx": "0xce750536e60338138b6cea13c8d69852efa653f182b2afe9565dbbf70cf78e64",
+    "renounceOwnerRoleTx": "0xbdf4cd5725d6c6cb532aa995be5eb742edc47baa7b26613ac9cc01bd5934679e",
+    "activateDepositsTx": "0xf1aaf6b13c096ec22ab51f1f48d169ed8c545e18358da8dd98bf674c6d755e28"
+  },
+  "poolDeploymentBlock": "129954000",
+  "entrypointDeploymentBlock": "129953774",
+  "publishedAt": "2026-10-06T15:45:10.117Z",
+  "privacyClaim": "Testnet only. No production privacy or compliance claim."
+}

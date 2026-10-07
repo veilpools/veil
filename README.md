@@ -105,7 +105,22 @@ Temporary protocol token for end-to-end testing (1B fixed supply, self-burn). Th
 | **executeBurn (1,000 VEIL)** | [`0x3df1259e80af32936cbc086688c150e8aef437c9f835dd249d055705709d64af`](https://explorer.testnet.chain.robinhood.com/tx/0x3df1259e80af32936cbc086688c150e8aef437c9f835dd249d055705709d64af) |
 | **Supply** | 1,000,000,000 → 999,999,000 (`totalBurned` = 1,000, `buybackShareBps` = 7000) |
 
-> Mainnet repeat is ready (`pnpm deploy:veiltoken:mainnet`) but blocked on funding: deployer `0xCdbdc82A021071eE445d9f897433a7E4B4EAfD8d` holds 0 ETH on mainnet 4663. Source verification on the testnet explorer is pending (instance verifier rejects valid builds; local build proven byte-identical).
+> Mainnet repeat is DONE — see the mainnet table above (fresh suite under the user wallet, burn proven). Source verification on the explorers is pending (instance verifier rejects valid builds; local builds proven byte-identical).
+
+### 🔒 Real Groth16 Privacy Loop (Testnet, 0xbow v1.2.1, proven 2026-10-07)
+
+Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approved setup artifacts (`withdraw/commitment` wasm+zkey), SDK proving in Node:
+
+| Item | Value |
+|---|---|
+| **Pool** | [`0x2bea7094f77e3f9a21397c688de8ef105d4848bc`](https://explorer.testnet.chain.robinhood.com/address/0x2bea7094f77e3f9a21397c688de8ef105d4848bc) |
+| **Deposit (0.001 ETH)** | [`0x22d3ddb5476f2880b82727a3fd0072875633bd375d6e98cbc30850d0c349e6c0`](https://explorer.testnet.chain.robinhood.com/tx/0x22d3ddb5476f2880b82727a3fd0072875633bd375d6e98cbc30850d0c349e6c0) |
+| **Withdraw relay** | [`0x93b55deb8183e0057ba800962664542c379928bc308a00ebc3075c6e93a7a27a`](https://explorer.testnet.chain.robinhood.com/tx/0x93b55deb8183e0057ba800962664542c379928bc308a00ebc3075c6e93a7a27a) |
+| **Recipient +0.001 ETH, nullifier spent** | verified onchain |
+| **Honesty test (garbage proof)** | rejected onchain — the verifier genuinely checks Groth16 |
+| **Hook gating (fresh 0x20c4 hook)** | [`0x65d99bb9eb99c008ef4b738cdd652800796d60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), attestation verified `true` |
+
+Pending (needs testnet funds): relayer-with-fee run, v4 router swap demo (pool initialized, PositionManager version on testnet differs from mainnet so PM mint needs a helper contract).
 
 ---
 

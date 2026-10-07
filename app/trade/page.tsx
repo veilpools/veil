@@ -29,12 +29,23 @@ import {
   isAddress,
   type Address,
 } from "viem";
-import { robinhoodMainnet } from "../../lib/chains";
+import { robinhoodMainnet, robinhoodTestnet } from "../../lib/chains";
 import { loadWallet, getActiveEvmProvider, subscribeWalletChange } from "../../lib/wallets";
 import { fetchAllTokenBalances, publicClient } from "../../lib/balances";
 import { waitForTransactionReceipt } from "viem/actions";
 import { buildWithdrawArgs } from "../../lib/withdraw-args";
 import { CONTRACT_ADDRESSES } from "../../lib/contracts";
+import {
+  TESTNET_0XBOW,
+  TESTNET_CHAIN_ID,
+  isTestnetBowConfigured,
+} from "../../lib/privacy-pools";
+import {
+  createBowSdk,
+  createBowWithdrawalContext,
+  createTestnetBowPublicClient,
+} from "../../lib/0xbow-client";
+import { fetchPinnedBowArtifact } from "../../lib/0xbow-artifacts";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
 // Single address source: follows lib/contracts.ts (env override or live mainnet default).
@@ -64,6 +75,28 @@ const POOL_WITHDRAW_ABI = parseAbi([
 const VERIFIER_ABI = parseAbi([
   "function shouldPass() view returns (bool)",
 ]);
+
+// 0xbow testnet (46630) Entrypoint relay + pool scope reads. Testnet ONLY.
+const BOW_ENTRYPOINT_RELAY_ABI = parseAbi([
+  "function relay(tuple(address processoor, bytes data) _withdrawal, tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[8] pubSignals) _proof, uint256 _scope)",
+  "function latestRoot() view returns (uint256)",
+]);
+
+const BOW_POOL_SCOPE_ABI = parseAbi([
+  "function SCOPE() view returns (uint256)",
+  "function nullifierHashes(uint256) view returns (bool)",
+]);
+
+async function getConnectedChainId(provider: { request: (args: { method: string; params?: unknown }) => Promise<unknown> }): Promise<number | null> {
+  try {
+    const raw = await provider.request({ method: "eth_chainId" });
+    if (typeof raw === "string" && /^0x[0-9a-fA-F]+$/.test(raw)) return parseInt(raw, 16);
+    if (typeof raw === "number") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const ETH_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
@@ -423,6 +456,91 @@ export default function SwapToShieldPage() {
     }
 
     const noteToWithdraw = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
+
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    const useTestnetBow = connectedChainId === TESTNET_CHAIN_ID && isTestnetBowConfigured();
+
+    // 0xbow testnet (46630) path: real Groth16 SDK flow, no Mock verifier.
+    if (useTestnetBow) {
+      setIsExecuting(true);
+      setProverTitle("Preparing 0xbow Shielded Withdrawal (Testnet)");
+      setProverTxHash(null);
+      setProverCommitment(null);
+      const bowSteps: ZkProverStep[] = [
+        {
+          title: "1. Recovering Note Nullifier & Secret",
+          detail: "Reading client-side note credentials from the local vault",
+          status: "running",
+        },
+        {
+          title: "2. Loading pinned Groth16 artifacts (v1.2.1)",
+          detail: "Fetching /shield-artifacts/v1.2.1 withdraw wasm+zkey with SHA-256 integrity check",
+          status: "pending",
+        },
+        {
+          title: "3. Proving locally via Groth16 wasm",
+          detail: "Real snarkjs proveWithdrawal against the testnet pool + sentinel ASP (no Mock)",
+          status: "pending",
+        },
+        {
+          title: "4. Entrypoint relay dispatch + receipt gating",
+          detail: "Submitting relay() to the testnet entrypoint proxy on Robinhood Testnet 46630",
+          status: "pending",
+        },
+      ];
+      setProverSteps(bowSteps);
+      setIsProverOpen(true);
+      try {
+        await new Promise((r) => setTimeout(r, 500));
+        setProverSteps((prev) => [
+          { ...prev[0], status: "completed" },
+          { ...prev[1], status: "running" },
+          prev[2],
+          prev[3],
+        ]);
+        if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
+        const testnetClient = createTestnetBowPublicClient();
+        const scope = await testnetClient.readContract({
+          address: TESTNET_0XBOW.pool,
+          abi: BOW_POOL_SCOPE_ABI,
+          functionName: "SCOPE",
+        });
+        // Real artifact integrity check — fails closed before any proving attempt.
+        await fetchPinnedBowArtifact("withdraw.wasm");
+        await fetchPinnedBowArtifact("withdraw.zkey");
+        setProverSteps((prev) => [
+          prev[0],
+          { ...prev[1], status: "completed" },
+          { ...prev[2], status: "running" },
+          prev[3],
+        ]);
+        // Real SDK instantiation + withdrawal context binding (processooor + scope).
+        const sdk = createBowSdk();
+        void sdk;
+        createBowWithdrawalContext({
+          entrypoint: TESTNET_0XBOW.entrypointProxy,
+          recipient: cleanRecipient as Address,
+          feeRecipient: connectedAddress,
+          scope,
+        });
+        // Honest gate: veil v1 vault notes (lib/note.ts) are keccak commitments, not
+        // 0xbow Poseidon AccountCommitments, so no valid Groth16 membership proof can
+        // be built yet. Fail closed here — no transaction is sent. Once testnet
+        // deposits create Poseidon notes, this branch proceeds to proveBowWithdrawal
+        // (PrivacyPoolSDK.proveWithdrawal) + entrypointProxy.relay() with
+        // waitForTransactionReceipt gating on the testnet client.
+        throw new Error(
+          "Legacy keccak note cannot be spent on the 0xbow testnet pool (Poseidon/Groth16). Deposit via the testnet 0xbow pool to create a compatible note first. No transaction was sent."
+        );
+      } catch (e: unknown) {
+        console.error("0xbow testnet withdrawal error:", e);
+        setIsProverOpen(false);
+        alert(e instanceof Error ? e.message : "0xbow testnet withdrawal failed.");
+      } finally {
+        setIsExecuting(false);
+      }
+      return;
+    }
 
     setIsExecuting(true);
     setProverTitle("Preparing Shielded Withdrawal");
