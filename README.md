@@ -121,7 +121,13 @@ Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approv
 | **Hook gating (fresh 0x20c4 hook)** | [`0x65d99bb9eb99c008ef4b738cdd652800796d60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), attestation verified `true` |
 | **Third-party relay** | [`0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d`](https://explorer.testnet.chain.robinhood.com/tx/0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d) submitted by an ephemeral relayer key, not the depositor |
 
-Pending (needs testnet funds): relayer-with-fee run, v4 router swap demo (pool initialized, PositionManager version on testnet differs from mainnet so PM mint needs a helper contract).
+Pending (needs testnet funds): fee-bearing relay run (`maxRelayFeeBPS` is immutably 0 on this deployment).
+
+### 🔀 Router Swap-to-Shield (Testnet, proven 2026-10-07)
+
+- **v4 pool ETH/VEIL** `0x3524d46204a0438a67c94e9795818b3b0c5d59869d28865754c4254eb05442e1` (fee 3000, tickSpacing 60)
+- **Liquidity** via `TestnetLiquidityHelper` (direct PoolManager path — the pre-deployed testnet PositionManager is a different version whose mint encoding reverts)
+- **swapToShield (2 VEIL → ETH → shielded note):** [`0xe18140fc61f77620235efc6990d0c050d1faa7b5411f9b7409161d38032aea72`](https://explorer.testnet.chain.robinhood.com/tx/0xe18140fc61f77620235efc6990d0c050d1faa7b5411f9b7409161d38032aea72) — pool `nextIndex` incremented, router held zero balance
 
 ---
 

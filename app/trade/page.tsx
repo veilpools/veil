@@ -77,10 +77,27 @@ const VERIFIER_ABI = parseAbi([
 ]);
 
 // 0xbow testnet (46630) Entrypoint relay + pool scope reads. Testnet ONLY.
-const BOW_ENTRYPOINT_RELAY_ABI = parseAbi([
-  "function relay(tuple(address processoor, bytes data) _withdrawal, tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[8] pubSignals) _proof, uint256 _scope)",
-  "function latestRoot() view returns (uint256)",
-]);
+// JSON form: the bundled abitype rejects human-readable tuple strings.
+const BOW_ENTRYPOINT_RELAY_ABI = [
+  {
+    type: "function",
+    name: "relay",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "_withdrawal", type: "tuple", components: [{ name: "processooor", type: "address" }, { name: "data", type: "bytes" }] },
+      { name: "_proof", type: "tuple", components: [{ name: "pA", type: "uint256[2]" }, { name: "pB", type: "uint256[2][2]" }, { name: "pC", type: "uint256[2]" }, { name: "pubSignals", type: "uint256[8]" }] },
+      { name: "_scope", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "latestRoot",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
 
 const BOW_POOL_SCOPE_ABI = parseAbi([
   "function SCOPE() view returns (uint256)",
