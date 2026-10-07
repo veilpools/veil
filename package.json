@@ -22,7 +22,8 @@
     "wire:treasury": "node scripts/wire-treasury-testnet.mjs",
     "verify:veiltoken": "node scripts/verify-veiltoken.mjs --testnet",
     "migrate:mainnet:dry": "node scripts/migrate-mainnet-0xbow.mjs",
-    "migrate:mainnet": "node scripts/migrate-mainnet-0xbow.mjs --execute"
+    "migrate:mainnet": "node scripts/migrate-mainnet-0xbow.mjs --execute",
+    "publish:asp": "node scripts/publish-asp.mjs"
   },
   "dependencies": {
     "@0xbow/privacy-pools-core-sdk": "1.5.0",
