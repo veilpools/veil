@@ -1,0 +1,9 @@
+{
+  "contractName": "Constants",
+  "outputName": "Constants",
+  "sourceName": "vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/lib/Constants.sol",
+  "abi": [],
+  "bytecode": "0x60556032600b8282823980515f1a607314602657634e487b7160e01b5f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f5ffdfea264697066735822122036fc96098fb9d0c94cda6ea53b3058261c354408fe131fb591c04777fcc50e5364736f6c634300081c0033",
+  "linkReferences": {},
+  "metadata": "{\"compiler\":{\"version\":\"0.8.28+commit.7893614a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/lib/Constants.sol\":\"Constants\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/\",\":@oz-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/\",\":@oz/=node_modules/@openzeppelin/contracts/\",\":contracts/=vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/\",\":interfaces/=vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/interfaces/\",\":lean-imt/=node_modules/@zk-kit/lean-imt.sol/\",\":poseidon-solidity/=node_modules/poseidon-solidity/\",\":poseidon/=node_modules/poseidon-solidity/\"]},\"sources\":{\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/lib/Constants.sol\":{\"keccak256\":\"0xfa588a5460ba189f5214269739389abd0eb7b9cf2e1241031c109a3d2d12ded9\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://fb54cfa152fa6b0e1fa32bc26a4590b3c3f7b67e5daeb2780745c75b71074c93\",\"dweb:/ipfs/QmT4pfSNqpmjWZUCvbAEQbQzHPXjayS6re6mW3Z3f4R7ic\"]}},\"version\":1}"
+}

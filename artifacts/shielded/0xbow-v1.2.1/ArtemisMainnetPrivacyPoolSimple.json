@@ -1,0 +1,800 @@
+{
+  "contractName": "ArtemisMainnetPrivacyPoolSimple",
+  "outputName": "ArtemisMainnetPrivacyPoolSimple",
+  "sourceName": "contracts/ArtemisMainnetPrivacyPoolSimple.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "entrypoint",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "withdrawalVerifier",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "ragequitVerifier",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "guardian",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "ActivationAlreadyCompleted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ContextMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "DepositsArePaused",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "FailedToSendNativeAsset",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "IncorrectASPRoot",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InsufficientValue",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidCommitment",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidDenomination",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidDepositValue",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidProcessooor",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidProof",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidTreeDepth",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "LeafAlreadyExists",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "LeafCannotBeZero",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "LeafGreaterThanSnarkScalarField",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MaxTreeDepthReached",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotGuardian",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotYetRagequitteable",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NullifierAlreadySpent",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyEntrypoint",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyOriginalDepositor",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "PoolDepositCapExceeded",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "PoolIsDead",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ScopeMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UnknownStateRoot",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroAddress",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "_depositor",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_commitment",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_label",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_value",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_precommitmentHash",
+          "type": "uint256"
+        }
+      ],
+      "name": "Deposited",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "guardian",
+          "type": "address"
+        }
+      ],
+      "name": "DepositsActivated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "guardian",
+          "type": "address"
+        }
+      ],
+      "name": "DepositsPaused",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "guardian",
+          "type": "address"
+        }
+      ],
+      "name": "GuardianRenounced",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_index",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_leaf",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_root",
+          "type": "uint256"
+        }
+      ],
+      "name": "LeafInserted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "PoolDied",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "_ragequitter",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_commitment",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_label",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_value",
+          "type": "uint256"
+        }
+      ],
+      "name": "Ragequit",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "_processooor",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_value",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_spentNullifier",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "_newCommitment",
+          "type": "uint256"
+        }
+      ],
+      "name": "Withdrawn",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "ASSET",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "DEPOSIT_DENOMINATION",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ENTRYPOINT",
+      "outputs": [
+        {
+          "internalType": "contract IEntrypoint",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "LIFETIME_DEPOSIT_CAP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MAX_TREE_DEPTH",
+      "outputs": [
+        {
+          "internalType": "uint32",
+          "name": "",
+          "type": "uint32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "RAGEQUIT_VERIFIER",
+      "outputs": [
+        {
+          "internalType": "contract IVerifier",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ROOT_HISTORY_SIZE",
+      "outputs": [
+        {
+          "internalType": "uint32",
+          "name": "",
+          "type": "uint32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "SCOPE",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "WITHDRAWAL_VERIFIER",
+      "outputs": [
+        {
+          "internalType": "contract IVerifier",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "activateDeposits",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "activationPending",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "currentRoot",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "_root",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "currentRootIndex",
+      "outputs": [
+        {
+          "internalType": "uint32",
+          "name": "",
+          "type": "uint32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "currentTreeDepth",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "_depth",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "currentTreeSize",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "_size",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "dead",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_depositor",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_value",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_precommitmentHash",
+          "type": "uint256"
+        }
+      ],
+      "name": "deposit",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "_commitment",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_label",
+          "type": "uint256"
+        }
+      ],
+      "name": "depositors",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "_depositooor",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "depositsPaused",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "guardian",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lifetimeDeposited",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "nonce",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_nullifierHash",
+          "type": "uint256"
+        }
+      ],
+      "name": "nullifierHashes",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "_spent",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pauseDeposits",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint256[2]",
+              "name": "pA",
+              "type": "uint256[2]"
+            },
+            {
+              "internalType": "uint256[2][2]",
+              "name": "pB",
+              "type": "uint256[2][2]"
+            },
+            {
+              "internalType": "uint256[2]",
+              "name": "pC",
+              "type": "uint256[2]"
+            },
+            {
+              "internalType": "uint256[4]",
+              "name": "pubSignals",
+              "type": "uint256[4]"
+            }
+          ],
+          "internalType": "struct ProofLib.RagequitProof",
+          "name": "_proof",
+          "type": "tuple"
+        }
+      ],
+      "name": "ragequit",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "renounceGuardian",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_index",
+          "type": "uint256"
+        }
+      ],
+      "name": "roots",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "_root",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "windDown",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "processooor",
+              "type": "address"
+            },
+            {
+              "internalType": "bytes",
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct IPrivacyPool.Withdrawal",
+          "name": "_withdrawal",
+          "type": "tuple"
+        },
+        {
+          "components": [
+            {
+              "internalType": "uint256[2]",
+              "name": "pA",
+              "type": "uint256[2]"
+            },
+            {
+              "internalType": "uint256[2][2]",
+              "name": "pB",
+              "type": "uint256[2][2]"
+            },
+            {
+              "internalType": "uint256[2]",
+              "name": "pC",
+              "type": "uint256[2]"
+            },
+            {
+              "internalType": "uint256[8]",
+              "name": "pubSignals",
+              "type": "uint256[8]"
+            }
+          ],
+          "internalType": "struct ProofLib.WithdrawProof",
+          "name": "_proof",
+          "type": "tuple"
+        }
+      ],
+      "name": "withdraw",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x610120604052600c805460ff1916600117905534801561001d575f5ffd5b50604051611f41380380611f4183398101604081905261003c91610200565b8383838383838373eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee808484846001600160a01b0383166100835760405163d92e233d60e01b815260040160405180910390fd5b6001600160a01b0381166100aa5760405163d92e233d60e01b815260040160405180910390fd5b6001600160a01b0382166100d15760405163d92e233d60e01b815260040160405180910390fd5b6001600160a01b0384166080526040516001600160601b031930606090811b8216602084015246603484015286901b1660548201527f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f000000190606801604051602081830303815290604052805190602001205f1c61014d9190610251565b60a0526001600160a01b0392831660c05290821660e052811661010052861694506101b393505050505760405162461bcd60e51b815260206004820152600d60248201526c3d32b9379033bab0b93234b0b760991b604482015260640160405180910390fd5b600a80546001600160a81b0319166001600160a01b0390921691909117600160a01b1790555061027095505050505050565b80516001600160a01b03811681146101fb575f5ffd5b919050565b5f5f5f5f60808587031215610213575f5ffd5b61021c856101e5565b935061022a602086016101e5565b9250610238604086016101e5565b9150610246606086016101e5565b905092959194509250565b5f8261026b57634e487b7160e01b5f52601260045260245ffd5b500690565b60805160a05160c05160e05161010051611c636102de5f395f81816104990152610cf201525f81816103860152610b2001525f81816105420152818161062601528181610a4a0152610e5f01525f81816102680152818161077c015261096401525f6102eb0152611c635ff3fe6080604052600436106101ba575f3560e01c8063a8f0f95a116100f2578063da66292511610092578063e7a950b011610062578063e7a950b014610517578063e8eb3cc614610531578063e9946f6c14610564578063fdab463d14610578575f5ffd5b8063da66292514610488578063e38df5f0146104bb578063e4b2fb79146104cf578063e570351214610503575f5ffd5b8063c2b40ae4116100cd578063c2b40ae414610415578063cd87a3b414610440578063cd9b1bea14610454578063d5c6cbd41461046d575f5ffd5b8063a8f0f95a146103d9578063affed0e0146103ed578063b85c514514610401575f5ffd5b80634800d97f1161015d57806360da3e831161013857806360da3e831461033657806371235b34146103565780638735eb2b1461037557806390eeb02b146103a8575f5ffd5b80634800d97f146102da5780634a2b75c81461030d5780634bcd50b314610321575f5ffd5b806330c0766d1161019857806330c0766d1461023857806333d092001461025757806336cf7c871461028a578063452a9320146102a3575f5ffd5b806302191980146101be5780630efe6a8b146101d45780631f79a1e9146101fa575b5f5ffd5b3480156101c9575f5ffd5b506101d261059a565b005b6101e76101e23660046114be565b61061a565b6040519081526020015b60405180910390f35b348015610205575f5ffd5b506102286102143660046114ee565b60086020525f908152604090205460ff1681565b60405190151581526020016101f1565b348015610243575f5ffd5b506101d26102523660046116f0565b610909565b348015610262575f5ffd5b506101e77f000000000000000000000000000000000000000000000000000000000000000081565b348015610295575f5ffd5b506001546102289060ff1681565b3480156102ae575f5ffd5b50600a546102c2906001600160a01b031681565b6040516001600160a01b0390911681526020016101f1565b3480156102e5575f5ffd5b506102c27f000000000000000000000000000000000000000000000000000000000000000081565b348015610318575f5ffd5b506005546101e7565b34801561032c575f5ffd5b506101e7600b5481565b348015610341575f5ffd5b50600a5461022890600160a01b900460ff1681565b348015610361575f5ffd5b506101d26103703660046117df565b610c7e565b348015610380575f5ffd5b506102c27f000000000000000000000000000000000000000000000000000000000000000081565b3480156103b3575f5ffd5b506003546103c49063ffffffff1681565b60405163ffffffff90911681526020016101f1565b3480156103e4575f5ffd5b506004546101e7565b3480156103f8575f5ffd5b506101e75f5481565b34801561040c575f5ffd5b506101d2610e54565b348015610420575f5ffd5b506101e761042f3660046114ee565b60026020525f908152604090205481565b34801561044b575f5ffd5b506103c4604081565b34801561045f575f5ffd5b50600c546102289060ff1681565b348015610478575f5ffd5b506101e7678ac7230489e8000081565b348015610493575f5ffd5b506102c27f000000000000000000000000000000000000000000000000000000000000000081565b3480156104c6575f5ffd5b506103c4602081565b3480156104da575f5ffd5b506102c26104e93660046114ee565b60096020525f90815260409020546001600160a01b031681565b34801561050e575f5ffd5b506101d2610ef7565b348015610522575f5ffd5b506101e766038d7ea4c6800081565b34801561053c575f5ffd5b506102c27f000000000000000000000000000000000000000000000000000000000000000081565b34801561056f575f5ffd5b506101d2610f88565b348015610583575f5ffd5b506005545f908152600660205260409020546101e7565b600a546001600160a01b0316331415806105bd5750600a546001600160a01b0316155b156105db576040516377b6878160e11b815260040160405180910390fd5b600a805460ff60a01b1916600160a01b17905560405133907feb225a736fbfee3f85ccb72bdf84ff0396ab358b7970e2cc351ab3e3fd92358d905f90a2565b5f336001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001614610664576040516301048f7b60e71b815260040160405180910390fd5b60015460ff16156106885760405163924b372760e01b815260040160405180910390fd5b600a54600160a01b900460ff16156106b357604051630b4cba3160e31b815260040160405180910390fd5b66038d7ea4c6800083146106da57604051637833d9e360e11b815260040160405180910390fd5b678ac7230489e8000083600b546106f191906118a1565b11156107105760405163e7d46c3960e01b815260040160405180910390fd5b6fffffffffffffffffffffffffffffffff83106107405760405163214121f160e11b815260040160405180910390fd5b82600b5f82825461075191906118a1565b925050819055505f7f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f00000017f00000000000000000000000000000000000000000000000000000000000000005f5f81546107a8906118b4565b9182905550604080516020810193909352820152606001604051602081830303815290604052805190602001205f1c6107e191906118e0565b5f8181526009602090815260409182902080546001600160a01b0319166001600160a01b038a16179055815160608101835287815290810183905280820186905290516320cf0a3760e01b815291925073__$e6593f94c90cc379e27dbde2e547f9549a$__916320cf0a3791610859916004016118f3565b602060405180830381865af4158015610874573d5f5f3e3d5ffd5b505050506040513d601f19601f820116820180604052508101906108989190611923565b91506108a382611014565b506108ae33856110df565b6040805183815260208101839052908101859052606081018490526001600160a01b038616907fe3b53cd1a44fbf11535e145d80b8ef1ed6d57a73bf5daa7e939b6b01657d65499060800160405180910390a2509392505050565b8181815f01516001600160a01b0316336001600160a01b03161461094057604051631a7c48e560e01b815260040160405180910390fd5b7f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001827f000000000000000000000000000000000000000000000000000000000000000060405160200161099492919061193a565b604051602081830303815290604052805190602001205f1c6109b691906118e0565b6109bf82611103565b146109dd57604051630ef6daeb60e41b815260040160405180910390fd5b60206109e882611118565b11806109fc575060206109fa82611126565b115b15610a1a5760405163610e647160e11b815260040160405180910390fd5b610a2b610a2682611134565b611142565b610a4857604051633f4f4f1360e21b815260040160405180910390fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663d7b0fef16040518163ffffffff1660e01b8152600401602060405180830381865afa158015610aa4573d5f5f3e3d5ffd5b505050506040513d601f19601f82011682018060405250810190610ac89190611923565b610ad1826111c5565b14610aef576040516329a9e09160e21b815260040160405180910390fd5b66038d7ea4c68000610b00846111d3565b14610b1e57604051637833d9e360e11b815260040160405180910390fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663c9219a7a845f01518560200151866040015187606001516040518563ffffffff1660e01b8152600401610b7f94939291906119e7565b6020604051808303815f875af1158015610b9b573d5f5f3e3d5ffd5b505050506040513d601f19601f82011682018060405250810190610bbf9190611a43565b610bdc576040516309bde33960e01b815260040160405180910390fd5b610bed610be8846111e1565b6111ef565b610bfe610bf984611238565b611014565b508351610c1390610c0e856111d3565b611245565b83516001600160a01b03167f75e161b3e824b114fc1a33274bd7091918dd4e639cede50b78b15a4eea956a21610c48856111d3565b610c51866111e1565b610c5a87611238565b6040805193845260208401929092529082015260600160405180910390a250505050565b66038d7ea4c68000610c8f826111d3565b14610cad57604051637833d9e360e11b815260040160405180910390fd5b5f610cb782611134565b5f818152600960205260409020549091506001600160a01b03163314610cf0576040516301f71c4f60e31b815260040160405180910390fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316635fe8c13b835f01518460200151856040015186606001516040518563ffffffff1660e01b8152600401610d519493929190611a69565b6020604051808303815f875af1158015610d6d573d5f5f3e3d5ffd5b505050506040513d601f19601f82011682018060405250810190610d919190611a43565b610dae576040516309bde33960e01b815260040160405180910390fd5b610dbf610dba83611238565b6112ba565b610ddc57604051636033c4fd60e11b815260040160405180910390fd5b610de8610be8836111e1565b610df533610c0e846111d3565b337fd2b3e868ae101106371f2bd93abc8d5a4de488b9fe47ed122c23625aa7172f13610e2084611238565b610e2985611134565b610e32866111d3565b6040805193845260208401929092529082015260600160405180910390a25050565b336001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001614610e9d576040516301048f7b60e71b815260040160405180910390fd5b60015460ff1615610ec15760405163924b372760e01b815260040160405180910390fd5b6001805460ff1916811790556040517ff9dc79d7254099fdf1f86b15c91deac3bf8883e4f340ebef6e3c6b870cc315b3905f90a1565b600a546001600160a01b03163314610f22576040516377b6878160e11b815260040160405180910390fd5b600c5460ff16610f4557604051634a0ef61f60e01b815260040160405180910390fd5b600c805460ff19169055600a805460ff60a01b1916905560405133907fc0f1ed800fd117673ead8f30a4c304f6a5ce49da7cb60c26849beaf577dd52f6905f90a2565b600a546001600160a01b031633141580610fab5750600a546001600160a01b0316155b15610fc9576040516377b6878160e11b815260040160405180910390fd5b600a80546001600160a01b031981169091556040516001600160a01b039091169081907f4eb99660b9345211d7a92ae7002db939fc985abfa114f71ed26b722b546fefe1905f90a250565b5f6110206004836112d1565b600554909150602010156110475760405163221f404160e01b815260040160405180910390fd5b6003545f906040906110609063ffffffff166001611ab9565b61106a9190611ad5565b63ffffffff81165f818152600260209081526040918290208690556003805463ffffffff1916909317909255600454815190815291820186905281018490529091507fcb249c8292372bd11f567786635483fca9e635030baafca55ff1a8940141d2219060600160405180910390a150919050565b8034146110ff5760405163044044a560e21b815260040160405180910390fd5b5050565b60608101515f9060075b602002015192915050565b60608101515f90600461110d565b60608101515f90600661110d565b60608101515f90600361110d565b5f815f0361115157505f919050565b60035463ffffffff165f5b604063ffffffff821610156111bc5763ffffffff82165f908152600260205260409020548403611190575060019392505050565b6040600161119e8285611ab9565b6111a89190611afc565b6111b29190611ad5565b915060010161115c565b505f9392505050565b60608101515f90600561110d565b60608101515f90600261110d565b60608101515f90600161110d565b5f8181526008602052604090205460ff161561121e5760405163b115d85760e01b815260040160405180910390fd5b5f908152600860205260409020805460ff19166001179055565b60608101515f908161110d565b5f826001600160a01b0316826040515f6040518083038185875af1925050503d805f811461128e576040519150601f19603f3d011682016040523d82523d5f602084013e611293565b606091505b50509050806112b557604051636ac6dcb160e11b815260040160405180910390fd5b505050565b5f8181526007602052604081205415155b92915050565b5f7f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f00000018210611312576040516361c0541760e11b815260040160405180910390fd5b815f03611332576040516314b48df160e11b815260040160405180910390fd5b5f82815260038401602052604090205415611360576040516312c50cad60e11b815260040160405180910390fd5b8254600180850154906113749083906118a1565b61137f826002611bfb565b10156113915761138e816118b4565b90505b60018501819055835f5b82811015611469578084901c60011660010361144e576040805180820182525f83815260028a0160209081529083902054825281018490529051632b0aac7f60e11b815273__$3df6530b668a25325f106f518886bbafa6$__9163561558fe916114089190600401611c06565b602060405180830381865af4158015611423573d5f5f3e3d5ffd5b505050506040513d601f19601f820116820180604052508101906114479190611923565b9150611461565b5f81815260028801602052604090208290555b60010161139b565b50611473836118b4565b8087555f928352600287016020908152604080852084905596845260039097019096529390209390935550919050565b80356001600160a01b03811681146114b9575f5ffd5b919050565b5f5f5f606084860312156114d0575f5ffd5b6114d9846114a3565b95602085013595506040909401359392505050565b5f602082840312156114fe575f5ffd5b5035919050565b634e487b7160e01b5f52604160045260245ffd5b6040516080810167ffffffffffffffff8111828210171561153c5761153c611505565b60405290565b6040805190810167ffffffffffffffff8111828210171561153c5761153c611505565b604051601f8201601f1916810167ffffffffffffffff8111828210171561158e5761158e611505565b604052919050565b5f82601f8301126115a5575f5ffd5b5f6115b06040611565565b90508060408401858111156115c3575f5ffd5b845b818110156115dd5780358352602092830192016115c5565b509195945050505050565b5f82601f8301126115f7575f5ffd5b604061160281611565565b806080850186811115611613575f5ffd5b855b81811015611636576116278882611596565b84526020909301928401611615565b50909695505050505050565b5f6102008284031215611653575f5ffd5b61165b611519565b90506116678383611596565b815261167683604084016115e8565b60208201526116888360c08401611596565b60408201525f8361011f84011261169d575f5ffd5b505f806101006116ac81611565565b91508192506102008501868111156116c2575f5ffd5b908501905b808210156116e25781358452602093840193909101906116c7565b505060608301525092915050565b5f5f6102208385031215611702575f5ffd5b823567ffffffffffffffff811115611718575f5ffd5b830160408186031215611729575f5ffd5b611731611542565b61173a826114a3565b8152602082013567ffffffffffffffff811115611755575f5ffd5b80830192505085601f830112611769575f5ffd5b813567ffffffffffffffff81111561178357611783611505565b611796601f8201601f1916602001611565565b8181528760208386010111156117aa575f5ffd5b816020850160208301375f60208383010152806020840152505080935050506117d68460208501611642565b90509250929050565b5f6101808284031280156117f1575f5ffd5b505f806117fc611519565b91506118088585611596565b825261181785604086016115e8565b60208301526118298560c08601611596565b60408301528461011f85011261183d575f5ffd5b505f8061184a6080611565565b9050809150610180850186811115611860575f5ffd5b61010086015b8181101561187e578035845260209384019301611866565b50506060830152509392505050565b634e487b7160e01b5f52601160045260245ffd5b808201808211156112cb576112cb61188d565b5f600182016118c5576118c561188d565b5060010190565b634e487b7160e01b5f52601260045260245ffd5b5f826118ee576118ee6118cc565b500690565b6060810181835f5b600381101561191a5781518352602092830192909101906001016118fb565b50505092915050565b5f60208284031215611933575f5ffd5b5051919050565b6040815260018060a01b0383511660408201525f6020840151604060608401528051806080850152806020830160a086015e5f60a0828601015260a0601f19601f830116850101925050508260208301529392505050565b805f5b60028110156119b4578151845260209384019390910190600101611995565b50505050565b805f5b60028110156119b4576119d1848351611992565b60409390930192602091909101906001016119bd565b61020081016119f68287611992565b611a0360408301866119ba565b611a1060c0830185611992565b6101008201835f5b6008811015611a37578151835260209283019290910190600101611a18565b50505095945050505050565b5f60208284031215611a53575f5ffd5b81518015158114611a62575f5ffd5b9392505050565b6101808101611a788287611992565b611a8560408301866119ba565b611a9260c0830185611992565b6101008201835f5b6004811015611a37578151835260209283019290910190600101611a9a565b63ffffffff81811683821601908111156112cb576112cb61188d565b5f63ffffffff831680611aea57611aea6118cc565b8063ffffffff84160691505092915050565b63ffffffff82811682821603908111156112cb576112cb61188d565b6001815b6001841115611b5357808504811115611b3757611b3761188d565b6001841615611b4557908102905b60019390931c928002611b1c565b935093915050565b5f82611b69575060016112cb565b81611b7557505f6112cb565b8160018114611b8b5760028114611b9557611bb1565b60019150506112cb565b60ff841115611ba657611ba661188d565b50506001821b6112cb565b5060208310610133831016604e8410600b8410161715611bd4575081810a6112cb565b611be05f198484611b18565b805f1904821115611bf357611bf361188d565b029392505050565b5f611a628383611b5b565b6040810181835f5b600281101561191a578151835260209283019290910190600101611c0e56fea264697066735822122023176c2244bad31ad885eb89cb30504cbba3ed91ea456e44b16f19d2d13e104c64736f6c634300081c0033",
+  "linkReferences": {
+    "node_modules/poseidon-solidity/PoseidonT3.sol": {
+      "PoseidonT3": [
+        {
+          "length": 20,
+          "start": 5823
+        }
+      ]
+    },
+    "node_modules/poseidon-solidity/PoseidonT4.sol": {
+      "PoseidonT4": [
+        {
+          "length": 20,
+          "start": 2833
+        }
+      ]
+    }
+  },
+  "metadata": "{\"compiler\":{\"version\":\"0.8.28+commit.7893614a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"entrypoint\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"withdrawalVerifier\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"ragequitVerifier\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"guardian\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"ActivationAlreadyCompleted\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ContextMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"DepositsArePaused\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"FailedToSendNativeAsset\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"IncorrectASPRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InsufficientValue\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidCommitment\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidDenomination\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidDepositValue\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidProcessooor\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidProof\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidTreeDepth\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"LeafAlreadyExists\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"LeafCannotBeZero\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"LeafGreaterThanSnarkScalarField\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"MaxTreeDepthReached\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotGuardian\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotYetRagequitteable\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NullifierAlreadySpent\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"OnlyEntrypoint\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"OnlyOriginalDepositor\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PoolDepositCapExceeded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PoolIsDead\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ScopeMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownStateRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ZeroAddress\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"_depositor\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_commitment\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_label\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_value\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_precommitmentHash\",\"type\":\"uint256\"}],\"name\":\"Deposited\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"guardian\",\"type\":\"address\"}],\"name\":\"DepositsActivated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"guardian\",\"type\":\"address\"}],\"name\":\"DepositsPaused\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"guardian\",\"type\":\"address\"}],\"name\":\"GuardianRenounced\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_leaf\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_root\",\"type\":\"uint256\"}],\"name\":\"LeafInserted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[],\"name\":\"PoolDied\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"_ragequitter\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_commitment\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_label\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_value\",\"type\":\"uint256\"}],\"name\":\"Ragequit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"_processooor\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_value\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_spentNullifier\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_newCommitment\",\"type\":\"uint256\"}],\"name\":\"Withdrawn\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"ASSET\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"DEPOSIT_DENOMINATION\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"ENTRYPOINT\",\"outputs\":[{\"internalType\":\"contract IEntrypoint\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"LIFETIME_DEPOSIT_CAP\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"MAX_TREE_DEPTH\",\"outputs\":[{\"internalType\":\"uint32\",\"name\":\"\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"RAGEQUIT_VERIFIER\",\"outputs\":[{\"internalType\":\"contract IVerifier\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"ROOT_HISTORY_SIZE\",\"outputs\":[{\"internalType\":\"uint32\",\"name\":\"\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"SCOPE\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"WITHDRAWAL_VERIFIER\",\"outputs\":[{\"internalType\":\"contract IVerifier\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"activateDeposits\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"activationPending\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"currentRoot\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"_root\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"currentRootIndex\",\"outputs\":[{\"internalType\":\"uint32\",\"name\":\"\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"currentTreeDepth\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"_depth\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"currentTreeSize\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"_size\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"dead\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_depositor\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"_value\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"_precommitmentHash\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"_commitment\",\"type\":\"uint256\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_label\",\"type\":\"uint256\"}],\"name\":\"depositors\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"_depositooor\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"depositsPaused\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"guardian\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"lifetimeDeposited\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"nonce\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_nullifierHash\",\"type\":\"uint256\"}],\"name\":\"nullifierHashes\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"_spent\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"pauseDeposits\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"components\":[{\"internalType\":\"uint256[2]\",\"name\":\"pA\",\"type\":\"uint256[2]\"},{\"internalType\":\"uint256[2][2]\",\"name\":\"pB\",\"type\":\"uint256[2][2]\"},{\"internalType\":\"uint256[2]\",\"name\":\"pC\",\"type\":\"uint256[2]\"},{\"internalType\":\"uint256[4]\",\"name\":\"pubSignals\",\"type\":\"uint256[4]\"}],\"internalType\":\"struct ProofLib.RagequitProof\",\"name\":\"_proof\",\"type\":\"tuple\"}],\"name\":\"ragequit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceGuardian\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_index\",\"type\":\"uint256\"}],\"name\":\"roots\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"_root\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"windDown\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"components\":[{\"internalType\":\"address\",\"name\":\"processooor\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"data\",\"type\":\"bytes\"}],\"internalType\":\"struct IPrivacyPool.Withdrawal\",\"name\":\"_withdrawal\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"uint256[2]\",\"name\":\"pA\",\"type\":\"uint256[2]\"},{\"internalType\":\"uint256[2][2]\",\"name\":\"pB\",\"type\":\"uint256[2][2]\"},{\"internalType\":\"uint256[2]\",\"name\":\"pC\",\"type\":\"uint256[2]\"},{\"internalType\":\"uint256[8]\",\"name\":\"pubSignals\",\"type\":\"uint256[8]\"}],\"internalType\":\"struct ProofLib.WithdrawProof\",\"name\":\"_proof\",\"type\":\"tuple\"}],\"name\":\"withdraw\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"details\":\"Keeps the pinned 0xbow withdrawal, verifier, and pool logic; only the initial pause state differs.\",\"events\":{\"Deposited(address,uint256,uint256,uint256,uint256)\":{\"params\":{\"_commitment\":\"The commitment hash\",\"_depositor\":\"The address of the depositor\",\"_label\":\"The deposit generated label\",\"_precommitmentHash\":\"The deposit precommitment hash\",\"_value\":\"The deposited amount\"}},\"LeafInserted(uint256,uint256,uint256)\":{\"params\":{\"_index\":\"The index of the leaf in the tree\",\"_leaf\":\"The leaf value\",\"_root\":\"The updated root\"}},\"Ragequit(address,uint256,uint256,uint256)\":{\"params\":{\"_commitment\":\"The ragequit commitment\",\"_label\":\"The commitment label\",\"_ragequitter\":\"The address who ragequit\",\"_value\":\"The ragequit amount\"}},\"Withdrawn(address,uint256,uint256,uint256)\":{\"params\":{\"_newCommitment\":\"The new commitment hash\",\"_processooor\":\"The address which processed the withdrawal\",\"_spentNullifier\":\"The spent nullifier\",\"_value\":\"The withdrawn amount\"}}},\"kind\":\"dev\",\"methods\":{\"currentRoot()\":{\"returns\":{\"_root\":\"The current state root\"}},\"currentTreeDepth()\":{\"returns\":{\"_depth\":\"The current state tree depth\"}},\"currentTreeSize()\":{\"returns\":{\"_size\":\"The current state tree size\"}},\"deposit(address,uint256,uint256)\":{\"details\":\"Only callable by the Entrypoint\",\"params\":{\"_depositor\":\"The depositor address\",\"_precommitment\":\"The precommitment hash\",\"_value\":\"The value being deposited\"},\"returns\":{\"_commitment\":\"The commitment hash\"}},\"ragequit((uint256[2],uint256[2][2],uint256[2],uint256[4]))\":{\"details\":\"Only callable by the original depositor\",\"params\":{\"_p\":\"the `RagequitProof` struct\"}},\"windDown()\":{\"details\":\"Withdrawals can never be disabledOnly callable by the Entrypoint\"},\"withdraw((address,bytes),(uint256[2],uint256[2][2],uint256[2],uint256[8]))\":{\"params\":{\"_p\":\"The `WithdrawProof` struct\",\"_w\":\"The `Withdrawal` struct\"}}},\"version\":1},\"userdoc\":{\"errors\":{\"ContextMismatch()\":[{\"notice\":\"Thrown when providing an invalid context for the pool and withdrawal\"}],\"FailedToSendNativeAsset()\":[{\"notice\":\"Thrown when failing to send native asset to an account\"}],\"IncorrectASPRoot()\":[{\"notice\":\"Thrown when providing an unknown or outdated ASP root\"}],\"InsufficientValue()\":[{\"notice\":\"Thrown when sending less amount of native asset than required\"}],\"InvalidCommitment()\":[{\"notice\":\"Thrown when trying to spend a commitment that does not exist in the state\"}],\"InvalidDepositValue()\":[{\"notice\":\"Thrown when trying to deposit an amount higher than 2**128\"}],\"InvalidProcessooor()\":[{\"notice\":\"Thrown when calling `withdraw` while not being the allowed processooor\"}],\"InvalidProof()\":[{\"notice\":\"Thrown when failing to verify a withdrawal proof through the Groth16 verifier\"}],\"InvalidTreeDepth()\":[{\"notice\":\"Thrown when calling `withdraw` with a ASP or state tree depth greater or equal than the max tree depth\"}],\"MaxTreeDepthReached()\":[{\"notice\":\"Thrown when the max tree depth is reached and no more commitments can be inserted\"}],\"NotYetRagequitteable()\":[{\"notice\":\"Thrown when trying to initiate the ragequitting process of a commitment before the waiting period\"}],\"NullifierAlreadySpent()\":[{\"notice\":\"Thrown when trying to spend a nullifier that has already been spent\"}],\"OnlyEntrypoint()\":[{\"notice\":\"Thrown when trying to call a method only available to the Entrypoint\"}],\"OnlyOriginalDepositor()\":[{\"notice\":\"Thrown when trying to ragequit while not being the original depositor\"}],\"PoolIsDead()\":[{\"notice\":\"Thrown when trying to deposit into a dead pool\"}],\"ScopeMismatch()\":[{\"notice\":\"Thrown when providing an invalid scope for this pool\"}],\"UnknownStateRoot()\":[{\"notice\":\"Thrown when providing an unknown or outdated state root\"}],\"ZeroAddress()\":[{\"notice\":\"Thrown when trying to set a state variable as address zero\"}]},\"events\":{\"Deposited(address,uint256,uint256,uint256,uint256)\":{\"notice\":\"Emitted when making a user deposit\"},\"LeafInserted(uint256,uint256,uint256)\":{\"notice\":\"Emitted when inserting a leaf into the Merkle Tree\"},\"PoolDied()\":{\"notice\":\"Emitted irreversibly suspending deposits\"},\"Ragequit(address,uint256,uint256,uint256)\":{\"notice\":\"Emitted when ragequitting a commitment\"},\"Withdrawn(address,uint256,uint256,uint256)\":{\"notice\":\"Emitted when processing a withdrawal\"}},\"kind\":\"user\",\"methods\":{\"ASSET()\":{\"notice\":\"Returns the pool asset\"},\"ENTRYPOINT()\":{\"notice\":\"Returns the configured Entrypoint contract\"},\"MAX_TREE_DEPTH()\":{\"notice\":\"Returns the maximum depth of the state tree\"},\"RAGEQUIT_VERIFIER()\":{\"notice\":\"Returns the configured Verifier contract for ragequits\"},\"ROOT_HISTORY_SIZE()\":{\"notice\":\"Returns the root history size for root caching\"},\"SCOPE()\":{\"notice\":\"Returns the pool unique identifier\"},\"WITHDRAWAL_VERIFIER()\":{\"notice\":\"Returns the configured Verifier contract for withdrawals\"},\"activateDeposits()\":{\"notice\":\"Opens deposits once after the mainnet deployment and configuration checks are complete.\"},\"currentRoot()\":{\"notice\":\"Returns the current state root\"},\"currentRootIndex()\":{\"notice\":\"Returns the current root index\"},\"currentTreeDepth()\":{\"notice\":\"Returns the current state tree depth\"},\"currentTreeSize()\":{\"notice\":\"Returns the current state tree size\"},\"dead()\":{\"notice\":\"Returns the boolean indicating if the pool is dead\"},\"deposit(address,uint256,uint256)\":{\"notice\":\"Deposit funds into the Privacy Pool\"},\"depositors(uint256)\":{\"notice\":\"Returns the original depositor that generated a label\"},\"nonce()\":{\"notice\":\"Returns the current label nonce\"},\"nullifierHashes(uint256)\":{\"notice\":\"Returns the spending status of a nullifier hash\"},\"pauseDeposits()\":{\"notice\":\"Irreversibly stops deposits while preserving withdrawals and ragequit.\"},\"ragequit((uint256[2],uint256[2][2],uint256[2],uint256[4]))\":{\"notice\":\"Publicly withdraw funds to original depositor without exposing secrets\"},\"renounceGuardian()\":{\"notice\":\"Permanently gives up the guardian pause authority.\"},\"roots(uint256)\":{\"notice\":\"Returns the root stored at an index\"},\"windDown()\":{\"notice\":\"Irreversibly suspends deposits\"},\"withdraw((address,bytes),(uint256[2],uint256[2][2],uint256[2],uint256[8]))\":{\"notice\":\"Privately withdraw funds by spending an existing commitment\"}},\"notice\":\"Mainnet deployment variant that cannot accept deposits until the guardian explicitly activates it.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/ArtemisMainnetPrivacyPoolSimple.sol\":\"ArtemisMainnetPrivacyPoolSimple\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/\",\":@oz-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/\",\":@oz/=node_modules/@openzeppelin/contracts/\",\":contracts/=vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/\",\":interfaces/=vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/interfaces/\",\":lean-imt/=node_modules/@zk-kit/lean-imt.sol/\",\":poseidon-solidity/=node_modules/poseidon-solidity/\",\":poseidon/=node_modules/poseidon-solidity/\"]},\"sources\":{\"contracts/ArtemisMainnetPrivacyPoolSimple.sol\":{\"keccak256\":\"0x070ef8e3442d2f5e5bd13d8a519454d0d95ff2cf3996b821ec3e61a0b8304b0f\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://14497edee4b9931e0e7ebe03d4af9ab82ffd6fed8d193aa920ac9d058f4bdb4e\",\"dweb:/ipfs/QmNmLwGeFHGwrCgkWFDsD4wWrwusKYPH66gxjHJsD5nhHH\"]},\"node_modules/@openzeppelin/contracts/interfaces/IERC20.sol\":{\"keccak256\":\"0xce41876e78d1badc0512229b4d14e4daf83bc1003d7f83978d18e0e56f965b9c\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://a2608291cb038b388d80b79a06b6118a42f7894ff67b7da10ec0dbbf5b2973ba\",\"dweb:/ipfs/QmWohqcBLbcxmA4eGPhZDXe5RYMMEEpFq22nfkaUMvTfw1\"]},\"node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol\":{\"keccak256\":\"0xe06a3f08a987af6ad2e1c1e774405d4fe08f1694b67517438b467cecf0da0ef7\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://df6f0c459663c9858b6cba2cda1d14a7d05a985bed6d2de72bd8e78c25ee79db\",\"dweb:/ipfs/QmeTTxZ7qVk9rjEv2R4CpCwdf8UMCcRqDNMvzNxHc3Fnn9\"]},\"node_modules/@zk-kit/lean-imt.sol/Constants.sol\":{\"keccak256\":\"0xb1944a1d9f63069b2f22260935adb2d11546f82fbb7d12d853a90134a92f4b5b\",\"license\":\"UNLICENSED\",\"urls\":[\"bzz-raw://6929c862576cb9dacaf21e514737c2f47cb6122cbee466b08c08aa62c028e68d\",\"dweb:/ipfs/QmZKaBc3gv9xVoAC8ETQYMdPdimuhn569nKUSTXqhSS4as\"]},\"node_modules/@zk-kit/lean-imt.sol/InternalLeanIMT.sol\":{\"keccak256\":\"0x6385ce9153d11d9824163464193d4ba3dd304e662dccd365ba2fc381a359762b\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://75394e0334e0712db7898c83113b7177925ce8256b7615d5a2f8f6b75d845f7c\",\"dweb:/ipfs/QmVWFwmWMYF61aAbkBXWR1YdbSVeG65QVVdRbWJvnhefL4\"]},\"node_modules/poseidon-solidity/PoseidonT3.sol\":{\"keccak256\":\"0x0102caa303bbc6690508f3615604f7730789ed990058c9513a87ccb30e4835be\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://1fe7291d5f998eaf7dfe37961b8a8e72f60cf79a7a34459efa5683ca3a702971\",\"dweb:/ipfs/QmQExqgvNEPKLq15rNygqmthUnAPWgTm4m3Bb5BCExwHF1\"]},\"node_modules/poseidon-solidity/PoseidonT4.sol\":{\"keccak256\":\"0x368158147596863aa9a03b134356e997487dd9283aa004cea1bb47071e3313b5\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://b5d979beafd18d5c4a63489c3716b46e4252dd67510fb0f60a964c4ba6417cd2\",\"dweb:/ipfs/QmZcwrTtrj8vB4MWwsrrELNkLZEC9EnHSxWNbTEiuvCfU9\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/PrivacyPool.sol\":{\"keccak256\":\"0x87f5de1b8df15daab991d13f0d25fea5653db44d6bb6190f5018e833c37aa974\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://cb18cc4c87e2f3cb39b786cc617ebb00d3f38650290ec69e489e12c86ace94a1\",\"dweb:/ipfs/QmTRoAeYQf2SMY83TY4jp5zF9Xcr6TYHsJRUYwBm6vhyp7\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/State.sol\":{\"keccak256\":\"0xd73173e5d1ac1c6d56559c0b4305f3972962e1c2199c68ecc60b5f5378572ef1\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://ecda64d3d83807b6632e4ef77cc58e3ec0a70468925914422f14a55286c09702\",\"dweb:/ipfs/Qmb1VKYoGrvkYY6EyUCpbnWZvbcJRei9hDivPwGYKaFzyF\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/implementations/PrivacyPoolSimple.sol\":{\"keccak256\":\"0x098e7ea566a150426d9dd213c380cf16ebf43a138ab47849f75f928c41891284\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://2b32f45f2f35c253ea592ea584a407845606825a3c45e62e96ba026aeb6bd9b4\",\"dweb:/ipfs/QmPtWoEUH6cv7ntpZ6cFU8jZC8U83UyEZN5EndoB8mc3JN\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/lib/Constants.sol\":{\"keccak256\":\"0xfa588a5460ba189f5214269739389abd0eb7b9cf2e1241031c109a3d2d12ded9\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://fb54cfa152fa6b0e1fa32bc26a4590b3c3f7b67e5daeb2780745c75b71074c93\",\"dweb:/ipfs/QmT4pfSNqpmjWZUCvbAEQbQzHPXjayS6re6mW3Z3f4R7ic\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/contracts/lib/ProofLib.sol\":{\"keccak256\":\"0xf5f4b403d34535fd25caa73ea75f569ce0e6df7ea86e43ed726b9f4b23ac3258\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://3a117a3a3162a6436bb822015afe718b77bd265ce2e3196dfc6839fffeda1d32\",\"dweb:/ipfs/QmSJNhm2peNTHKHQntNqxHoChnfvjFZmspQCJyyLWtsaf5\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/interfaces/IEntrypoint.sol\":{\"keccak256\":\"0xa097fa61be5f18d3029c691c28aeef3f068696661b041b8fdefc3eafbf721196\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://0ce03842d3057e45171fc783f19fbb52040dc7b555ad9d4dfae8b561b2705ac0\",\"dweb:/ipfs/QmZdsUEmS5UiNgx6H1rVA8PMM3soVxaQbKveoKzDFXBM2B\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/interfaces/IPrivacyPool.sol\":{\"keccak256\":\"0xdff641063018f81bc16cad98ea932ee18e07c6aca30bd6c317f33f92df919c61\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://bf6f496ccb9f3374eef2598a33ed7c2b0a0e34e53d53e3e819dfabc5203d7741\",\"dweb:/ipfs/QmcNtxHDUUhfTyRRWfwqiHzJLYFUy2LxCbkHKCrfTMGbYT\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/interfaces/IState.sol\":{\"keccak256\":\"0x300799136065d4db72a147d6d71a2d5d94c875b25a17efe1b23d480b3664020c\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://2f019d61cd649a24fb488c0024e76655cad6c1937dd8c2fcfcb48166f3cf89eb\",\"dweb:/ipfs/QmcuQcoDbxTRTsL5evwMNJkyMtGsGCPBMC9Jw4iShMFa9q\"]},\"vendor/0xbow-privacy-pools-core-v1.2.1/contracts-src/interfaces/IVerifier.sol\":{\"keccak256\":\"0x31b69853781ba7bead88d9777e2748c032331e6037982493fa890bf67d374d8b\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://2e2572f7e1d9bcd5565e05222606a6970edb968bbe20dbbd0006c4c586933202\",\"dweb:/ipfs/QmYraNWSY6XHJxhWo3wpqwb7YsdxskH3vKQroM24Yn3LpZ\"]}},\"version\":1}"
+}
