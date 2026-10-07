@@ -106,22 +106,68 @@ async function call(addr, abi, fn, args) {
   return h;
 }
 
-libs.PoseidonT3 = await deployLibrary("PoseidonT3");
-libs.PoseidonT4 = await deployLibrary("PoseidonT4");
-const wdr = await deploy("WithdrawalVerifier", []);
-const cmt = await deploy("CommitmentVerifier", []);
-const epImpl = await deploy("Entrypoint", []);
+const CHECKPOINT = join(root, "deployments", "migrate-mainnet-pending.json");
+let checkpoint = {};
+try {
+  checkpoint = JSON.parse(readFileSync(CHECKPOINT, "utf8"));
+} catch {}
+const saveCheckpoint = () =>
+  writeFileSync(CHECKPOINT, JSON.stringify({ ...checkpoint, updatedAt: new Date().toISOString() }, null, 2));
+async function codeExists(addr) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(addr ?? "")) return false;
+  const code = await publicClient.getCode({ address: addr });
+  return !!code && code !== "0x";
+}
+const outputExists = (v) => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v);
+
+libs.PoseidonT3 = checkpoint.poseidonT3 && (await codeExists(checkpoint.poseidonT3)) ? checkpoint.poseidonT3 : await deployLibrary("PoseidonT3");
+libs.PoseidonT4 = checkpoint.poseidonT4 && (await codeExists(checkpoint.poseidonT4)) ? checkpoint.poseidonT4 : await deployLibrary("PoseidonT4");
+checkpoint.poseidonT3 = libs.PoseidonT3;
+checkpoint.poseidonT4 = libs.PoseidonT4;
+saveCheckpoint();
+const wdr = outputExists(checkpoint.wdr) && (await codeExists(checkpoint.wdr)) ? checkpoint.wdr : await deploy("WithdrawalVerifier", []);
+const cmt = outputExists(checkpoint.cmt) && (await codeExists(checkpoint.cmt)) ? checkpoint.cmt : await deploy("CommitmentVerifier", []);
+checkpoint.wdr = wdr;
+checkpoint.cmt = cmt;
+saveCheckpoint();
+const epImpl = outputExists(checkpoint.epImpl) && (await codeExists(checkpoint.epImpl)) ? checkpoint.epImpl : await deploy("Entrypoint", []);
+checkpoint.epImpl = epImpl;
+saveCheckpoint();
 const epAbi = art("Entrypoint").abi;
 const initData = encodeFunctionData({ abi: epAbi, functionName: "initialize", args: [account.address, account.address] });
-const entrypoint = await deploy("ERC1967Proxy", [epImpl, initData]);
+const entrypoint = outputExists(checkpoint.entrypoint) && (await codeExists(checkpoint.entrypoint)) ? checkpoint.entrypoint : await deploy("ERC1967Proxy", [epImpl, initData]);
+const entrypointFresh = checkpoint.entrypoint !== entrypoint && EXECUTE;
+checkpoint.entrypoint = entrypoint;
+if (entrypointFresh) {
+  delete checkpoint.ethPool;
+  delete checkpoint.veilPool;
+  delete checkpoint.registryV2;
+  delete checkpoint.hookV2;
+}
+saveCheckpoint();
 const poolAbi = art("VeilTestnetPrivacyPool").abi;
 const erc20Abi = art("VeilTestnetPrivacyPoolERC20").abi;
-const ethPool = await deploy("VeilTestnetPrivacyPool", [entrypoint, wdr, cmt, account.address]);
-const veilPool = await deploy("VeilTestnetPrivacyPoolERC20", [entrypoint, wdr, cmt, VEIL, account.address]);
-await call(ethPool, poolAbi, "activateDeposits", []);
-await call(veilPool, erc20Abi, "activateDeposits", []);
-await call(entrypoint, epAbi, "registerPool", [NATIVE, ethPool, parseEther("0.001"), 0n, 100n]);
-await call(entrypoint, epAbi, "registerPool", [VEIL, veilPool, parseEther("1"), 0n, 100n]);
+const ethPool = outputExists(checkpoint.ethPool) && (await codeExists(checkpoint.ethPool)) ? checkpoint.ethPool : await deploy("VeilTestnetPrivacyPool", [entrypoint, wdr, cmt, account.address]);
+const veilPool = outputExists(checkpoint.veilPool) && (await codeExists(checkpoint.veilPool)) ? checkpoint.veilPool : await deploy("VeilTestnetPrivacyPoolERC20", [entrypoint, wdr, cmt, VEIL, account.address]);
+checkpoint.ethPool = ethPool;
+checkpoint.veilPool = veilPool;
+saveCheckpoint();
+const pauseAbi = [{ type: "function", name: "depositsPaused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] }];
+for (const [p, a] of [[ethPool, poolAbi], [veilPool, erc20Abi]]) {
+  const paused = EXECUTE ? await publicClient.readContract({ address: p, abi: pauseAbi, functionName: "depositsPaused" }) : true;
+  if (paused) await call(p, a, "activateDeposits", []);
+  else console.log("already active:", p);
+}
+try {
+  await call(entrypoint, epAbi, "registerPool", [NATIVE, ethPool, parseEther("0.001"), 0n, 100n]);
+} catch (e) {
+  console.log("registerPool ETH skipped (probably exists):", e.message.slice(0, 90));
+}
+try {
+  await call(entrypoint, epAbi, "registerPool", [VEIL, veilPool, parseEther("1"), 0n, 100n]);
+} catch (e) {
+  console.log("registerPool VEIL skipped (probably exists):", e.message.slice(0, 90));
+}
 
 const SNARK_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const leaves = [SNARK_FIELD - 1n];
@@ -141,11 +187,20 @@ if (!EXECUTE) {
     await import("../lib/veil-artifact.mjs");
   const { mineHookSalt } = await import("./mine-hook.mjs");
   const { encodeAbiParameters: enc } = await import("viem");
-  let hh = await wallet.deployContract({ abi: VEIL_ATTESTATION_REGISTRY_ABI, bytecode: VEIL_ATTESTATION_REGISTRY_BYTECODE, args: [account.address] });
-  let rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
-  if (rrc.status !== "success") throw new Error("registry v2 deploy reverted");
-  registryV2 = rrc.contractAddress;
-  console.log("registry v2:", registryV2);
+  let hh;
+  let rrc;
+  if (outputExists(checkpoint.registryV2) && (await codeExists(checkpoint.registryV2))) {
+    registryV2 = checkpoint.registryV2;
+    console.log("registry v2 (resumed):", registryV2);
+  } else {
+    hh = await wallet.deployContract({ abi: VEIL_ATTESTATION_REGISTRY_ABI, bytecode: VEIL_ATTESTATION_REGISTRY_BYTECODE, args: [account.address] });
+    rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+    if (rrc.status !== "success") throw new Error("registry v2 deploy reverted");
+    registryV2 = rrc.contractAddress;
+    checkpoint.registryV2 = registryV2;
+    saveCheckpoint();
+    console.log("registry v2:", registryV2);
+  }
   const mined = mineHookSalt(CREATE2_MAINNET, V4_PM_MAINNET, TREASURY_MAINNET, registryV2, account.address);
   hookSalt = mined.salt;
   hookV2 = mined.address;
@@ -153,10 +208,19 @@ if (!EXECUTE) {
     [{ type: "address" }, { type: "address" }, { type: "address" }, { name: "o", type: "address" }],
     [V4_PM_MAINNET, TREASURY_MAINNET, registryV2, account.address]
   ).slice(2);
-  hh = await wallet.writeContract({ address: CREATE2_MAINNET, abi: VEIL_CREATE2_DEPLOYER_ABI, functionName: "deploy", args: [hookSalt, `${VEIL_HOOK_BYTECODE}${ctor}`] });
-  rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
-  if (rrc.status !== "success") throw new Error("hook v2 deploy reverted");
-  console.log("hook v2:", hookV2);
+  if (outputExists(checkpoint.hookV2) && (await codeExists(checkpoint.hookV2))) {
+    hookV2 = checkpoint.hookV2;
+    hookSalt = checkpoint.hookSalt;
+    console.log("hook v2 (resumed):", hookV2);
+  } else {
+    hh = await wallet.writeContract({ address: CREATE2_MAINNET, abi: VEIL_CREATE2_DEPLOYER_ABI, functionName: "deploy", args: [hookSalt, `${VEIL_HOOK_BYTECODE}${ctor}`] });
+    rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+    if (rrc.status !== "success") throw new Error("hook v2 deploy reverted");
+    checkpoint.hookV2 = hookV2;
+    checkpoint.hookSalt = hookSalt;
+    saveCheckpoint();
+    console.log("hook v2:", hookV2);
+  }
 }
 
 if (!EXECUTE) {
