@@ -49,6 +49,8 @@ import {
   TESTNET_LEGACY_ETH_POOL,
   TESTNET_ROUTER_ADDRESS,
   TESTNET_ROUTER_POOL_KEY,
+  TESTNET_VEIL_POOL_05,
+  TESTNET_VEIL_POOL_05_DENOMINATION,
   TESTNET_VEIL_TOKEN,
 } from "./router-swap";
 import type { ShieldedNote } from "./note";
@@ -86,7 +88,7 @@ export const SHIELDED_SWAP_ZERO_FOR_ONE = false as const;
 // deployments/shieldedpool-veil*-testnet-latest.json.
 export const KNOWN_TESTNET_LEGACY_POOLS: readonly Address[] = [
   TESTNET_LEGACY_ETH_POOL,
-  "0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address,
+  TESTNET_VEIL_POOL_05,
   SHIELDED_SWAP_SOURCE_POOL,
 ] as const;
 
@@ -136,13 +138,22 @@ export function getShieldedSwapRouteStatus(
 ): ShieldedSwapRouteStatus {
   const isEthSource =
     sourcePool.toLowerCase() === TESTNET_LEGACY_ETH_POOL.toLowerCase();
+  // Deep-audit fix (live incident 2026-10-08): the passed pool must be
+  // honored when it is a known pool. Previously every non-ETH source fell
+  // through to the 2-VEIL pool, so a 0.5-VEIL note could never spend even
+  // though its pool exists and is liquid.
+  const knownSource = KNOWN_TESTNET_LEGACY_POOLS.find(
+    (p) => p.toLowerCase() === sourcePool.toLowerCase()
+  );
   const actualSourcePool = isEthSource
     ? TESTNET_LEGACY_ETH_POOL
-    : SHIELDED_SWAP_SOURCE_POOL;
+    : knownSource ?? SHIELDED_SWAP_SOURCE_POOL;
   const destination = resolveShieldedSwapDestination(actualSourcePool);
   const zeroForOne = isEthSource;
   const sourceDenomination = isEthSource
     ? 1000000000000000n
+    : actualSourcePool.toLowerCase() === TESTNET_VEIL_POOL_05.toLowerCase()
+    ? TESTNET_VEIL_POOL_05_DENOMINATION
     : SHIELDED_SWAP_SOURCE_DENOMINATION;
 
   if (destination === null) {

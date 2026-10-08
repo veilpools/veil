@@ -12,7 +12,7 @@ import {
   SHIELDED_SWAP_SOURCE_POOL,
   type ShieldedSwapRouteStatus,
 } from "../../lib/shielded-swap-ui";
-import { TESTNET_LEGACY_ETH_POOL } from "../../lib/router-swap";
+import { TESTNET_LEGACY_ETH_POOL, TESTNET_VEIL_POOL_05 } from "../../lib/router-swap";
 import type { TokenItem } from "../TokenSelectModal";
 
 export interface ShieldedSwapPanelProps {
@@ -59,12 +59,15 @@ export const ShieldedSwapPanel: React.FC<ShieldedSwapPanelProps> = ({
 }) => {
   const isEthSource =
     !activeNote?.asset || activeNote.asset === ETH_ZERO_ADDRESS;
+  const isV05Source =
+    !isEthSource &&
+    route.sourcePool.toLowerCase() === TESTNET_VEIL_POOL_05.toLowerCase();
   const sourceLabel = isEthSource
     ? `ShieldedPool_ETH ${short(TESTNET_LEGACY_ETH_POOL)} · ${
         ethDenomination !== null ? `${formatEther(ethDenomination)} ETH` : "…"
       }/note`
-    : `ShieldedPool_VEIL2 ${short(SHIELDED_SWAP_SOURCE_POOL)} · ${formatEther(
-        SHIELDED_SWAP_SOURCE_DENOMINATION
+    : `ShieldedPool_VEIL${isV05Source ? "" : "2"} ${short(route.sourcePool)} · ${formatEther(
+        route.sourceDenomination
       )} VEIL/note`;
   const destLabel = route.destination
     ? isEthSource

@@ -17,6 +17,8 @@ import {
 } from "../lib/shielded-swap-ui";
 import {
   TESTNET_LEGACY_ETH_POOL,
+  TESTNET_VEIL_POOL_05,
+  TESTNET_VEIL_POOL_05_DENOMINATION,
   TESTNET_VEIL_TOKEN,
 } from "../lib/router-swap";
 import { MAX_SQRT_RATIO } from "../lib/router-client";
@@ -128,6 +130,15 @@ describe("ShieldedSwap tab adapter (Task 4b: §7 #5 #6, R2/R3/R4)", () => {
     expect(status.sourceDenomination).toBe(1000000000000000n);
     expect(status.zeroForOne).toBe(true);
     expect(status.missingPool).toBeNull();
+  });
+
+  it("honors a 0.5-VEIL source pool instead of falling through to VEIL2 (live incident 2026-10-08)", () => {
+    const status = getShieldedSwapRouteStatus(TESTNET_VEIL_POOL_05);
+    expect(status.executable).toBe(true);
+    expect(status.sourcePool).toBe(TESTNET_VEIL_POOL_05);
+    expect(status.sourceDenomination).toBe(TESTNET_VEIL_POOL_05_DENOMINATION);
+    expect(status.destination).toBe(TESTNET_LEGACY_ETH_POOL);
+    expect(status.zeroForOne).toBe(false);
   });
 
   it("pending message names the missing pool and keeps funds-safe guidance", () => {
