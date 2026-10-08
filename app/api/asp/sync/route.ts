@@ -118,6 +118,48 @@ export async function POST(req: NextRequest) {
     });
 
     const head = await publicClient.getBlockNumber();
+
+    // Root-audit hardening (2026-10-08): unauthenticated POST used to let
+    // anyone force a server-signed updateRoot (gas griefing). Now throttled:
+    // at most one publish per THROTTLE_BLOCKS unless the sentinel override
+    // token (x-asp-publish-token == ASP_PUBLISH_TOKEN) is presented. The UI
+    // calls this after deposits without a token; throttled calls fail closed
+    // with 429 and the withdraw flow tells the user to retry shortly.
+    const THROTTLE_BLOCKS = 150n;
+    const sentinelToken = (process.env.ASP_PUBLISH_TOKEN || "").trim();
+    const presented = (req.headers.get("x-asp-publish-token") || "").trim();
+    const hasToken = sentinelToken.length > 0 && presented === sentinelToken;
+    if (!hasToken) {
+      const rootUpdatedLogs = await publicClient.getLogs({
+        address: TESTNET_0XBOW.entrypointProxy,
+        event: {
+          type: "event",
+          name: "RootUpdated",
+          inputs: [
+            { type: "uint256", name: "_root" },
+            { type: "string", name: "_ipfsCID" },
+            { type: "uint256", name: "_timestamp" },
+          ],
+        } as const,
+        fromBlock: head > 200000n ? head - 200000n : 0n,
+        toBlock: head,
+      });
+      const lastBlock = rootUpdatedLogs.reduce<bigint>(
+        (m, l) => (l.blockNumber > m ? l.blockNumber : m),
+        0n
+      );
+      if (lastBlock > 0n && head - lastBlock < THROTTLE_BLOCKS) {
+        return NextResponse.json(
+          {
+            success: false,
+            throttled: true,
+            error: `ASP root updated recently (block ${lastBlock}); retry after ~${THROTTLE_BLOCKS} blocks or use the sentinel token.`,
+          },
+          { status: 429 }
+        );
+      }
+    }
+
     const cid = `auto-asp-46630-b${head}-l${labels.length}`.padEnd(33, "0");
 
     const txHash = await walletClient.writeContract({

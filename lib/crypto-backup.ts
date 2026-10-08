@@ -29,7 +29,11 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy;
 }
 
-async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveKey(
+  password: string,
+  salt: Uint8Array,
+  iterations: number = PBKDF2_ITERATIONS
+): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     toArrayBuffer(new TextEncoder().encode(password)),
@@ -43,7 +47,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
       name: "PBKDF2",
       hash: "SHA-256",
       salt: toArrayBuffer(salt),
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
     },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
@@ -97,7 +101,13 @@ export async function decryptNoteBackup(backup: EncryptedNoteBackup, password: s
   const iv = fromBase64(backup.iv);
   const ciphertext = fromBase64(backup.ciphertext);
 
-  const key = await deriveKey(password, salt);
+  // Honor the stored iteration count (back-compat: default when absent), so a
+  // future KDF bump never silently weakens or bricks existing backups.
+  const iterations =
+    Number.isFinite(backup.iterations) && backup.iterations > 0
+      ? Math.floor(backup.iterations)
+      : PBKDF2_ITERATIONS;
+  const key = await deriveKey(password, salt, iterations);
 
   try {
     const decryptedBuffer = await crypto.subtle.decrypt(

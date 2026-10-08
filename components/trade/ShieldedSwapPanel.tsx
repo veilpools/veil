@@ -197,7 +197,7 @@ export const ShieldedSwapPanel: React.FC<ShieldedSwapPanelProps> = ({
                         fontWeight: 500,
                       }}
                     >
-                      ASP Verified
+                      Legacy note
                     </span>
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace", marginTop: "2px" }}>

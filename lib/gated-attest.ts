@@ -1,4 +1,5 @@
 import {
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   keccak256,
@@ -472,8 +473,20 @@ export type GatedSimResult =
   | { ok: false; reason: GatedSimReason; message: string };
 
 /**
+ * Decode swapExactIn output (uint256 amountOut) from a successful simulation.
+ * Throws honestly on malformed data — never defaults to 1n.
+ */
+export function decodeGatedSwapOutput(returnData: `0x${string}`): bigint {
+  const [amountOut] = decodeAbiParameters([{ type: "uint256" }], returnData);
+  if (amountOut <= 0n) throw new Error("Gated simulation returned zero output.");
+  return amountOut;
+}
+
+/**
  * Transaction args for TestnetSwapHelper.swapExactIn (wallet write path).
- * Same proven shape as the gas-free simulation: VEIL in, ETH out, minOut 1n.
+ * Same proven shape as the gas-free simulation: VEIL in, ETH out.
+ * minOut defaults to 1n only when the caller has no simulation; the UI
+ * always passes a slippage-bound value (root-audit F1).
  */
 export function buildGatedSwapTxArgs(args: GatedSimCallArgs) {
   if (args.amountIn <= 0n) throw new Error("VEIL input amount must be greater than zero.");

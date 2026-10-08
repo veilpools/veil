@@ -19,11 +19,11 @@ const faqItems: FaqItem[] = [
   },
   {
     q: "What chains are supported?",
-    a: "Veil is natively deployed on Robinhood Chain (Testnet 46630 and Mainnet 4663) leveraging Uniswap v4's custom hook architecture for high-throughput, low-fee execution.",
+    a: "Veil is natively deployed on Robinhood Chain (Testnet 46630 and Mainnet 4663) leveraging Uniswap v4's custom hook architecture for high-throughput, low-fee execution. Mainnet pools are paused pending the 0xbow migration — live activity happens on testnet.",
   },
   {
     q: "Can anyone freeze my funds or block withdrawals?",
-    a: "Never. Veil smart contracts enforce non-blocking withdrawals. While a protocol guardian can pause new deposits in an emergency, withdrawals can never be paused, censored, or frozen under any circumstance.",
+    a: "The withdraw path has no pause or guardian switch, and nullifiers cannot be reused. Bounds apply on the legacy path: the provisional verifier must pass and the Merkle root must be within the 100-entry onchain history. See the published internal audit for the full picture.",
   },
 ];
 

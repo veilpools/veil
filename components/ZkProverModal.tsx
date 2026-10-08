@@ -18,6 +18,9 @@ interface ZkProverModalProps {
   steps: ZkProverStep[];
   txHash: string | null;
   commitment: string | null;
+  // Root-audit F9: the commitment is derived client-side BEFORE the receipt.
+  // "Leaf Inserted" renders only when the caller confirms onchain insertion.
+  committed?: boolean;
   onDownloadBackup?: () => void;
 }
 
@@ -28,6 +31,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
   steps,
   txHash,
   commitment,
+  committed = false,
   onDownloadBackup,
 }) => {
   const isAllCompleted = steps.every((s) => s.status === "completed");
@@ -211,7 +215,7 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
           >
             <div style={{ display: "flex", justifyContent: "space-between", color: "var(--color-muted)", fontWeight: 500 }}>
               <span>Commitment:</span>
-              <span style={{ color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>Leaf Inserted</span>
+              <span style={{ color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>{committed ? "Leaf Inserted" : "Commitment Prepared"}</span>
             </div>
             <div
               style={{

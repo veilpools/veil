@@ -143,7 +143,7 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
                         fontWeight: 500,
                       }}
                     >
-                      ASP Attested
+                      Legacy note
                     </span>
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace", marginTop: "2px" }}>

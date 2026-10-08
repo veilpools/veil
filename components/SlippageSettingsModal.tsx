@@ -205,7 +205,7 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
             <span>Router Invariant Protection</span>
           </div>
           <p style={{ margin: 0, color: "var(--color-muted)", lineHeight: "var(--leading-body-sm)" }}>
-            VeilShieldRouter enforces atomic 0-balance settlement. If slippage bounds are exceeded, 100% of user funds revert safely.
+            VeilShieldRouter enforces atomic 0-balance settlement. Amounts below your slippage bound revert; dust refunds to the sender. Direct transfers to the router are unrecoverable — always transact through the app.
           </p>
         </div>
 

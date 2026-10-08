@@ -232,8 +232,8 @@ export const AttestPanel: React.FC<AttestPanelProps> = ({
           }}
         />
         <span id="gated-swap-hint" style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
-          Minimum accepted is 1 wei, verbatim from the proven script — no slippage
-          protection on this testnet path. Needs test VEIL already in your wallet;
+          Minimum accepted derives from a fresh gas-free simulation × your slippage
+          setting (Execution Settings). Needs test VEIL already in your wallet;
           there is no onchain faucet.
         </span>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>

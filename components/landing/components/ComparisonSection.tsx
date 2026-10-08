@@ -50,7 +50,7 @@ export const ComparisonSection: React.FC = () => {
         <SectionHeader
           kicker="Architecture Comparison"
           title="An execution layer, not a mixer."
-          sub="Underneath the interface is a zero-knowledge Uniswap v4 routing hook, not an anonymity mixer. Swaps settle atomically with zero protocol custody, zero sandwich slippage, and zero sanctions contagion."
+          sub="Underneath the interface is a zero-knowledge Uniswap v4 routing hook, not an anonymity mixer. Swaps settle atomically with zero protocol custody and per-transaction slippage bounds."
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />

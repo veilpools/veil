@@ -329,6 +329,8 @@ export function walletLabel(e: unknown): string {
     if (e.message === "wallet_missing") return "Wallet not detected. Install extension or choose another.";
     if (e.message === "wallet_rejected") return "Connection cancelled by user.";
     if (e.message === "wallet_timeout") return "Wallet timed out. Please unlock and retry.";
+    if (/at least one account/i.test(e.message))
+      return "Wallet is locked or has no unlocked account. Open your wallet extension, unlock it, then retry.";
     return e.message;
   }
   return "Wallet connection failed.";

@@ -8,11 +8,12 @@ import { formatNoteAmount, getNoteAssetSymbol } from "../../lib/note-format";
 export interface VaultPanelProps {
   notes: AnyShieldedNote[];
   onBackup: () => void;
+  onBackupNote: (nullifier: string) => void;
   onWithdrawNote: (nullifier: string) => void;
 }
 
 /** Vault tab: local encrypted-note list with copy + withdraw shortcuts. */
-export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onWithdrawNote }) => {
+export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBackupNote, onWithdrawNote }) => {
   const [copiedCommitment, setCopiedCommitment] = useState<string | null>(null);
 
   function handleCopyCommitment(text: string) {
@@ -112,7 +113,7 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onWithd
                       fontWeight: 500,
                     }}
                   >
-                    {isBowNote(note) ? "0xbow v1.2.1 · Groth16" : "Attested · Depth 20"}
+                    {isBowNote(note) ? "0xbow v1.2.1 · Groth16" : "Legacy · Depth 20"}
                   </span>
                 </div>
                 <span style={{ fontFamily: "monospace", fontSize: "1.1rem", color: "var(--color-accent-ink)", fontWeight: 700 }}>
@@ -181,9 +182,32 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onWithd
                 <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
                   Storage: Encrypted Local CSPRNG
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onWithdrawNote(note.nullifier)}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => onBackupNote(note.nullifier)}
+                    aria-label={`Back up note ${index + 1} as encrypted JSON`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "5px 12px",
+                      minHeight: "24px",
+                      borderRadius: "var(--radius-sm)",
+                      backgroundColor: "transparent",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-muted)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all var(--duration-fast)",
+                    }}
+                  >
+                    <span>Backup</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onWithdrawNote(note.nullifier)}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -199,8 +223,9 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onWithd
                     transition: "all var(--duration-fast)",
                   }}
                 >
-                  <span>Withdraw Note ➔</span>
-                </button>
+                    <span>Withdraw Note ➔</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))}

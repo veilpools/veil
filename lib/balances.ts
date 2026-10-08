@@ -43,7 +43,8 @@ export async function fetchAllTokenBalances(
       maximumFractionDigits: 4,
     });
   } catch {
-    result["ETH"] = "0.000";
+    // Unavailable (not zero): RPC failure must never masquerade as a 0 balance.
+    result["ETH"] = "—";
   }
 
   // 2. Fetch ERC20 balances in parallel
@@ -67,7 +68,7 @@ export async function fetchAllTokenBalances(
           maximumFractionDigits: 2,
         });
       } catch {
-        result[token.symbol] = "0.00";
+        result[token.symbol] = "—";
       }
     });
 

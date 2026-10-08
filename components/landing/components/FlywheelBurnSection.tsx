@@ -144,7 +144,7 @@ export const FlywheelBurnSection: React.FC = () => {
         <SectionHeader
           kicker="Protocol Flywheel"
           title="Autonomous burn ledger. Deflationary by code."
-          sub="All burns execute on-chain via the native burn() call, permanently reducing total supply. Programmatically funded by Uniswap v4 hook swap fees and creator royalties."
+          sub="All burns execute on-chain via the native burn() call, permanently reducing total supply. Programmatically funded by Uniswap v4 hook swap fees and creator royalties. No mainnet burns yet — the ledger below reads live."
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />

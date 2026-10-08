@@ -212,3 +212,75 @@ export function deserializeNotesList(raw: string): AnyShieldedNote[] {
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Pending-note journal (root-audit F5): a note's secrets live only in memory
+// between signing and persistence — a tab close/crash in that window strands
+// funds (two such 0.001 ETH notes are permanently locked on testnet). Every
+// deposit persists {payload, txHash} BEFORE waiting for receipt; success
+// promotes into the vault, reconcilePendingNotes() heals crash leftovers on
+// load. Same at-rest exposure as the vault itself (documented accepted risk).
+// ---------------------------------------------------------------------------
+
+export interface PendingNoteRecord {
+  payload: string;
+  nullifier: string;
+  txHash: string;
+  pool: string;
+  savedAt: number;
+}
+
+const PENDING_KEY = "veil_pending_notes_v1";
+
+function readPendingRaw(): PendingNoteRecord[] {
+  try {
+    if (typeof window === "undefined" || typeof localStorage === "undefined") return [];
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    return list.filter(
+      (r): r is PendingNoteRecord =>
+        r !== null &&
+        typeof r === "object" &&
+        typeof r.payload === "string" &&
+        typeof r.txHash === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function loadPendingNotes(): PendingNoteRecord[] {
+  return readPendingRaw();
+}
+
+/** Journal a note BEFORE awaiting its receipt. Overwrites same-nullifier entries. */
+export function savePendingNote(note: AnyShieldedNote, txHash: string, pool: string): void {
+  try {
+    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+    const next = readPendingRaw().filter((r) => r.nullifier !== note.nullifier);
+    next.push({
+      payload: serializeAnyNote(note),
+      nullifier: note.nullifier,
+      txHash,
+      pool,
+      savedAt: Date.now(),
+    });
+    localStorage.setItem(PENDING_KEY, JSON.stringify(next));
+  } catch {
+    // Journal is best-effort; the confirmed-save path remains authoritative.
+  }
+}
+
+export function clearPendingNoteByTx(txHash: string): void {
+  try {
+    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+    const next = readPendingRaw().filter(
+      (r) => r.txHash.toLowerCase() !== txHash.toLowerCase()
+    );
+    localStorage.setItem(PENDING_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}

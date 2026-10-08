@@ -1,0 +1,28 @@
+{
+  "network": "Robinhood Testnet",
+  "chainId": 46630,
+  "ranAt": "2026-10-08T03:16:04.109Z",
+  "drills": {
+    "slippageRevert": {
+      "quotedOut": "872233080100258796",
+      "revertedPreSend": true,
+      "reason": "The contract function \"swapToShield\" reverted."
+    },
+    "pauseDrill": {
+      "pauseTx": "0xe8e777f79207c203a5af743adddfd18eb2a0052ff0d2a579ee468048b7c4293a",
+      "depositReverted": true,
+      "depositReason": "The contract function \"deposit\" reverted.",
+      "withdrawTx": "0xda25615a1aa96904909320dd654a82f3e4102565677e791ed9dc3c1c6f82dadb",
+      "nullifierSpent": true,
+      "unpauseTx": "0xbdce07415f3bed1974d1bca946b04405e75da5a3d78c0cd25466e02072ed8b47"
+    }
+  },
+  "gasAccounting": {
+    "balanceBefore": "15432485203409622",
+    "balanceAfter": "15430992013409622",
+    "spentWei": "1493190000000"
+  },
+  "explorer": {
+    "base": "https://explorer.testnet.chain.robinhood.com/tx/"
+  }
+}

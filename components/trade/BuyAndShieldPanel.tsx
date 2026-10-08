@@ -312,9 +312,17 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
             {outDenomLabel === "…" ? "Loading live denomination…" : outDenomLabel}
           </div>
 
-          {/* Token Button */}
+          {/* Token Button: fixed by route direction in router mode (the
+              destination pool follows pay direction, chosen live) */}
           <button
             onClick={onOpenOutputTokenModal}
+            disabled={isTestnetRouterMode}
+            title={
+              isTestnetRouterMode
+                ? `Destination fixed by direction: ${isEthRouterInput ? "VEIL pool (live-picked)" : "0.001 ETH pool"}`
+                : "Choose shield pool token"
+            }
+            aria-disabled={isTestnetRouterMode}
             style={{
               display: "flex",
               alignItems: "center",
@@ -324,7 +332,8 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
               backgroundColor: "#ffffff",
               border: "1px solid var(--color-border-strong)",
               color: "var(--color-text)",
-              cursor: "pointer",
+              cursor: isTestnetRouterMode ? "not-allowed" : "pointer",
+              opacity: isTestnetRouterMode ? 0.6 : 1,
               boxShadow: "0 2px 6px rgba(26, 26, 26, 0.06)",
               transition: "all var(--duration-fast)",
             }}
@@ -333,7 +342,7 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
               {outputToken.iconSvg}
             </div>
             <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
-              {outputToken.symbol}
+              {isTestnetRouterMode ? (isEthRouterInput ? "VEIL" : "ETH") : outputToken.symbol}
             </span>
             <ChevronDown className="w-4 h-4 text-[#FF8C00]" aria-hidden="true" />
           </button>

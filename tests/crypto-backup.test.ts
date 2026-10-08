@@ -38,4 +38,23 @@ describe("Encrypted Note Backup (PBKDF2 + AES-256-GCM)", () => {
       "Password must be at least 8 characters long"
     );
   });
+
+  it("honors the stored KDF iteration count on decrypt (root-audit)", async () => {
+    const note = createShieldedNote(parseEther("0.001"));
+    const serialized = serializeNote(note);
+    const password = "strong-password-123";
+    const encrypted = await encryptNoteBackup(serialized, password);
+    // Same count round-trips.
+    await expect(decryptNoteBackup({ ...encrypted }, password)).resolves.toBe(serialized);
+    // A tampered count derives a different key and fails closed (no oracle).
+    await expect(
+      decryptNoteBackup({ ...encrypted, iterations: 1000 }, password)
+    ).rejects.toThrow("Failed to decrypt note backup");
+    // Absent count falls back to the default (back-compat), still decrypts.
+    const { iterations: _dropped, ...withoutCount } = encrypted;
+    void _dropped;
+    await expect(
+      decryptNoteBackup({ ...withoutCount, iterations: 0 }, password)
+    ).resolves.toBe(serialized);
+  });
 });

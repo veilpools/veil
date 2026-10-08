@@ -14,6 +14,7 @@ import {
   buildSelfAttestInnerHash,
   buildVeilAllowanceSlot,
   buildVeilBalanceSlot,
+  decodeGatedSwapOutput,
   decodeGatingRevert,
   describeGatedSimRevert,
   encodeGatedHookData,
@@ -401,5 +402,16 @@ describe("live simulation transcripts fixture (I-1, zero gas)", () => {
         Object.keys(override[GATED_VEIL_TOKEN].stateDiff)
       ).toHaveLength(2);
     }
+  });
+});
+
+describe("gated swap output decoding (root-audit F1)", () => {
+  it("decodes uint256 output and rejects zero/malformed", async () => {
+    const { encodeAbiParameters } = await import("viem");
+    const good = encodeAbiParameters([{ type: "uint256" }], [123456789n]);
+    expect(decodeGatedSwapOutput(good)).toBe(123456789n);
+    const zero = encodeAbiParameters([{ type: "uint256" }], [0n]);
+    expect(() => decodeGatedSwapOutput(zero)).toThrow();
+    expect(() => decodeGatedSwapOutput("0x1234" as `0x${string}`)).toThrow();
   });
 });
