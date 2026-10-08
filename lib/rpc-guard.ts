@@ -16,7 +16,11 @@ export const RPC_READ_METHODS: ReadonlySet<string> = new Set([
 
 export const RPC_MAX_BODY_BYTES = 256_000;
 export const RPC_RATE_WINDOW_MS = 60_000;
-export const RPC_RATE_MAX = 120;
+// 600/min: a single trade-page load fires dozens of reads (telemetry,
+// balances, quotes, guards) and dev StrictMode doubles effects. 120/min
+// starved real usage with 429s (incident 2026-10-08). Upstream quota is
+// still bounded; a WAF belongs in front for production.
+export const RPC_RATE_MAX = 600;
 
 /** Chain allowlist: explicit testnet/mainnet only, never silent fallback. */
 export function isAllowedChain(chainParam: string | null): boolean {

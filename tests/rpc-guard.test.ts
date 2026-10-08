@@ -53,10 +53,10 @@ describe("RPC guard (root-audit open-proxy hardening)", () => {
   it("rate-limits per IP with a sliding window", () => {
     const limiter = new RpcRateLimiter();
     const t0 = 1_000_000;
-    for (let i = 0; i < 120; i++) {
-      expect(limiter.check("1.2.3.4", t0 + i * 100)).toBe(false);
+    for (let i = 0; i < 600; i++) {
+      expect(limiter.check("1.2.3.4", t0 + i * 50)).toBe(false);
     }
-    expect(limiter.check("1.2.3.4", t0 + 12_000)).toBe(true);
+    expect(limiter.check("1.2.3.4", t0 + 30_000)).toBe(true);
     // Another IP is unaffected.
     expect(limiter.check("5.6.7.8", t0 + 12_000)).toBe(false);
     // Window slides: after 60s the bucket drains.

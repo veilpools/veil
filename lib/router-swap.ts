@@ -293,8 +293,11 @@ export function isUserRejection(error: unknown): boolean {
 export function mapRouterSwapError(error: unknown, slippagePercent?: number): string {
   if (isUserRejection(error))
     return "Transaction cancelled in your wallet. No transaction was sent.";
-  const name = findErrorName(error);
   const msg = messageOf(error);
+  // Rate guard (HTTP 429 from /api/rpc): reads throttled, nothing sent.
+  if (/Status:\s*429|rate limited/i.test(msg))
+    return "Too many read requests at once — wait a few seconds and try again. Rate guard only, no funds moved.";
+  const name = findErrorName(error);
   const slip =
     slippagePercent !== undefined && Number.isFinite(slippagePercent)
       ? ` Your slippage setting is ${slippagePercent}%.`
