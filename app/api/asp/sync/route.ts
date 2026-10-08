@@ -119,17 +119,32 @@ export async function POST(req: NextRequest) {
 
     const head = await publicClient.getBlockNumber();
 
-    // Root-audit hardening (2026-10-08): unauthenticated POST used to let
-    // anyone force a server-signed updateRoot (gas griefing). Now throttled:
-    // at most one publish per THROTTLE_BLOCKS unless the sentinel override
-    // token (x-asp-publish-token == ASP_PUBLISH_TOKEN) is presented. The UI
-    // calls this after deposits without a token; throttled calls fail closed
-    // with 429 and the withdraw flow tells the user to retry shortly.
-    const THROTTLE_BLOCKS = 150n;
+    // Root-audit hardening (2026-10-08, deep-audit tuned): unauthenticated
+    // POST used to let anyone force a server-signed updateRoot (gas
+    // griefing). Throttle: at most one publish per THROTTLE_BLOCKS (~5 min
+    // at testnet pace) unless (a) the sentinel override token
+    // (x-asp-publish-token == ASP_PUBLISH_TOKEN) is presented, or (b) the
+    // caller names a label that IS in the freshly computed set but CANNOT be
+    // in the stale onchain root (roots only change via this endpoint, so a
+    // computed-but-unpublished label proves genuine inclusion need — and each
+    // such publish costs the attacker a real 0.001 deposit, bounding grief).
+    const THROTTLE_BLOCKS = 1200n;
+    const requestedLabel =
+      typeof body.label === "string" && body.label.length > 0 ? body.label : null;
     const sentinelToken = (process.env.ASP_PUBLISH_TOKEN || "").trim();
     const presented = (req.headers.get("x-asp-publish-token") || "").trim();
     const hasToken = sentinelToken.length > 0 && presented === sentinelToken;
-    if (!hasToken) {
+    let requestedLabelLive = false;
+    if (requestedLabel !== null) {
+      try {
+        const want = BigInt(requestedLabel);
+        requestedLabelLive =
+          aspSet.labels.some((l) => l === want) && aspSet.root !== BigInt(onchainRoot);
+      } catch {
+        requestedLabelLive = false;
+      }
+    }
+    if (!hasToken && !requestedLabelLive) {
       const rootUpdatedLogs = await publicClient.getLogs({
         address: TESTNET_0XBOW.entrypointProxy,
         event: {
@@ -153,7 +168,8 @@ export async function POST(req: NextRequest) {
           {
             success: false,
             throttled: true,
-            error: `ASP root updated recently (block ${lastBlock}); retry after ~${THROTTLE_BLOCKS} blocks or use the sentinel token.`,
+            error:
+              "ASP root was published recently; the publisher is cooling down (~5 minutes). Wait a few minutes and try the withdrawal again, or use the sentinel token.",
           },
           { status: 429 }
         );

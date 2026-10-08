@@ -330,6 +330,8 @@ export default function SwapToShieldPage() {
 
   // Inline flow error (replaces blocking alert() dialogs).
   const [flowError, setFlowError] = useState<string | null>(null);
+  // Deep-audit #25: persistent storage-health flag (see banner below).
+  const [vaultUnavailable, setVaultUnavailable] = useState(false);
 
   function switchTab(tab: "buy_and_shield" | "shielded_swap" | "withdraw" | "vault") {
     setActiveTab(tab);
@@ -340,6 +342,14 @@ export default function SwapToShieldPage() {
   // Load notes from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // Storage health probe (deep-audit #25): a denied vault must be
+      // visible, never a silent empty list.
+      try {
+        localStorage.setItem("__veil_storage_probe__", "1");
+        localStorage.removeItem("__veil_storage_probe__");
+      } catch {
+        setVaultUnavailable(true);
+      }
       try {
         const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (stored) {
@@ -625,9 +635,12 @@ export default function SwapToShieldPage() {
     }
   }
 
-  // Double-submit guard (root-audit F6): React state flips async, so two
-  // clicks in the same tick both enter a handler. This ref is synchronous.
-  const txInFlight = useRef(false);
+  // Double-submit guard (root-audit F6, deep-audit hardening): React state
+  // flips async, so two clicks in the same tick both enter a handler. This
+  // counter is synchronous. Counter (not boolean): concurrent early-returns
+  // inside try still hit finally, and decrement-returns-to-zero stays exact.
+  // Acquire inside the main try of each send handler; every finally decrements.
+  const txInFlight = useRef(0);
 
   // User-facing expiry for signatures the wallet signs (root-audit F2): the
   // Execution Settings "Transaction Deadline" actually drives these instead
@@ -756,9 +769,9 @@ export default function SwapToShieldPage() {
       return;
     }
     let slippagePct: number;
+    // Read-only parse runs unguarded; the guard is acquired inside the main
+    // try below so validation failures can never leak it (deep-audit F1).
     try {
-      if (txInFlight.current) return;
-      txInFlight.current = true;
       slippagePct = parseSlippagePercent(slippage);
     } catch (e: unknown) {
       setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
@@ -824,6 +837,8 @@ export default function SwapToShieldPage() {
     setIsProverOpen(true);
 
     try {
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
       const walletClient = createWalletClient({
         account: connectedAddress as Address,
         chain: appChain,
@@ -1058,6 +1073,14 @@ export default function SwapToShieldPage() {
             "Router safety invariant failed: router ETH balance changed across the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
           );
         }
+        // VEIL leg of the invariant (deep-audit S3): VEIL-in leg must also
+        // leave zero VEIL behind (approval pull + forceApprove pattern).
+        const routerVeilAfter = await readVeilBalance(publicClient, TESTNET_ROUTER_ADDRESS);
+        if (routerVeilAfter !== 0n) {
+          throw new Error(
+            "Router safety invariant failed: router holds VEIL after the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
+          );
+        }
 
         setLiveDenomination(guards.denomination);
         setSelectedNote(note);
@@ -1078,7 +1101,7 @@ export default function SwapToShieldPage() {
       setFlowError(mapRouterSwapError(e, slippagePct));
     } finally {
       setIsExecuting(false);
-      txInFlight.current = false;
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
     }
   }
 
@@ -1126,8 +1149,8 @@ export default function SwapToShieldPage() {
     }
     setIsAttesting(true);
     try {
-      if (txInFlight.current) return;
-      txInFlight.current = true;
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
       const live = await readAttestationStatus(publicClient, connectedAddress);
       setAttestation(live);
       if (live.attested) {
@@ -1169,7 +1192,7 @@ export default function SwapToShieldPage() {
       setFlowError(mapSelfAttestError(e));
     } finally {
       setIsAttesting(false);
-      txInFlight.current = false;
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
     }
   }
 
@@ -1289,8 +1312,8 @@ export default function SwapToShieldPage() {
     }
     setIsGatedSwapping(true);
     try {
-      if (txInFlight.current) return;
-      txInFlight.current = true;
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
       const walletClient = createWalletClient({
         account: connectedAddress,
         chain: appChain,
@@ -1366,7 +1389,7 @@ export default function SwapToShieldPage() {
       setFlowError(mapGatedSwapError(e));
     } finally {
       setIsGatedSwapping(false);
-      txInFlight.current = false;
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
     }
   }
 
@@ -1459,8 +1482,8 @@ export default function SwapToShieldPage() {
     setIsProverOpen(true);
 
     try {
-      if (txInFlight.current) return;
-      txInFlight.current = true;
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
       if (useTestnetBow) {
         await new Promise((r) => setTimeout(r, 400));
         const testnetClient = createTestnetBowPublicClient();
@@ -1495,6 +1518,10 @@ export default function SwapToShieldPage() {
         });
 
         const depositDenomination = 1000000000000000n; // 0.001 ETH
+        // Deep-audit note: denomination is intentionally pinned to
+        // TESTNET_0XBOW_META.denominationWei (no onchain per-asset minimum is
+        // exposed for native-ETH pools via assetConfig). A pool reconfig
+        // fails closed downstream (commitment/value checks), never silently.
         const depositHash = await walletClient.writeContract({
           address: TESTNET_0XBOW.entrypointProxy,
           abi: parseAbi(["function deposit(uint256 _precommitmentHash) payable returns (uint256)"]),
@@ -1567,7 +1594,7 @@ export default function SwapToShieldPage() {
         fetch("/api/asp/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
+          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
         }).catch((err) => console.warn("Background ASP sync:", err));
 
         setProverSteps((prev) => [
@@ -1693,7 +1720,7 @@ export default function SwapToShieldPage() {
       );
     } finally {
       setIsExecuting(false);
-      txInFlight.current = false;
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
     }
   }
 
@@ -1737,7 +1764,14 @@ export default function SwapToShieldPage() {
       return;
     }
 
-    const noteToSwap = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
+    const noteToSwap = notes.find((n) => n.nullifier === selectedNoteNullifier);
+    if (!noteToSwap) {
+      // Deep-audit #24: never silently substitute another note — the sync
+      // effect normally guarantees a selection, but a stale nullifier plus a
+      // fast click must fail closed, not spend the wrong note.
+      setFlowError("Select a shielded note first. No transaction was sent.");
+      return;
+    }
     // Router interface gate: shieldedSwap spends via
     // IShieldedPool.withdraw(bytes,bytes32,bytes32,address,uint256), which
     // only legacy Veil pools expose. 0xbow notes live in 0xbow pools
@@ -1778,9 +1812,9 @@ export default function SwapToShieldPage() {
     }
 
     let slippagePct: number;
+    // Read-only parse runs unguarded; the guard is acquired inside the main
+    // try below so validation failures can never leak it (deep-audit F1).
     try {
-      if (txInFlight.current) return;
-      txInFlight.current = true;
       slippagePct = parseSlippagePercent(slippage);
     } catch (e: unknown) {
       setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
@@ -1818,6 +1852,8 @@ export default function SwapToShieldPage() {
     setIsProverOpen(true);
 
     try {
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
       const guards = await readSwapGuards(publicClient, route.sourcePool);
       if (guards.paused) {
         throw new Error("Shielded source pool deposits are paused. No transaction was sent.");
@@ -2001,7 +2037,7 @@ export default function SwapToShieldPage() {
       setFlowError(mapShieldedSwapError(e, slippagePct));
     } finally {
       setIsShieldedSwapping(false);
-      txInFlight.current = false;
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
       setIsShieldedProving(false);
     }
   }
@@ -2028,7 +2064,11 @@ export default function SwapToShieldPage() {
       return;
     }
 
-    const noteToWithdraw = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
+    const noteToWithdraw = notes.find((n) => n.nullifier === selectedNoteNullifier);
+    if (!noteToWithdraw) {
+      setFlowError("Select a shielded note first. No transaction was sent.");
+      return;
+    }
 
     // Route by note kind: 0xbow notes take the Groth16 testnet path, legacy
     // keccak notes take the legacy path. Never mix the two.
@@ -2069,6 +2109,8 @@ export default function SwapToShieldPage() {
       setProverSteps(bowSteps);
       setIsProverOpen(true);
       try {
+        if (txInFlight.current > 0) return;
+        txInFlight.current += 1;
         if (!isAddress(cleanRecipient)) throw new Error("Recipient address is required");
 
         if (withdrawPath !== "0xbow" || !isBowNote(noteToWithdraw)) {
@@ -2088,6 +2130,19 @@ export default function SwapToShieldPage() {
         const secret = BigInt(bowNote.secret);
         const commitmentHash = BigInt(bowNote.commitmentHash);
 
+        // Scope live re-check (deep-audit S10): the note's scope must still
+        // match the pool's, or minutes of proving + gas burn on a stale proof.
+        const liveScope = await testnetClient.readContract({
+          address: TESTNET_0XBOW.pool,
+          abi: BOW_POOL_SCOPE_ABI,
+          functionName: "SCOPE",
+        });
+        if (BigInt(liveScope) !== scope) {
+          throw new Error(
+            "Pool scope changed onchain since this note was created. Withdraw is unavailable for this note. No transaction was sent."
+          );
+        }
+
         setProverSteps((prev) => [
           { ...prev[0], status: "completed" },
           { ...prev[1], status: "running" },
@@ -2099,12 +2154,13 @@ export default function SwapToShieldPage() {
         await fetchPinnedBowArtifact("withdraw.wasm");
         await fetchPinnedBowArtifact("withdraw.zkey");
 
-        // Sync ASP root first if needed
+        // Sync ASP root first if needed (label included so the server can
+        // tell genuine inclusion need apart from redundant publishes).
         try {
           await fetch("/api/asp/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
+            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
           });
         } catch {}
 
@@ -2147,7 +2203,7 @@ export default function SwapToShieldPage() {
           const resync = await fetch("/api/asp/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID }),
+            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
           });
           try {
             const syncJson = (await resync.json()) as { throttled?: boolean; error?: string };
@@ -2282,6 +2338,21 @@ export default function SwapToShieldPage() {
         const receipt = await waitForTransactionReceipt(testnetClient, { hash: relayHash });
         if (receipt.status !== "success") throw new Error("Entrypoint relay transaction reverted onchain.");
 
+        // Post-receipt spent assert (deep-audit): the nullifier must read as
+        // spent before the note leaves the vault — never on receipt alone.
+        const spentNullifier = BigInt(withdrawalProof.publicSignals[1]);
+        const spentOnchain = await testnetClient.readContract({
+          address: TESTNET_0XBOW.pool,
+          abi: parseAbi(["function nullifierHashes(uint256) view returns (bool)"]),
+          functionName: "nullifierHashes",
+          args: [spentNullifier],
+        });
+        if (!spentOnchain) {
+          throw new Error(
+            "Relay confirmed but the nullifier does not read as spent onchain. The note was NOT removed — verify on the explorer before retrying."
+          );
+        }
+
         // Remove spent note from local storage
         const remaining = notes.filter((n) => n.nullifier !== bowNote.nullifier);
         setNotes(remaining);
@@ -2291,7 +2362,11 @@ export default function SwapToShieldPage() {
           setSelectedNoteNullifier("");
         }
         if (typeof window !== "undefined") {
-          localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(remaining));
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(remaining));
+          } catch (e: unknown) {
+            console.error("Vault removal write failed:", e);
+          }
         }
 
         // Refresh token balances
@@ -2315,8 +2390,7 @@ export default function SwapToShieldPage() {
         setFlowError(e instanceof Error ? e.message : "0xbow testnet withdrawal failed. Try again.");
       } finally {
         setIsExecuting(false);
-        txInFlight.current = false;
-      txInFlight.current = false;
+        txInFlight.current = Math.max(0, txInFlight.current - 1);
       }
       return;
     }
@@ -2382,8 +2456,8 @@ export default function SwapToShieldPage() {
         setFlowError(e instanceof Error ? e.message : "0xbow mainnet withdrawal failed. Try again.");
       } finally {
         setIsExecuting(false);
-        txInFlight.current = false;
-      txInFlight.current = false;
+        // No guard acquired on this fail-closed stub path: decrementing here
+        // would release another handler's in-flight guard. Intentionally absent.
       }
       return;
     }
@@ -2421,8 +2495,8 @@ export default function SwapToShieldPage() {
     setIsProverOpen(true);
 
     try {
-      if (txInFlight.current) return;
-      txInFlight.current = true;
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
       await new Promise((r) => setTimeout(r, 700));
       setProverSteps((prev) => [
         { ...prev[0], status: "completed" },
@@ -2516,6 +2590,30 @@ export default function SwapToShieldPage() {
       const receipt = await waitForTransactionReceipt(publicClient, { hash: withdrawHash });
       if (receipt.status !== "success") throw new Error("Withdraw transaction reverted onchain.");
 
+      // Post-receipt event assert (deep-audit): the Withdraw event for our
+      // nullifier + recipient must exist in the receipt block before the
+      // note leaves the vault — never on receipt status alone.
+      const wdLogs = await publicClient.getContractEvents({
+        address: withdrawPool,
+        abi: parseAbi([
+          "event Withdraw(bytes32 indexed nullifierHash, address indexed recipient, address indexed relayer, uint256 fee)",
+        ]),
+        eventName: "Withdraw",
+        args: { nullifierHash: legacyNote.nullifierHash as `0x${string}` },
+        fromBlock: receipt.blockNumber,
+        toBlock: receipt.blockNumber,
+      });
+      const wdMatch = wdLogs.some(
+        (l) =>
+          (l.args.recipient as string | undefined)?.toLowerCase() ===
+          (cleanRecipient as string).toLowerCase()
+      );
+      if (!wdMatch) {
+        throw new Error(
+          "Withdraw confirmed but no matching Withdraw event for this note and recipient was found. The note was NOT removed — verify on the explorer before retrying."
+        );
+      }
+
       const remaining = notes.filter((n) => n.nullifier !== noteToWithdraw.nullifier);
       setNotes(remaining);
       if (remaining.length > 0) {
@@ -2524,7 +2622,11 @@ export default function SwapToShieldPage() {
         setSelectedNoteNullifier("");
       }
       if (typeof window !== "undefined") {
-        localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(remaining));
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(remaining));
+        } catch (e: unknown) {
+          console.error("Vault removal write failed:", e);
+        }
       }
 
       setProverSteps((prev) => [
@@ -2546,7 +2648,7 @@ export default function SwapToShieldPage() {
       );
     } finally {
       setIsExecuting(false);
-      txInFlight.current = false;
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
     }
   }
 
@@ -2821,6 +2923,32 @@ export default function SwapToShieldPage() {
           </div>
 
           {/* Inline flow error — non-blocking, screen-reader announced */}
+          {/* Persistent vault-unavailable warning (deep-audit #25): browser
+              storage denied means notes cannot persist — deposits would strand
+              funds on a reload. This never auto-dismisses. */}
+          {vaultUnavailable && (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "var(--space-2)",
+                padding: "10px 12px",
+                borderRadius: "var(--radius-sm)",
+                backgroundColor: "var(--color-danger-bg)",
+                border: "1px solid var(--color-danger-border)",
+                color: "var(--color-danger-ink)",
+                fontSize: "var(--text-caption)",
+                fontFamily: "var(--font-body)",
+                lineHeight: 1.5,
+              }}
+            >
+              <AlertTriangle size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <span style={{ flex: 1, overflowWrap: "anywhere" }}>
+                Browser storage is unavailable — shielded notes cannot be saved on this device. Do not deposit: a reload would strand funds. Enable site storage and reload.
+              </span>
+            </div>
+          )}
           {flowError && (
             <div
               role="alert"
@@ -3137,7 +3265,9 @@ export default function SwapToShieldPage() {
         commitment={proverCommitment}
         committed={proverCommitted}
         onDownloadBackup={() => {
-          setBackupNote(selectedNote);
+          // Deep-audit #20: back up the vault selection the user is looking
+          // at, not a stale last-deposited note.
+          setBackupNote(activeNoteItem ?? selectedNote);
           setIsBackupOpen(true);
         }}
       />

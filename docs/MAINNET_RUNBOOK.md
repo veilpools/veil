@@ -82,6 +82,6 @@ VeilHook.setPoolGating(poolKey, true, 600); // 600 seconds (10 minutes) launch w
 * **Deposit Pause:**
   In the event of market anomalies or vulnerabilities, the guardian can call `ShieldedPool.pauseDeposits()`.
 * **Non-Blocking Withdrawal Sovereignty:**
-  Withdrawals (`withdraw`) **can never be paused or blocked by anyone, including the team or guardian**. User funds remain fully withdrawable at all times using their private cryptographic secret notes.
+  Withdrawals (`withdraw`) have **no pause or guardian switch in code**. Bounds (deep-audit 2026-10-08): legacy withdrawals additionally require the provisional verifier to pass and a known Merkle root (100-entry history); never renounce the guardian while deposits are paused (unpausing becomes impossible).
 * **Renounce Guardian:**
   Once the F5 phase runs reliably without incidents, the guardian can call `ShieldedPool.renounceGuardian()` to permanently lock decentralized governance.

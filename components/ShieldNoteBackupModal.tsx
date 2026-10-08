@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Lock, Download, Copy, Check, X, ShieldAlert } from "lucide-react";
 import { encryptNoteBackup, decryptNoteBackup, type EncryptedNoteBackup } from "../lib/crypto-backup";
 import { serializeAnyNote, deserializeAnyNote, type AnyShieldedNote } from "../lib/note";
@@ -21,6 +21,18 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
   const [importJson, setImportJson] = useState("");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Deep-audit #19: stale ciphertext from a previous note must never display
+  // for a newly opened note. Reset all export/import state on note/open change.
+  const noteKey = note === null ? "none" : `${note.nullifier}`;
+  useEffect(() => {
+    setEncryptedPayload(null);
+    setPassword("");
+    setImportJson("");
+    setCopied(false);
+    setError(note === null ? "No note selected for backup." : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteKey, isOpen]);
 
   async function handleEncrypt() {
     if (!note) return;
@@ -252,7 +264,9 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
 
             <button
               onClick={handleEncrypt}
-              disabled={password.length < 8}
+              disabled={password.length < 8 || !note}
+              aria-disabled={password.length < 8 || !note}
+              title={!note ? "Select or create a note first" : "Generate encrypted backup"}
               className="lp-btn lp-btn--accent"
               style={{
                 width: "100%",
@@ -267,8 +281,8 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
                 fontFamily: "var(--font-body)",
                 fontSize: "var(--text-body-sm)",
                 fontWeight: 600,
-                cursor: password.length < 8 ? "not-allowed" : "pointer",
-                opacity: password.length < 8 ? 0.4 : 1,
+                cursor: password.length < 8 || !note ? "not-allowed" : "pointer",
+                opacity: password.length < 8 || !note ? 0.4 : 1,
               }}
             >
               Generate Encrypted Backup (AES-GCM)

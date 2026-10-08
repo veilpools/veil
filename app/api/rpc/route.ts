@@ -10,7 +10,8 @@ import {
 // Cloudflare Anycast edge IP for Robinhood Chain RPC (bypasses local ISP DNS poisoning & Cloudflare block)
 const ROBINHOOD_RPC_IP = "172.66.147.70";
 
-// Root-audit hardening (2026-10-08): this route used to forward ANY JSON-RPC
+// Root-audit hardening (2026-10-08, deep-audit tuned to 600/min after a
+// same-day 429 incident starved the trade page): this route used to forward ANY JSON-RPC
 // body verbatim (open-proxy abuse: getLogs range bombs, quota drain). Guards
 // live in lib/rpc-guard.ts (unit-tested): explicit chain allowlist (no silent
 // mainnet fallback), read-only method allowlist (no send/trace/debug/txpool),
