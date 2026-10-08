@@ -152,6 +152,19 @@ describe("router swapToShield builders (testnet e2e task 2)", () => {
     expect(() => parseSlippagePercent("100")).toThrow();
   });
 
+  it("maps raw OZ ERC20 selectors from undecodable viem sim reverts", () => {
+    expect(
+      mapRouterSwapError(
+        new Error('The contract function "swapToShield" reverted with the following signature: 0xfb8f41b2')
+      )
+    ).toMatch(/Approve VEIL/);
+    expect(
+      mapRouterSwapError(
+        new Error('Unable to decode signature "0xe450d38c" as it was not found')
+      )
+    ).toMatch(/no onchain faucet/);
+  });
+
   it("surfaces contract revert reasons honestly", () => {
     const slip = mapRouterSwapError({ errorName: "SlippageExceeded" }, 0.5);
     expect(slip).toMatch(/SlippageExceeded/);

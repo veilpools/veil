@@ -299,6 +299,14 @@ export function mapRouterSwapError(error: unknown, slippagePercent?: number): st
     slippagePercent !== undefined && Number.isFinite(slippagePercent)
       ? ` Your slippage setting is ${slippagePercent}%.`
       : "";
+  // Raw OZ ERC20 selectors: viem wraps reverts it cannot decode as
+  // 'Unable to decode signature "0x…"', hiding the error name. Match the
+  // selectors directly so users get guidance instead of raw hex.
+  // 0xfb8f41b2 = ERC20InsufficientAllowance, 0xe450d38c = ERC20InsufficientBalance.
+  if (/0xfb8f41b2/i.test(msg))
+    return "The router is not approved to spend this VEIL yet. Approve VEIL for the router first, then the live quote refreshes and you can execute.";
+  if (/0xe450d38c/i.test(msg))
+    return `Insufficient test VEIL balance. The router route needs test VEIL (${TESTNET_VEIL_TOKEN}) already in your wallet — the proven script ran on a pre-funded operator balance and there is no onchain faucet. Fund test VEIL and try again.`;
   if (
     name === "SlippageExceeded" ||
     /SlippageExceeded/i.test(msg)
