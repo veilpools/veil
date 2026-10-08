@@ -608,7 +608,20 @@ export default function SwapToShieldPage() {
     setNotes(updated);
     setSelectedNoteNullifier(newNote.nullifier);
     if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(updated));
+      // Root-audit hardening: a silent storage failure here used to strand
+      // funds with a success-looking UI. Verify the write by reading back.
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(updated));
+        const check = localStorage.getItem(LOCAL_STORAGE_KEY) || "";
+        if (!check.includes(newNote.nullifier.slice(2, 10))) {
+          throw new Error("vault write verification failed");
+        }
+      } catch (e: unknown) {
+        throw new Error(
+          "Browser vault storage failed — your note was NOT saved. Copy the commitment from the prover modal and retry. " +
+            (e instanceof Error ? e.message : "Storage unavailable.")
+        );
+      }
     }
   }
 
@@ -851,7 +864,7 @@ export default function SwapToShieldPage() {
         const note = createShieldedNote(destPool.denomination, TESTNET_VEIL_TOKEN);
         setProverCommitment(note.commitment);
         setProverSteps((prev) => [
-          prev[0],
+          { ...prev[0], status: "completed" },
           { ...prev[1], status: "completed" },
           { ...prev[2], status: "running" },
           prev[3],
@@ -1959,7 +1972,18 @@ export default function SwapToShieldPage() {
       setSelectedNote(secrets.newNote);
       setSelectedNoteNullifier(secrets.newNote.nullifier);
       if (typeof window !== "undefined") {
-        localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(updated));
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(updated));
+          const check = localStorage.getItem(LOCAL_STORAGE_KEY) || "";
+          if (!check.includes(secrets.newNote.nullifier.slice(2, 10))) {
+            throw new Error("vault write verification failed");
+          }
+        } catch (e: unknown) {
+          throw new Error(
+            "Browser vault storage failed — your new note was NOT saved. Copy the commitment from the prover modal and retry. " +
+              (e instanceof Error ? e.message : "Storage unavailable.")
+          );
+        }
       }
       clearPendingNoteByTx(swapHash);
       setProverCommitted(true);
