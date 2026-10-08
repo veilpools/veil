@@ -324,6 +324,37 @@ export function getActiveEvmProvider(): EvmProvider | null {
   return asEvm(w.ethereum);
 }
 
+/**
+ * Mid-flow drift guard (testnet-final hardening): re-read chain + selected
+ * account immediately before a send and compare against the values captured
+ * at handler entry. A wallet account/chain switch mid-prover (or a second
+ * wallet signing) aborts honestly instead of sending from the wrong
+ * account or on the wrong chain. Throws; callers surface via flowError.
+ */
+export async function revalidateWallet(
+  provider: EvmProvider,
+  expectedAddress: string,
+  expectedChainId: number | null
+): Promise<{ chainId: number; account: string }> {
+  const [chainHex, accounts] = await Promise.all([
+    provider.request({ method: "eth_chainId" }),
+    provider.request({ method: "eth_accounts" }),
+  ]);
+  const chainId = Number.parseInt(String(chainHex), 16);
+  const account = Array.isArray(accounts) ? String(accounts[0] ?? "") : "";
+  if (!account || account.toLowerCase() !== expectedAddress.toLowerCase()) {
+    throw new Error(
+      "Wallet account changed mid-flow. Review the connected account and retry. No transaction was sent."
+    );
+  }
+  if (expectedChainId !== null && chainId !== expectedChainId) {
+    throw new Error(
+      "Wallet chain changed mid-flow. Switch back to the expected network and retry. No transaction was sent."
+    );
+  }
+  return { chainId, account };
+}
+
 export function walletLabel(e: unknown): string {
   if (e instanceof Error) {
     if (e.message === "wallet_missing") return "Wallet not detected. Install extension or choose another.";

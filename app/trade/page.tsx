@@ -48,7 +48,7 @@ import {
   type Address,
 } from "viem";
 import { appChain, APP_CHAIN_ID, explorerTxUrl } from "../../lib/chains";
-import { loadWallet, getActiveEvmProvider, subscribeWalletChange } from "../../lib/wallets";
+import { loadWallet, getActiveEvmProvider, subscribeWalletChange, revalidateWallet } from "../../lib/wallets";
 import { fetchAllTokenBalances, publicClient } from "../../lib/balances";
 import { waitForTransactionReceipt } from "viem/actions";
 import { buildWithdrawArgs } from "../../lib/withdraw-args";
@@ -899,6 +899,9 @@ export default function SwapToShieldPage() {
           address: TESTNET_ROUTER_ADDRESS,
         });
 
+        // Drift re-check (testnet-final): abort if the wallet account or
+        // chain changed since handler entry. No transaction was sent.
+        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
         const swapHash = await walletClient.writeContract({
           address: TESTNET_ROUTER_ADDRESS,
           abi: CONTRACT_ABIS.VeilShieldRouter,
@@ -984,12 +987,13 @@ export default function SwapToShieldPage() {
 
         const allowance = await readVeilAllowance(publicClient, connectedAddress as Address);
         if (allowance < amountIn) {
+          await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
           const approveHash = await walletClient.writeContract({
-            address: TESTNET_VEIL_TOKEN,
-            abi: VEIL_ERC20_ABI,
-            functionName: "approve",
-            args: [TESTNET_ROUTER_ADDRESS, amountIn],
-          });
+              address: TESTNET_VEIL_TOKEN,
+              abi: VEIL_ERC20_ABI,
+              functionName: "approve",
+              args: [TESTNET_ROUTER_ADDRESS, amountIn],
+            });
           const approveReceipt = await waitForTransactionReceipt(publicClient, {
             hash: approveHash,
           });
@@ -1035,6 +1039,7 @@ export default function SwapToShieldPage() {
           zeroForOne: false,
           shieldedPool: TESTNET_LEGACY_ETH_POOL,
         });
+        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
         const swapHash = await walletClient.writeContract({
           address: TESTNET_ROUTER_ADDRESS,
           abi: CONTRACT_ABIS.VeilShieldRouter,
@@ -1173,6 +1178,7 @@ export default function SwapToShieldPage() {
         transport: custom(activeProvider),
       });
       const signature = await walletClient.signMessage({ message: { raw: inner } });
+      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
       const attestHash = await walletClient.writeContract({
         address: GATED_REGISTRY_ADDRESS,
         abi: CONTRACT_ABIS.VeilAttestationRegistry,
@@ -1321,12 +1327,13 @@ export default function SwapToShieldPage() {
       });
       const allowance = await readVeilAllowanceGated(publicClient, connectedAddress);
       if (allowance < amountIn) {
-        const approveHash = await walletClient.writeContract({
-          address: GATED_VEIL_TOKEN,
-          abi: VEIL_ERC20_MIN_ABI,
-          functionName: "approve",
-          args: [GATED_SWAPPER_ADDRESS, amountIn],
-        });
+          await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+          const approveHash = await walletClient.writeContract({
+              address: GATED_VEIL_TOKEN,
+              abi: VEIL_ERC20_MIN_ABI,
+              functionName: "approve",
+              args: [GATED_SWAPPER_ADDRESS, amountIn],
+            });
         const approveReceipt = await waitForTransactionReceipt(publicClient, {
           hash: approveHash,
         });
@@ -1372,6 +1379,7 @@ export default function SwapToShieldPage() {
         hookData,
         minOut: calculateSlippageBound(simOut, simSlippage),
       });
+      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
       const swapHash = await walletClient.writeContract({
         address: GATED_SWAPPER_ADDRESS,
         abi: GATED_SWAPPER_ABI,
@@ -1522,6 +1530,7 @@ export default function SwapToShieldPage() {
         // TESTNET_0XBOW_META.denominationWei (no onchain per-asset minimum is
         // exposed for native-ETH pools via assetConfig). A pool reconfig
         // fails closed downstream (commitment/value checks), never silently.
+        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
         const depositHash = await walletClient.writeContract({
           address: TESTNET_0XBOW.entrypointProxy,
           abi: parseAbi(["function deposit(uint256 _precommitmentHash) payable returns (uint256)"]),
@@ -1660,6 +1669,7 @@ export default function SwapToShieldPage() {
       });
 
       // Deposit note commitment to Robinhood Chain ShieldedPool_ETH
+      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
       const depositHash = await walletClient.writeContract({
         address: SHIELDED_POOL_ETH,
         abi: POOL_DEPOSIT_ABI,
@@ -1969,6 +1979,7 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
+      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
       const swapHash = await walletClient.writeContract({
         address: SHIELDED_SWAP_ROUTER,
         abi: CONTRACT_ABIS.VeilShieldRouter,
@@ -2326,6 +2337,7 @@ export default function SwapToShieldPage() {
           transport: custom(activeProvider),
         });
 
+        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
         const relayHash = await walletClient.writeContract({
           address: TESTNET_0XBOW.entrypointProxy,
           abi: BOW_ENTRYPOINT_RELAY_ABI,
@@ -2571,6 +2583,7 @@ export default function SwapToShieldPage() {
         transport: custom(activeProvider),
       });
 
+      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
       const withdrawHash = await walletClient.writeContract({
         address: withdrawPool,
         abi: POOL_WITHDRAW_ABI,
