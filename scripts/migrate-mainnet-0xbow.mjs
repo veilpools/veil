@@ -1,6 +1,9 @@
 // MAINNET 4663. Deploys the audited 0xbow v1.2.1 suite on mainnet using the
 // EXACT contracts proven on testnet: verifiers, entrypoint (proxy + init in
 // constructor), ETH pool + VEIL pool, ASP sentinel, maxRelayFeeBPS=100.
+// Plus full testnet parity for the legacy path: fixed VeilShieldRouter (R1
+// native-settle fix) and legacy ShieldedPool VEIL 0.5 / 2 (Mock verifier,
+// mirroring the mainnet ETH pool config — provisional, like testnet).
 // Quinn: needs ~0.0003 ETH gas + 0.0011 for the proof cycle. Fund first.
 // Usage: node scripts/migrate-mainnet-0xbow.mjs --execute
 // Without --execute: dry-run validation only (zero gas).
@@ -223,6 +226,86 @@ if (!EXECUTE) {
   }
 }
 
+// ---- Legacy-path parity with testnet FINAL (router fixed + VEIL pools) ----
+const MAINNET_ASSOC_ROOT =
+  "0x2188824287183927522224640574525727508854836440041603434369820418";
+const MAINNET_MOCK_VERIFIER =
+  process.env.NEXT_PUBLIC_SHIELDED_VERIFIER || "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda";
+let routerFixed = `0x${"55".repeat(20)}`;
+let veilPool05 = `0x${"66".repeat(20)}`;
+let veilPool2 = `0x${"77".repeat(20)}`;
+if (!EXECUTE) {
+  console.log("[dry-run] would deploy VeilShieldRouter (fixed R1 settle) + ShieldedPool VEIL 0.5/2");
+} else {
+  const {
+    VEIL_SHIELD_ROUTER_ABI,
+    VEIL_SHIELD_ROUTER_BYTECODE,
+    SHIELDED_POOL_ABI,
+    SHIELDED_POOL_BYTECODE,
+  } = await import("../lib/veil-artifact.mjs");
+  if (outputExists(checkpoint.routerFixed) && (await codeExists(checkpoint.routerFixed))) {
+    routerFixed = checkpoint.routerFixed;
+    console.log("router fixed (resumed):", routerFixed);
+  } else {
+    const hh = await wallet.deployContract({
+      abi: VEIL_SHIELD_ROUTER_ABI,
+      bytecode: VEIL_SHIELD_ROUTER_BYTECODE,
+      args: [V4_PM_MAINNET],
+    });
+    const rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+    if (rrc.status !== "success" || !rrc.contractAddress) throw new Error("router fixed deploy reverted");
+    routerFixed = rrc.contractAddress;
+    checkpoint.routerFixed = routerFixed;
+    saveCheckpoint();
+    console.log("router fixed:", routerFixed);
+  }
+  const pm = await publicClient.readContract({
+    address: routerFixed,
+    abi: VEIL_SHIELD_ROUTER_ABI,
+    functionName: "poolManager",
+  });
+  if (pm.toLowerCase() !== V4_PM_MAINNET.toLowerCase()) throw new Error("router poolManager mismatch");
+  const poolVerifyAbi = [
+    { type: "function", name: "denomination", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+    { type: "function", name: "asset", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+    { type: "function", name: "depositsPaused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+    { type: "function", name: "poolCap", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+    { type: "function", name: "verifier", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  ];
+  const deployVeilPool = async (key, denom, cap) => {
+    if (outputExists(checkpoint[key]) && (await codeExists(checkpoint[key]))) {
+      console.log(`${key} (resumed):`, checkpoint[key]);
+      return checkpoint[key];
+    }
+    const hh = await wallet.deployContract({
+      abi: SHIELDED_POOL_ABI,
+      bytecode: SHIELDED_POOL_BYTECODE,
+      args: [VEIL, MAINNET_MOCK_VERIFIER, denom, cap, MAINNET_ASSOC_ROOT, account.address],
+    });
+    const rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+    if (rrc.status !== "success" || !rrc.contractAddress) throw new Error(`${key} deploy reverted`);
+    const addr = rrc.contractAddress;
+    const [d, a, p, c, v] = await Promise.all([
+      publicClient.readContract({ address: addr, abi: poolVerifyAbi, functionName: "denomination" }),
+      publicClient.readContract({ address: addr, abi: poolVerifyAbi, functionName: "asset" }),
+      publicClient.readContract({ address: addr, abi: poolVerifyAbi, functionName: "depositsPaused" }),
+      publicClient.readContract({ address: addr, abi: poolVerifyAbi, functionName: "poolCap" }),
+      publicClient.readContract({ address: addr, abi: poolVerifyAbi, functionName: "verifier" }),
+    ]);
+    if (d !== denom) throw new Error(`${key} denomination mismatch after deploy`);
+    if (a.toLowerCase() !== VEIL.toLowerCase()) throw new Error(`${key} asset mismatch after deploy`);
+    if (p !== false) throw new Error(`${key} deposits must be unpaused after deploy`);
+    if (c !== cap) throw new Error(`${key} cap mismatch after deploy`);
+    if (v.toLowerCase() !== MAINNET_MOCK_VERIFIER.toLowerCase()) throw new Error(`${key} verifier mismatch after deploy`);
+    checkpoint[key] = addr;
+    saveCheckpoint();
+    console.log(`${key}:`, addr);
+    return addr;
+  };
+  veilPool05 = await deployVeilPool("veilPool05", 500000000000000000n, 5000000000000000000000n);
+  veilPool2 = await deployVeilPool("veilPool2", 2000000000000000000n, 20000000000000000000000n);
+}
+
 if (!EXECUTE) {
   console.log("DRY-RUN COMPLETE — no gas spent. Re-run with --execute once funded.");
   process.exit(0);
@@ -232,6 +315,7 @@ const out = {
   withdrawalVerifier: wdr, commitmentVerifier: cmt,
   poseidonT3: libs.PoseidonT3, poseidonT4: libs.PoseidonT4,
   registryV2, hookV2, hookSalt, treasury: TREASURY_MAINNET,
+  routerFixed, veilPool05, veilPool2,
   aspRoot: aspRoot.toString(), owner: account.address, maxRelayFeeBPS: 100,
 };
 writeFileSync(join(root, "deployments", "privacy-pools-mainnet-latest.json"), JSON.stringify(out, null, 2));
@@ -247,6 +331,9 @@ for (const f of [".env.local", ".env.mainnet.local"]) {
   set("NEXT_PUBLIC_0XBOW_POOL_VEIL", veilPool);
   set("NEXT_PUBLIC_VEIL_ATTESTATION_REGISTRY", registryV2);
   set("NEXT_PUBLIC_VEIL_HOOK", hookV2);
+  set("NEXT_PUBLIC_VEIL_SHIELD_ROUTER", routerFixed);
+  set("NEXT_PUBLIC_VEIL_POOL_05", veilPool05);
+  set("NEXT_PUBLIC_VEIL_POOL_2", veilPool2);
   writeFileSync(f, txt);
   console.log("env updated:", f);
 }
