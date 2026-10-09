@@ -126,7 +126,20 @@ describe("zk router flow wiring (full-ZK UI)", () => {
         }
         return { result: 424242n };
       },
+      // Send-capable mock: any write/send attempt is recorded so the
+      // lib-never-sends assertion below is falsifiable (not trivially true).
+      async writeContract() {
+        writes += 1;
+        throw new Error("lib must never send: writeContract called");
+      },
+      async sendTransaction() {
+        writes += 1;
+        throw new Error("lib must never send: sendTransaction called");
+      },
     };
+    // The mock must expose send paths, otherwise writes === 0 proves nothing.
+    expect("writeContract" in mockClient).toBe(true);
+    expect("sendTransaction" in mockClient).toBe(true);
     const base = {
       withdrawal: WITHDRAWAL,
       proof: PROOF,
@@ -255,5 +268,78 @@ describe("zk router flow wiring (full-ZK UI)", () => {
     // Wallet drift guard before the send.
     const zkSection = src.slice(src.indexOf("executeFullZkFlow") - 4000);
     expect(zkSection).toContain("revalidateWallet");
+  });
+
+  it("rejects a stale entrypoint processooor on every builder path (no dead builders)", async () => {
+    const mod = await import("../lib/zk-router");
+    const badBase = {
+      withdrawal: {
+        processooor: "0x000000000000000000000000000000000000dead" as `0x${string}`,
+        data: "0x1234" as `0x${string}`,
+      },
+      proof: PROOF,
+      scope: 123n,
+      withdrawAsset: ETH_ZERO,
+      depositAsset: VEIL,
+      depositValue: parseEther("0.5"),
+      precommitment: 999n,
+      zeroForOne: true,
+    };
+    // Pure builder must fail closed on the entrypoint check.
+    expect(() =>
+      mod.buildFullZkFlowArgs({ ...badBase, quotedSwapOut: parseEther("1.35"), slippagePercent: 0.5 })
+    ).toThrow(/processooor|entrypoint/i);
+    // Quote path (resolveBase) must enforce the same check, otherwise the
+    // shipped UI quote would skip validation the tests pin.
+    const hidden = parseEther("1.35");
+    const mockClient = {
+      async simulateContract() {
+        return { result: 1n };
+      },
+    };
+    await expect(
+      mod.quoteAndBuildFullZkFlow(mockClient as never, {
+        account: ACCOUNT,
+        base: badBase,
+        slippagePercent: 0.5,
+      })
+    ).rejects.toThrow(/processooor|entrypoint/i);
+    void hidden;
+  });
+
+  it("pins the shipped UI path: builders + pre-send sim + drift guard direction", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const src = readFileSync(join(process.cwd(), "app/trade/page.tsx"), "utf8");
+    // I2: page must route through the ordering-tested builders (no dead builders).
+    expect(src).toContain("quoteAndBuildFullZkFlow");
+    expect(src).toContain("buildFullZkFlowArgs");
+    expect(src).toContain("simulateFullZkFlow");
+    // I1: pre-send simulation runs AFTER revalidateWallet and BEFORE writeContract.
+    const execIdx = src.indexOf("handleZkFullFlow");
+    const execSrc = src.slice(execIdx);
+    const revalidateIdx = execSrc.indexOf("revalidateWallet");
+    const simIdx = execSrc.indexOf("simulateFullZkFlow");
+    const sendIdx = execSrc.indexOf("writeContract");
+    expect(revalidateIdx).toBeGreaterThan(-1);
+    expect(simIdx).toBeGreaterThan(revalidateIdx);
+    expect(sendIdx).toBeGreaterThan(simIdx);
+    // C1: the live-drifting ETH->VEIL deposit leg is re-checked; VEIL->ETH is
+    // not permanently blocked. Both directions must quote.
+    expect(src).toContain("zkIsEthIn && veilMinimum !== zkBundle.depositValue");
+    expect(src).not.toContain("!zkIsEthIn && veilMinimum !== zkBundle.depositValue");
+    // M1: in-flight guard precedes the prover modal in both ZK handlers.
+    const quoteIdx = src.indexOf("handleZkQuote");
+    const quoteSrc = src.slice(quoteIdx, quoteIdx + 6000);
+    expect(quoteSrc.indexOf("txInFlight.current > 0")).toBeLessThan(
+      quoteSrc.indexOf("setIsProverOpen(true)")
+    );
+    expect(execSrc.indexOf("txInFlight.current > 0")).toBeLessThan(
+      execSrc.indexOf("setIsProverOpen(true)")
+    );
+    // M3: new ZK comments use paused-route wording, not legacy.
+    const libSrc = readFileSync(join(process.cwd(), "lib/zk-router.ts"), "utf8");
+    expect(libSrc).not.toMatch(/legacy router module/);
+    expect(src).not.toMatch(/legacy stays dead/);
   });
 });

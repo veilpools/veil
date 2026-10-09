@@ -124,12 +124,12 @@ import { VEIL_ZK_ROUTER_ABI } from "../../lib/veil-artifact";
 import {
   TESTNET_ZK_ROUTER_ADDRESS,
   TESTNET_ZK_ROUTER_CHAIN_ID,
-  buildZkSwapLeg,
-  deriveZkMinSwapOut,
-  discoverZkSwapOut,
+  buildFullZkFlowArgs,
   findFullZkFlowExecuted,
   isZkExecuteDisabled,
   mapZkRouterError,
+  quoteAndBuildFullZkFlow,
+  simulateFullZkFlow,
 } from "../../lib/zk-router";
 import { ZkSwapToShieldPanel } from "../../components/trade/ZkSwapToShieldPanel";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
@@ -591,7 +591,7 @@ export default function SwapToShieldPage() {
     parsedGatedIn = null;
   }
 
-  // Full-ZK Swap-to-Shield derived state (fresh suite only, legacy stays dead).
+  // Full-ZK Swap-to-Shield derived state (fresh suite only, paused-route stays dead).
   // Direction follows the selected 0xbow note: ETH notes swap ETH -> VEIL and
   // shield into the fresh VEIL pool; VEIL notes do the reverse.
   const zkNote =
@@ -916,7 +916,7 @@ export default function SwapToShieldPage() {
 
   // Full-ZK Swap-to-Shield: atomic relay -> swap -> deposit in ONE transaction
   // via VeilZkRouter.executeFullZkFlow on Robinhood Testnet (fresh suite only,
-  // legacy stays dead). Quote FIRST via free exact-calldata simulations (no tx,
+  // paused-route stays dead). Quote FIRST via free exact-calldata simulations (no tx,
   // minSwapOut bracketed live), then execute with the slippage-bound min.
   // Prover-modal steps mirror the 0xbow flows: prove -> relay-in-tx -> swap ->
   // deposit -> verify. The single send below is guarded by revalidateWallet.
@@ -989,6 +989,7 @@ export default function SwapToShieldPage() {
     const depositAsset = zkDepositAsset;
     const withdrawAsset = zkWithdrawAsset;
 
+    if (txInFlight.current > 0) return;
     setIsExecuting(true);
     setIsZkQuoting(true);
     setProverTitle("Full-ZK Swap to Shield (Testnet)");
@@ -1000,7 +1001,6 @@ export default function SwapToShieldPage() {
     setIsProverOpen(true);
 
     try {
-      if (txInFlight.current > 0) return;
       txInFlight.current += 1;
       const testnetClient = createTestnetBowPublicClient();
       const isVeilBowNote =
@@ -1186,11 +1186,14 @@ export default function SwapToShieldPage() {
         precommitment: newSecrets.precommitment,
         zeroForOne,
       };
-      const { floor, probes } = await discoverZkSwapOut(testnetClient, {
+      const quoted = await quoteAndBuildFullZkFlow(testnetClient, {
         account: connectedAddress,
         base,
+        slippagePercent: slip,
       });
-      const minSwapOut = deriveZkMinSwapOut(floor, slip);
+      const floor = quoted.quotedSwapOut;
+      const minSwapOut = quoted.minSwapOut;
+      const probes = quoted.probes;
       const spentNullifier = BigInt(withdrawalProof.publicSignals[1]);
 
       setZkBundle({
@@ -1255,14 +1258,16 @@ export default function SwapToShieldPage() {
       setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
       return;
     }
-    // Deposit drift re-check: a changed live minimum invalidates the quote.
-    if (!zkIsEthIn && veilMinimum !== zkBundle.depositValue) {
+    // Deposit drift re-check: the ETH->VEIL leg deposits the live VEIL
+    // minimum, which drifts; VEIL->ETH deposits the fixed ETH denomination.
+    if (zkIsEthIn && veilMinimum !== zkBundle.depositValue) {
       setFlowError(
         "The live VEIL minimum changed onchain since the quote. Refresh the live quote and try again. No transaction was sent."
       );
       return;
     }
 
+    if (txInFlight.current > 0) return;
     setIsExecuting(true);
     setProverTitle("Full-ZK Swap to Shield (Testnet)");
     setProverSteps([
@@ -1275,32 +1280,49 @@ export default function SwapToShieldPage() {
     setIsProverOpen(true);
 
     try {
-      if (txInFlight.current > 0) return;
       txInFlight.current += 1;
       const testnetClient = createTestnetBowPublicClient();
-      const minSwapOut = deriveZkMinSwapOut(zkBundle.quotedSwapOut, slip);
-      const swapLeg = buildZkSwapLeg({ zeroForOne: zkBundle.zeroForOne });
+      const rebuilt = buildFullZkFlowArgs({
+        withdrawal: zkBundle.withdrawal,
+        proof: zkBundle.proof,
+        scope: zkBundle.scope,
+        withdrawAsset: zkBundle.withdrawAsset,
+        depositAsset: zkBundle.depositAsset,
+        depositValue: zkBundle.depositValue,
+        precommitment: zkBundle.precommitment,
+        zeroForOne: zkBundle.zeroForOne,
+        quotedSwapOut: zkBundle.quotedSwapOut,
+        slippagePercent: slip,
+      });
       const walletClient = createWalletClient({
         account: connectedAddress,
         chain: appChain,
         transport: custom(activeProvider),
       });
       await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+      try {
+        await simulateFullZkFlow(testnetClient, {
+          account: connectedAddress,
+          args: rebuilt,
+        });
+      } catch (e: unknown) {
+        throw new Error(mapZkRouterError(e, slip));
+      }
       const fullHash = await walletClient.writeContract({
         address: TESTNET_ZK_ROUTER_ADDRESS,
         abi: VEIL_ZK_ROUTER_ABI,
         functionName: "executeFullZkFlow",
         args: [
-          zkBundle.withdrawal,
-          zkBundle.proof as never,
-          zkBundle.scope,
-          TESTNET_ZK_ROUTER_ADDRESS,
-          zkBundle.withdrawAsset,
-          zkBundle.depositAsset,
-          zkBundle.depositValue,
-          zkBundle.precommitment,
-          swapLeg as never,
-          minSwapOut,
+          rebuilt.withdrawal,
+          rebuilt.proof as never,
+          rebuilt.scope,
+          rebuilt.recipient,
+          rebuilt.withdrawAsset,
+          rebuilt.depositAsset,
+          rebuilt.depositValue,
+          rebuilt.precommitment,
+          rebuilt.swapLeg as never,
+          rebuilt.minSwapOut,
         ],
       });
       setProverTxHash(fullHash);

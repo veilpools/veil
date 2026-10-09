@@ -44,7 +44,7 @@ export const TESTNET_ZK_EXPLORER_TX_BASE =
 
 // Shared v4 ETH/VEIL pool key (verbatim from lib/router-swap.ts, the only
 // pool the ZK swap leg runs against). Re-exported under a ZK name so call
-// sites never import the legacy router module for pool truth.
+// sites never import the paused-route router module for pool truth.
 export const ZK_POOL_KEY = {
   currency0: TESTNET_ROUTER_POOL_KEY.currency0,
   currency1: TESTNET_ROUTER_POOL_KEY.currency1,
@@ -328,6 +328,11 @@ function resolveBase(
   minSwapOut: bigint
 ): FullZkFlowArgs {
   const zeroForOne = base.zeroForOne ?? false;
+  if (base.withdrawal.processooor.toLowerCase() !== TESTNET_ZK_ROUTER_ENTRYPOINT.toLowerCase()) {
+    throw new Error(
+      `Invalid withdrawal: processooor must be the fresh suite entrypoint (${TESTNET_ZK_ROUTER_ENTRYPOINT}).`
+    );
+  }
   if (base.depositValue <= 0n) throw new Error("Deposit value must be greater than zero.");
   if (base.precommitment === 0n) throw new Error("InvalidPrecommitment: precommitment must be non-zero.");
   const swapLeg = buildZkSwapLeg({ zeroForOne });
