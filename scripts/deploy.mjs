@@ -183,10 +183,9 @@ async function main() {
   writeFileSync(`deployments/${networkName}-latest.json`, JSON.stringify(manifest, null, 2));
   console.log(`\n🎉 Deployment Complete! Manifest written to ${manifestPath}`);
 
-  // Write env output
+  // Write env output (never persist private keys to disk).
   const updatedEnv = `NEXT_PUBLIC_CHAIN_ID=${chain.id}
 NEXT_PUBLIC_RPC_URL=${rpcUrl}
-PRIVATE_KEY=${privateKey}
 DEPLOYER_ADDRESS=${account.address}
 
 # Canonical Uniswap V4 Dependencies on Robinhood Chain
