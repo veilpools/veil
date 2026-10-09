@@ -59,7 +59,7 @@ import {
   type LegacyPoolCandidate,
 } from "../../lib/legacy-pool-resolve";
 import { CONTRACT_ABIS, CONTRACT_ADDRESSES } from "../../lib/contracts";
-import { parseSlippagePercent } from "../../lib/router-swap";
+import { parseSlippagePercent, TESTNET_VEIL_POOL_05, TESTNET_VEIL_POOL_2 } from "../../lib/router-swap";
 import { calculateSlippageBound } from "../../lib/router-client";
 import {
   buildGatedHookInnerHash,
@@ -2306,18 +2306,20 @@ export default function SwapToShieldPage() {
         throw new Error("This pool only accepts legacy shielded notes.");
       }
       const legacyNote = noteToWithdraw as ShieldedNote;
-      // Exit-only candidate list: fresh ETH default + retired pools for old
-      // notes (ETH 0x1b1d…, VEIL 0xd739…/0x172e…). Old notes live in the
-      // retired pools and exits stay open by promise. Withdraw pool follows
-      // the NOTE's asset (R3): ETH notes -> ETH pool, VEIL notes -> the
-      // live-matching VEIL pool. Verified live (denomination + asset) inside
-      // the resolver; a paused pool still serves exits (pause gates deposits
-      // only); fail closed when nothing matches.
+      // Exit-only candidate list: fresh pools first (new notes), retired
+      // pools for old notes (ETH 0x1b1d…, VEIL 0xd739…/0x172e…). Old notes
+      // live in the retired pools and exits stay open by promise. Withdraw
+      // pool follows the NOTE's asset (R3): ETH notes -> ETH pool, VEIL
+      // notes -> the live-matching VEIL pool. Verified live (denomination +
+      // asset) inside the resolver; a paused pool still serves exits (pause
+      // gates deposits only); fail closed when nothing matches.
       const withdrawPool = await resolveLegacyPoolForNote(
         publicClient,
         legacyNote,
         [
           { pool: SHIELDED_POOL_ETH, asset: ETH_ZERO_ADDRESS },
+          { pool: TESTNET_VEIL_POOL_05, asset: TESTNET_BOW_V3_VEIL_TOKEN },
+          { pool: TESTNET_VEIL_POOL_2, asset: TESTNET_BOW_V3_VEIL_TOKEN },
           { pool: LEGACY_EXIT_ETH_POOL, asset: ETH_ZERO_ADDRESS },
           { pool: LEGACY_EXIT_VEIL_POOL_05, asset: TESTNET_BOW_V3_VEIL_TOKEN },
           { pool: LEGACY_EXIT_VEIL_POOL_2, asset: TESTNET_BOW_V3_VEIL_TOKEN },
