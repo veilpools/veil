@@ -102,15 +102,18 @@ async function main() {
     console.log(`   - Address : ${account.address}`);
     console.log(`   - Balance : ${formatEther(balance)} ETH`);
     
-    // Deployment gas estimate: ~3.5M gas total across all 7 contracts
+    // Deployment gas estimate: full migration + proof cycle needs >= 0.0015 ETH
+    // (matches scripts/migrate-mainnet-0xbow.mjs EXECUTE guard).
     const estimatedGas = 3_500_000n;
     const estimatedCost = estimatedGas * gasPrice;
+    const requiredBalance = 1500000000000000n; // 0.0015 ETH
     console.log(`   - Est. Gas Needed: ~${estimatedGas.toLocaleString()} gas (~${formatEther(estimatedCost)} ETH)`);
+    console.log(`   - Required Balance: 0.0015 ETH (full migration + proof)`);
     
-    if (balance >= estimatedCost) {
+    if (balance >= requiredBalance) {
       console.log(`   ✓ Sufficient balance for live mainnet deployment!`);
     } else {
-      console.log(`   ⚠ Notice: Account needs at least ${formatEther(estimatedCost)} ETH on Robinhood Mainnet.`);
+      console.log(`   ⚠ Notice: Account needs at least 0.0015 ETH on Robinhood Mainnet (have ${formatEther(balance)} ETH).`);
     }
   }
 

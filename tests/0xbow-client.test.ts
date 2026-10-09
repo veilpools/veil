@@ -69,8 +69,8 @@ describe("0xbow testnet address book", () => {
       withdrawalVerifier: "0xeea9d0f7ee0958c6d59f25162be4e69ba60a0f71",
       commitmentVerifier: "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008",
       entrypointImplementation: "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
-      entrypointProxy: "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0",
-      pool: "0x2bea7094f77e3f9a21397c688de8ef105d4848bc",
+      entrypointProxy: "0xb68c3d25e5e9902363e8e10d5c0a471e65be8152",
+      pool: "0xea48e6a7ae296ebbd7d58792091b8087032d3aa4",
       poseidonT3: "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34",
       poseidonT4: "0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
     };

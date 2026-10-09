@@ -33,7 +33,7 @@ describe("router swapToShield builders (testnet e2e task 2)", () => {
       "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27"
     );
     expect(TESTNET_LEGACY_ETH_POOL).toBe(
-      "0x1b1d39e4da649747ecc0e93e7a06452a3061de17"
+      "0x3783db43f4f08294da847c66a0fb7203bb3e005d"
     );
     expect(TESTNET_VEIL_TOKEN).toBe(
       "0x019086f63407fadf0ccb89516e465baef5031aa9"

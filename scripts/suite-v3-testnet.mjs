@@ -45,6 +45,8 @@ const account = privateKeyToAccount(key.startsWith("0x") ? key : `0x${key}`);
 const wallet = createWalletClient({ account, chain: robinhoodTestnet, transport });
 const art = (n) => JSON.parse(readFileSync(join(root, "artifacts", "privacy-pools-testnet", `${n}.json`), "utf8"));
 
+if (Number(await publicClient.getChainId()) !== 46630) throw new Error("Not testnet 46630, aborting (refusing to deploy v3 suite elsewhere).");
+
 function link(bytecode, linkReferences) {
   let code = bytecode.startsWith("0x") ? bytecode.slice(2) : bytecode;
   for (const [file, names] of Object.entries(linkReferences ?? {})) {

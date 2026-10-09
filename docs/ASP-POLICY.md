@@ -21,6 +21,14 @@ and deterministic, the key only prevents censorship.
 - Testnet 46630 (v3 entrypoint): sentinel-only genesis; labels join automatically per the rule above.
 - Mainnet 4663: to be published at migration from live deposits under the same rule.
 
+## v3 auto-sync authorization (2026-10-09)
+
+`app/api/asp/sync/route.ts` is authorized to publish the v3 association set
+(entrypoint `0xb68c…`, scanning BOTH the ETH pool `0xea48…` and the VEIL pool
+`0xae2c…` full history, censoring neither). Anti-spam stays on: at most one
+publish per 1200 blocks (~5 minutes) unless the `x-asp-publish-token`
+(`ASP_PUBLISH_TOKEN`) sentinel or a genuine inclusion label is presented.
+
 ## Changes
 
 Any rule change requires a new policy version in this file before the code

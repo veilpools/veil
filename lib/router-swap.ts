@@ -44,7 +44,7 @@ export const TESTNET_ROUTER_ADDRESS =
   ("0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27" as Address);
 export const TESTNET_LEGACY_ETH_POOL =
   (process.env.NEXT_PUBLIC_TESTNET_PRIVACY_POOL_ETH as Address | undefined) ||
-  ("0x1b1d39e4da649747ecc0e93e7a06452a3061de17" as Address);
+  ("0x3783db43f4f08294da847c66a0fb7203bb3e005d" as Address);
 export const TESTNET_VEIL_TOKEN =
   (process.env.NEXT_PUBLIC_TESTNET_VEIL_TOKEN as Address | undefined) ||
   ("0x019086f63407fadf0ccb89516e465baef5031aa9" as Address);
@@ -54,10 +54,10 @@ export const TESTNET_VEIL_TOKEN =
 // via pickVeilDestinationPool.
 export const TESTNET_VEIL_POOL_05 =
   (process.env.NEXT_PUBLIC_TESTNET_VEIL_POOL_05 as Address | undefined) ||
-  ("0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address);
+  ("0x0fb48c9552154ea028cbd812430e1ea3465a9b4c" as Address);
 export const TESTNET_VEIL_POOL_2 =
   (process.env.NEXT_PUBLIC_TESTNET_VEIL_POOL_2 as Address | undefined) ||
-  ("0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address);
+  ("0xc144f744f887ebf5746a9974673d626f22431f3b" as Address);
 export const TESTNET_VEIL_POOL_05_DENOMINATION = 500000000000000000n;
 export const TESTNET_VEIL_DEST_POOLS = [
   TESTNET_VEIL_POOL_05,

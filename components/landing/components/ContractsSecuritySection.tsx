@@ -49,7 +49,7 @@ export const ContractsSecuritySection: React.FC = () => {
       role: "Uniswap v4 Hook",
       address: "0x9df0b52bf290a13e11c73c56c4c533e3887760c4",
       category: "core",
-      description: "Mined CREATE2 hook enforcing ZK attestation gating (beforeSwap), atomic zero-custody routing, and protocol fee collection (afterSwap).",
+      description: "Mined CREATE2 hook enforcing open self-attestation gating (beforeSwap), atomic zero-custody routing, and protocol fee collection (afterSwap).",
       source: "Salt: 0x6048 · Flag: 0x20c4",
       explorerUrl: "https://explorer.mainnet.chain.robinhood.com/address/0x9df0b52bf290a13e11c73c56c4c533e3887760c4",
     },
@@ -82,10 +82,10 @@ export const ContractsSecuritySection: React.FC = () => {
     },
     {
       name: "VeilAttestationRegistry",
-      role: "ZK Attestation Registry",
+      role: "Open Self-Attestation Registry",
       address: "0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
       category: "core",
-      description: "Attestation registry for ZK-gated pools verifying trader cleanliness and anti-bot launch criteria.",
+      description: "Attestation registry for gated pools: open self-attest with no eligibility conditions; gating is an anti-bot speedbump plus launch windows only.",
       source: "contracts/VeilAttestationRegistry.sol",
       explorerUrl: "https://explorer.mainnet.chain.robinhood.com/address/0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
     },
@@ -94,7 +94,7 @@ export const ContractsSecuritySection: React.FC = () => {
       role: "Legacy Mock Verifier (old notes only)",
       address: "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
       category: "core",
-      description: "Provisional ZK proof verifier for old notes only, validating withdrawal knowledge and clean association set membership. Groth16 serves 0xbow paths and follows for all flows in F4.",
+      description: "Provisional ZK proof verifier for old notes only, validating withdrawal knowledge and clean association set membership. Groth16 serves the live 0xbow paths.",
       source: "contracts/ShieldedVerifierMock.sol",
       explorerUrl: "https://explorer.mainnet.chain.robinhood.com/address/0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
     },
@@ -176,7 +176,7 @@ export const ContractsSecuritySection: React.FC = () => {
         <SectionHeader
           kicker="Security & Verification"
           title="Verified on-chain. Non-custodial by law of math."
-          sub="All smart contracts are deployed on Robinhood Chain with an internal audit published; external audit (F4) pending. Owner powers are retained per docs — verify parameters onchain. Cryptographic parameters and state roots are publicly verifiable."
+          sub="All smart contracts are deployed on Robinhood Chain with an internal audit published; external audit waived per docs/DECISIONS.md item 6 (internal audit plus deep root-audit rounds only). Owner powers are retained per docs — verify parameters onchain. Cryptographic parameters and state roots are publicly verifiable."
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />
@@ -351,7 +351,7 @@ export const ContractsSecuritySection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Notes (secret + nullifier) are generated in the browser with secure randomness and never sent to any central server or relayer. Proof payloads are assembled client-side against a provisional verifier for old notes only; Groth16 serves 0xbow paths and follows for all flows in F4.
+              Notes (secret + nullifier) are generated in the browser with secure randomness and never sent to any central server or relayer. Proof payloads are assembled client-side against a provisional verifier for old notes only; Groth16 serves the live 0xbow paths.
             </p>
           </div>
 
@@ -672,7 +672,7 @@ export const ContractsSecuritySection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Cancun EVM · Verified Source on Blockscout
+              Cancun EVM · Source verification pending on Blockscout; local builds proven byte-identical (fallback: vendored source + byte-identical proof)
             </span>
           </div>
 
@@ -888,7 +888,7 @@ export const ContractsSecuritySection: React.FC = () => {
                   fontWeight: 700,
                 }}
               >
-                10/10 PASS
+                8/10 PASS + 2 RESIDUALS
               </span>
               <span
                 style={{

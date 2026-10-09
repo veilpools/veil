@@ -51,15 +51,14 @@ pnpm migrate:mainnet       # executes once deployer holds >= 0.0015 ETH
 ```
 
 ### Execution sequence (`scripts/migrate-mainnet-0xbow.mjs`):
-0. **Rescue stranded funds** — pulls ~145.8k VEIL out of the abandoned treasury `0x8cd3…` back to the deployer (owner key matches). Skipped safely if empty.
+0. **Rescue stranded funds** — pulls ~145.8k VEIL out of the abandoned treasury `0x8cd3…` back to the deployer (owner key matches). Skipped safely if empty; a failed rescue THROWS and aborts the migration (funds stay in the old treasury — re-run the rescue before treating the migration as complete).
 1. **VeilTreasury (fresh)** — owner + mainnet VEIL token wired at construction (buyback 70% default). **VeilCreate2Deployer (fresh), ShieldedVerifierMock (fresh), legacy ShieldedPool_ETH (fresh, 0.001/10 ETH, open)** — the entire old Mock suite (`deployments/mainnet-latest.json`) is abandoned: nothing is reused, nothing new points at it.
-1. **PoseidonT3/T4** libraries.
-2. **WithdrawalVerifier + CommitmentVerifier** (Groth16, audited 0xbow v1.2.1).
-3. **Entrypoint implementation + ERC1967Proxy** (initialize owner twice).
-4. **VeilTestnetPrivacyPool (ETH)** + **VeilTestnetPrivacyPoolERC20 (VEIL)** — `activateDeposits`, `registerPool` (0.001 ETH / 1 VEIL, maxRelay 100), ASP sentinel root.
-5. **VeilAttestationRegistry v2 + VeilHook v2** (CREATE2-mined, treasury = `VeilTreasury` mainnet).
-6. **VeilShieldRouter (fixed R1 settle)** — replaces buggy `0x01a0…`; `poolManager()` verified post-deploy.
-7. **ShieldedPool VEIL 0.5 + VEIL 2** — Mock verifier + association root mirrored from the mainnet ETH pool (provisional, same posture as testnet), guardian = deployer, verified post-deploy.
+2. **PoseidonT3/T4** libraries.
+3. **WithdrawalVerifier + CommitmentVerifier** (Groth16, audited 0xbow v1.2.1).
+4. **Entrypoint implementation + ERC1967Proxy** (initialize owner twice).
+5. **VeilTestnetPrivacyPool (ETH)** + **VeilTestnetPrivacyPoolERC20 (VEIL)** — `activateDeposits`, `registerPool` (0.001 ETH / 1 VEIL, maxRelay 100), ASP sentinel root.
+6. **VeilAttestationRegistry v2 + VeilHook v2** (CREATE2-mined, treasury = `VeilTreasury` mainnet).
+7. **VeilShieldRouter (fixed R1 settle)** — replaces buggy `0x01a0…`; `poolManager()` verified post-deploy — plus **ShieldedPool VEIL 0.5 + VEIL 2** — Mock verifier + association root mirrored from the mainnet ETH pool (provisional, same posture as testnet), guardian = deployer, verified post-deploy.
 
 Outputs: `deployments/privacy-pools-mainnet-latest.json` + env patch
 (`NEXT_PUBLIC_0XBOW_*`, `NEXT_PUBLIC_VEIL_SHIELD_ROUTER`, `NEXT_PUBLIC_VEIL_POOL_05/02`)
@@ -106,7 +105,12 @@ VeilHook.setPoolGating(poolKey, true, 600); // 600 seconds (10 minutes) launch w
 
 On any incident (suspect tx, invariant failure, oracle/price dislocation):
 
-1. **Pause deposits everywhere** — guardian `pauseDeposits()` on each new pool (ETH, VEIL, 0xbow pools via their guardian). One tx per pool, no user funds move.
+1. **Pause deposits everywhere** — guardian `pauseDeposits()` on EACH new pool, one tx per pool, no user funds move:
+   - `legacyEthFresh.pauseDeposits()` (legacy ShieldedPool ETH),
+   - `veilPool05.pauseDeposits()` (legacy ShieldedPool VEIL 0.5),
+   - `veilPool2.pauseDeposits()` (legacy ShieldedPool VEIL 2),
+   - `ethPool.pauseDeposits()` (0xbow ETH pool, via its guardian),
+   - `veilPool.pauseDeposits()` (0xbow VEIL pool, via its guardian).
 2. **Withdrawals stay open by code** — there is no pause path for `withdraw`; never attempt to block them. Tell users to withdraw calmly; the UI keeps working for exits.
 3. **Keep the old Mock suite paused** — do not unpause `0xdd0f…` (Mock ETH pool) as a "fallback"; it is provisional and must never take real funds.
 4. **Fix forward from checkpoints** — `deployments/migrate-mainnet-pending.json` resumes the migration; a mid-run abort never needs a from-scratch rerun.

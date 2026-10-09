@@ -145,6 +145,9 @@ const SHIELDED_POOL_ETH = CONTRACT_ADDRESSES.poolEth as Address;
 // a deposit target.
 const LEGACY_EXIT_VEIL_POOL_05 = "0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address;
 const LEGACY_EXIT_VEIL_POOL_2 = "0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address;
+// Retired legacy ETH pool (paused + guardian renounced at cutover).
+// EXIT ONLY: old ETH notes live here and exits stay open by promise.
+const LEGACY_EXIT_ETH_POOL = "0x1b1d39e4da649747ecc0e93e7a06452a3061de17" as Address;
 
 const POOL_WITHDRAW_ABI = parseAbi([
   "function withdraw(bytes proof, bytes32 root, bytes32 nullifierHash, address recipient, uint256 fee)",
@@ -2271,7 +2274,7 @@ export default function SwapToShieldPage() {
       },
       {
         title: "4. On-Chain Verifier Dispatch",
-        detail: "Submitting to ShieldedVerifier contract; the withdraw call carries no depositor address. Provisional verifier for old notes only — Groth16 on 0xbow paths (F4)",
+        detail: "Submitting to ShieldedVerifier contract; the withdraw call carries no depositor address. Provisional verifier for old notes only — Groth16 on 0xbow paths",
         status: "pending",
       },
     ];
@@ -2303,14 +2306,19 @@ export default function SwapToShieldPage() {
         throw new Error("This pool only accepts legacy shielded notes.");
       }
       const legacyNote = noteToWithdraw as ShieldedNote;
-      // Withdraw pool follows the NOTE's asset (R3): ETH notes -> ETH pool,
-      // VEIL notes -> the live-matching VEIL pool. Verified live (denomination
-      // + asset) inside the resolver; fail closed when nothing matches.
+      // Exit-only candidate list: fresh ETH default + retired pools for old
+      // notes (ETH 0x1b1d…, VEIL 0xd739…/0x172e…). Old notes live in the
+      // retired pools and exits stay open by promise. Withdraw pool follows
+      // the NOTE's asset (R3): ETH notes -> ETH pool, VEIL notes -> the
+      // live-matching VEIL pool. Verified live (denomination + asset) inside
+      // the resolver; a paused pool still serves exits (pause gates deposits
+      // only); fail closed when nothing matches.
       const withdrawPool = await resolveLegacyPoolForNote(
         publicClient,
         legacyNote,
         [
           { pool: SHIELDED_POOL_ETH, asset: ETH_ZERO_ADDRESS },
+          { pool: LEGACY_EXIT_ETH_POOL, asset: ETH_ZERO_ADDRESS },
           { pool: LEGACY_EXIT_VEIL_POOL_05, asset: TESTNET_BOW_V3_VEIL_TOKEN },
           { pool: LEGACY_EXIT_VEIL_POOL_2, asset: TESTNET_BOW_V3_VEIL_TOKEN },
         ] as LegacyPoolCandidate[]

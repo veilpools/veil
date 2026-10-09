@@ -29,35 +29,66 @@ const POOL_ABI = parseAbi([
 ]);
 const ERC20_ABI = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 const ZERO = "0x0000000000000000000000000000000000000000";
+const VEIL_FALLBACK = "0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a";
+const BOW_POOL_ABI = parseAbi([
+  "function lifetimeDeposited() view returns (uint256)",
+  "function depositsPaused() view returns (bool)",
+]);
 
-function loadManifest() {
-  const path = MAINNET
-    ? "deployments/privacy-pools-mainnet-latest.json"
-    : "deployments/router-fixed-testnet-latest.json";
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return null;
-  }
+function readJson(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
 }
 
-// Legacy pools under audit. Testnet: fixed manifest set. Mainnet: written by
-// pnpm migrate:mainnet (veilPool05/veilPool2) plus the pre-existing Mock ETH
-// pool (paused, must read zero-drift too).
+// Pools under audit, built from deployment manifests (no hardcoded pool
+// addresses). Testnet: fresh legacy pools (deployments/legacy-pools-fresh-46630.json)
+// + fresh 0xbow v3 suite (deployments/suite-v3-testnet-latest.json).
+// Mainnet: written by pnpm migrate:mainnet.
 const POOLS = MAINNET
-  ? [
-      { name: "LegacyPool_ETH(Mock,paused)", address: process.env.NEXT_PUBLIC_PRIVACY_POOL_ETH || "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0" },
-    ]
-  : [
-      { name: "LegacyPool_ETH", address: "0x1b1d39e4da649747ecc0e93e7a06452a3061de17" },
-      { name: "ShieldedPool_VEIL05", address: "0xd73920a3cbfdf3f6be530cab73fc9c876619517a" },
-      { name: "ShieldedPool_VEIL2", address: "0x172e9cc542cf9349813f74548eec6e0a1df65e17" },
-    ];
+  ? (() => {
+      const m = readJson("deployments/privacy-pools-mainnet-latest.json");
+      return [
+        { name: "Mainnet_0xbow_ETH", address: m.ethPool, kind: "bow", asset: ZERO },
+        { name: "Mainnet_0xbow_VEIL", address: m.veilPool, kind: "bow", asset: m.veilToken ?? m.veilTokenAddress ?? VEIL_FALLBACK },
+        { name: "Mainnet_Legacy_ETH", address: m.legacyEthPool, kind: "legacy" },
+        { name: "Mainnet_Legacy_VEIL05", address: m.veilPool05, kind: "legacy" },
+        { name: "Mainnet_Legacy_VEIL2", address: m.veilPool2, kind: "legacy" },
+      ];
+    })()
+  : (() => {
+      const legacy = readJson("deployments/legacy-pools-fresh-46630.json");
+      const v3 = readJson("deployments/suite-v3-testnet-latest.json");
+      return [
+        { name: "LegacyPool_ETH(fresh)", address: legacy.pools.eth.address, kind: "legacy" },
+        { name: "ShieldedPool_VEIL05(fresh)", address: legacy.pools.veil05.address, kind: "legacy" },
+        { name: "ShieldedPool_VEIL2(fresh)", address: legacy.pools.veil2.address, kind: "legacy" },
+        { name: "BowV3_ETH", address: v3.ethPool, kind: "bow", asset: ZERO },
+        { name: "BowV3_VEIL", address: v3.veilPool, kind: "bow", asset: v3.veilToken },
+      ];
+    })();
 
 if (Number(await client.getChainId()) !== CHAIN_ID) throw new Error(`Not chain ${CHAIN_ID}, aborting.`);
 
 let failures = 0;
 for (const p of POOLS) {
+  if (p.kind === "bow") {
+    // 0xbow v3 pools expose lifetimeDeposited (no totalDeposits/totalWithdrawn).
+    // Gate: onchain balance must never exceed lifetime deposits (withdrawals
+    // only move funds out); fail closed on excess.
+    const [lifetime, paused] = await Promise.all([
+      client.readContract({ address: p.address, abi: BOW_POOL_ABI, functionName: "lifetimeDeposited" }),
+      client.readContract({ address: p.address, abi: BOW_POOL_ABI, functionName: "depositsPaused" }),
+    ]);
+    const balance =
+      p.asset === ZERO
+        ? await client.getBalance({ address: p.address })
+        : await client.readContract({ address: p.asset, abi: ERC20_ABI, functionName: "balanceOf", args: [p.address] });
+    const ok = balance <= lifetime;
+    if (!ok) failures++;
+    console.log(
+      `${ok ? "PASS" : "MISMATCH"} ${p.name}: lifetime=${formatEther(lifetime)} balance=${formatEther(balance)} paused=${paused}`
+    );
+    continue;
+  }
   const [denom, asset, tot, wd] = await Promise.all([
     client.readContract({ address: p.address, abi: POOL_ABI, functionName: "denomination" }),
     client.readContract({ address: p.address, abi: POOL_ABI, functionName: "asset" }),

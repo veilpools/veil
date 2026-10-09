@@ -105,7 +105,7 @@ export const HowItWorksSection: React.FC = () => {
                 maxWidth: "40ch",
               }}
             >
-              Uniswap v4 beforeSwap hook enforcing zero-knowledge proof attestations and protocol fee buyback/burn engine.
+              Uniswap v4 beforeSwap hook enforcing open self-attestation gating and protocol fee buyback/burn engine.
             </p>
           </div>
         </div>
@@ -150,7 +150,7 @@ export const HowItWorksSection: React.FC = () => {
                 maxWidth: "40ch",
               }}
             >
-              Private pool-to-pool token swaps and gasless unlinked withdrawals across Robinhood Chain and Ethereum L1.
+              Private pool-to-pool token swaps and unlinked withdrawals on Robinhood Chain via self-relay.
             </p>
             <a
               href="/contracts"

@@ -67,7 +67,7 @@
 > **Safety notice:** deposits into the Mock-verifier `ShieldedPool_ETH` are **paused** by guardian action ([tx](https://explorer.mainnet.chain.robinhood.com/tx/0x3a34660dec5279612b7a6317f5717f99fbdda6939e52b936a0f1a0e7c5de997b)) after the internal audit found the Mock accepts arbitrary proofs. Withdrawals were never pausable and need no action (pool holds 0 deposits). New deposits will open only on the 0xbow suite after migration.
 | **VeilToken (temporary)** | `0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a` | [View on Explorer](https://explorer.mainnet.chain.robinhood.com/address/0xe0e11ec0d62eda12de796d025d6334fadfe5ab2a) |
 
-### 🚀 Mainnet 0xbow Migration (ready, waiting on funds)
+### 🚀 Mainnet 0xbow Migration (mainnet pending — testnet fresh suite DONE)
 
 Validated offline (`pnpm migrate:mainnet:dry`, ctor/link/encoding checks green). One command once the deployer holds **≥0.0015 ETH**:
 
@@ -89,15 +89,24 @@ Deploys on 4663 (testnet-proven bytecode): PoseidonT3/T4 → WithdrawalVerifier 
 
 ## 🧪 Live Robinhood Testnet Deployments (Chain ID: 46630)
 
+Fresh suite under the new wallet (old pools retired — exit-only, withdrawals stay open by code; no new deposits there):
+
 | Contract | Address | Blockscout Explorer |
 |---|---|---|
 | **VeilCreate2Deployer** | `0x25ed04b42071086c3a8647954422c9c958e35f3e` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x25ed04b42071086c3a8647954422c9c958e35f3e) |
 | **ShieldedVerifierMock** | `0xab9dd89a3b16db81140d6a5842a439de6f4969b6` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xab9dd89a3b16db81140d6a5842a439de6f4969b6) |
-| **ShieldedPool_ETH** | `0x1b1d39e4da649747ecc0e93e7a06452a3061de17` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x1b1d39e4da649747ecc0e93e7a06452a3061de17) |
+| **ShieldedPool_ETH (fresh)** | `0x3783db43f4f08294da847c66a0fb7203bb3e005d` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x3783db43f4f08294da847c66a0fb7203bb3e005d) |
+| **ShieldedPool_VEIL05 (fresh)** | `0x0fb48c9552154ea028cbd812430e1ea3465a9b4c` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x0fb48c9552154ea028cbd812430e1ea3465a9b4c) |
+| **ShieldedPool_VEIL2 (fresh)** | `0xc144f744f887ebf5746a9974673d626f22431f3b` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xc144f744f887ebf5746a9974673d626f22431f3b) |
+| **0xbow Entrypoint v3 (fresh)** | `0xb68c3d25e5e9902363e8e10d5c0a471e65be8152` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xb68c3d25e5e9902363e8e10d5c0a471e65be8152) |
+| **0xbow ETH Pool v3 (fresh)** | `0xea48e6a7ae296ebbd7d58792091b8087032d3aa4` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xea48e6a7ae296ebbd7d58792091b8087032d3aa4) |
+| **0xbow VEIL Pool v3 (fresh)** | `0xae2c219e462ca1b80473375bcbcad2b025cae610` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xae2c219e462ca1b80473375bcbcad2b025cae610) |
 | **VeilTreasury** | `0x491413119a4adb0ea23b902c7fc7cee3845542b2` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x491413119a4adb0ea23b902c7fc7cee3845542b2) |
 | **VeilAttestationRegistry** | `0x4d66540c3cd12ee8de89ad8013c51838b572dce3` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x4d66540c3cd12ee8de89ad8013c51838b572dce3) |
 | **VeilHook (0x20c4)** | `0xc0bd5e335651394b57a9277411f65e149e73e0c4` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xc0bd5e335651394b57a9277411f65e149e73e0c4) |
-| **VeilShieldRouter** | `0xb1baee8d519a7a2edbaff99eec0ba10948670d68` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0xb1baee8d519a7a2edbaff99eec0ba10948670d68) |
+| **VeilShieldRouter (fixed R1)** | `0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27` | [View on Explorer](https://explorer.testnet.chain.robinhood.com/address/0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27) |
+
+> Retired pools (paused + guardian renounced, exit-only — old notes withdraw here, no new deposits): legacy ETH `0x1b1d39e4da649747ecc0e93e7a06452a3061de17`, VEIL05 `0xd73920a3cbfdf3f6be530cab73fc9c876619517a`, VEIL2 `0x172e9cc542cf9349813f74548eec6e0a1df65e17`; 0xbow v1 pool `0x2bea7094f77e3f9a21397c688de8ef105d4848bc`.
 
 ### 🚀 Verified On-Chain Transactions (Live Testnet E2E)
 - **Live Deposit (0.001 ETH):** [`0x5b230bdbbc99cbd9c3fdb7ef5a8284d724fbc92e72f07ccaf38736cfa93ad467`](https://explorer.testnet.chain.robinhood.com/tx/0x5b230bdbbc99cbd9c3fdb7ef5a8284d724fbc92e72f07ccaf38736cfa93ad467)
@@ -117,7 +126,7 @@ Temporary protocol token for end-to-end testing (1B fixed supply, self-burn). Th
 | **executeBurn (1,000 VEIL)** | [`0x3df1259e80af32936cbc086688c150e8aef437c9f835dd249d055705709d64af`](https://explorer.testnet.chain.robinhood.com/tx/0x3df1259e80af32936cbc086688c150e8aef437c9f835dd249d055705709d64af) |
 | **Supply** | 1,000,000,000 → 999,999,000 (`totalBurned` = 1,000, `buybackShareBps` = 7000) |
 
-> Mainnet repeat is DONE — see the mainnet table above (fresh suite under the user wallet, burn proven). Source verification on the explorers is pending (instance verifier rejects valid builds; local builds proven byte-identical).
+> Testnet fresh suite DONE (entrypoint `0xb68c…`, pools `0xea48…`/`0xae2c…`, legacy `0x3783…`/`0x0fb4…`/`0xc144…`); mainnet migration pending. Source verification on the explorers is pending (instance verifier rejects valid builds; local builds proven byte-identical, vendored source fallback).
 
 ### 🔒 Real Groth16 Privacy Loop (Testnet, 0xbow v1.2.1, proven 2026-10-07)
 
@@ -133,7 +142,7 @@ Audited 0xbow stack (WithdrawalVerifier, PrivacyPool, Poseidon, LeanIMT), approv
 | **Hook gating (fresh 0x20c4 hook)** | [`0x65d99bb9eb99c008ef4b738cdd652800796d60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), attestation verified `true` |
 | **Third-party relay** | [`0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d`](https://explorer.testnet.chain.robinhood.com/tx/0xef17b1c04014f4e74af2a2f0438f22bccee2d5214eeb0bd7a268aa148a23cb1d) submitted by an ephemeral relayer key, not the depositor |
 
-### 🪝 Hook Gating + Protocol Fee From Real Usage (Testnet, proven 2026-10-07)
+### 🪝 Hook Gating + Protocol Fee From Real Usage (Testnet, proven 2026-10-07 — NOT PROVEN on the fresh suite, manual retest required; v3 flow: /trade attest + gated swap)
 
 - **Hooked pool** ETH/VEIL fee 3000 with `VeilHook` [`0x65d9...60c4`](https://explorer.testnet.chain.robinhood.com/address/0x65d99bb9eb99c008ef4b738cdd652800796d60c4), gated 600s launch window
 - **Ungated swap reverts** (`GatingActiveUserNotAttested` enforced onchain)
@@ -156,7 +165,7 @@ Fresh 0xbow suite v2 (operator-owned entrypoint, ETH + VEIL pools, `maxRelayFeeB
 
 - **ETH shielded** → **withdrawn (ZK)** → **v4 swap ETH→VEIL** ([0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99](https://explorer.testnet.chain.robinhood.com/tx/0x45c66d17e4a248a70d77ef2a945a216bdd6adc80a3f08605f0d9487e5a69dd99)) → **VEIL shielded** ([0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc](https://explorer.testnet.chain.robinhood.com/tx/0xed7e12fc77dc61c32732791679a861a9d13131343ab70c383a7d3491e5e691bc), 0.001 VEIL note) → **VEIL relayed with enforced 50 BPS fee by a third-party key** ([0x33408fc3b3f9ca4d4de07432a1e57ecd76f37937c6011ed1404d0c36b4dcdb20](https://explorer.testnet.chain.robinhood.com/tx/0x33408fc3b3f9ca4d4de07432a1e57ecd76f37937c6011ed1404d0c36b4dcdb20): recipient 0.995, relayer 0.005)
 
-### 🔀 Router Swap-to-Shield (Testnet, proven 2026-10-07)
+### 🔀 Router Swap-to-Shield (Testnet, proven 2026-10-07 — NOT PROVEN on the fresh suite, manual retest required; v3 flow: /trade router swap-to-shield)
 
 - **v4 pool ETH/VEIL** `0x3524d46204a0438a67c94e9795818b3b0c5d59869d28865754c4254eb05442e1` (fee 3000, tickSpacing 60)
 - **Liquidity** via `TestnetLiquidityHelper` (direct PoolManager path — the pre-deployed testnet PositionManager is a different version whose mint encoding reverts)
@@ -211,20 +220,20 @@ pnpm build
 
 ---
 
-## 🧪 Protocol Invariant & Security Acceptance Matrix
+## 🧪 Protocol Invariant & Security Acceptance Matrix (old-suite evidence — NOT PROVEN on the fresh suite, manual retest required; v3 flow: /trade per docs/TESTNET-CLICKTHROUGH.md)
 
 | # | Scenario | Expected Outcome | Status |
 |---|---|---|---|
-| 1 | Normal Buy & Shield | Commitment inserted into Merkle tree, router balance = 0 | ✅ Pass |
-| 2 | Slippage exceeded | Transaction reverts, 100% of user funds refunded | ✅ Pass |
-| 3 | Double-spend same note | Automatically rejected (NullifierAlreadySpent) | ✅ Pass |
-| 4 | Relayer tampers minOut / recipient / fee | Groth16 proof binds recipient+fee; swap params caller-side (self-relay only on Mock suite) | ⚠️ Partial (see audit) |
-| 5 | Shielded swap Token A ➔ Token B | Shielded balance B increases, zero public address trace | ✅ Pass |
-| 6 | Relayer offline / unavailable | Fallback direct self-relay operates normally | ✅ Pass |
-| 7 | Unregistered address on gated pool | Swap rejected by hook | ✅ Pass |
-| 8 | Deposit exceeds pool cap | Transaction rejected by contract (PoolCapExceeded) | ✅ Pass |
-| 9 | Guardian pauses pool | Deposits paused, withdrawals remain 100% unblocked | ✅ Pass |
-| 10 | Tree rebuild in new browser | Balances independently verified against Merkle root | ✅ Pass |
+| 1 | Normal Buy & Shield | Commitment inserted into Merkle tree, router balance = 0 | ✅ Pass (old suite; fresh manual pending) |
+| 2 | Slippage exceeded | Transaction reverts, 100% of user funds refunded | ✅ Pass (old suite; fresh manual pending) |
+| 3 | Double-spend same note | Automatically rejected (NullifierAlreadySpent) | ✅ Pass (old suite; fresh manual pending) |
+| 4 | Relayer tampers minOut / recipient / fee | Groth16 proof binds recipient+fee; swap params caller-side (self-relay only) | ⚠️ Partial (see audit) |
+| 5 | Shielded swap Token A ➔ Token B | Shielded balance B increases, zero public address trace | ✅ Pass (old suite; fresh manual pending) |
+| 6 | Relayer offline / unavailable | Self-relay operates normally (the supported path) | ✅ Pass (old suite; fresh manual pending) |
+| 7 | Unregistered address on gated pool | Swap rejected by hook | ✅ Pass (old suite; fresh manual pending) |
+| 8 | Deposit exceeds pool cap | Transaction rejected by contract (PoolCapExceeded) | ✅ Pass (old suite; fresh manual pending) |
+| 9 | Guardian pauses pool | Deposits paused, withdrawals remain 100% unblocked | ✅ Pass (old suite; fresh manual pending) |
+| 10 | Tree rebuild in new browser | Balances independently verified against Merkle root | Manual (see docs/TESTNET-CLICKTHROUGH.md §5) |
 
 ---
 

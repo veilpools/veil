@@ -114,8 +114,10 @@ let checkpoint = {};
 try {
   checkpoint = JSON.parse(readFileSync(CHECKPOINT, "utf8"));
 } catch {}
-const saveCheckpoint = () =>
+const saveCheckpoint = () => {
+  if (!EXECUTE) return;
   writeFileSync(CHECKPOINT, JSON.stringify({ ...checkpoint, updatedAt: new Date().toISOString() }, null, 2));
+};
 async function codeExists(addr) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(addr ?? "")) return false;
   const code = await publicClient.getCode({ address: addr });
@@ -223,8 +225,9 @@ if (!EXECUTE) {
     const rescueMsg = String(e?.message || e).slice(0, 300);
     checkpoint.rescueFailed = { message: rescueMsg, at: new Date().toISOString() };
     saveCheckpoint();
-    console.error(`BLOCKING WARNING: stranded-VEIL rescue FAILED — funds remain in old treasury ${OLD_TREASURY_MAINNET}. Reason: ${rescueMsg}`);
-    console.error("BLOCKING WARNING: checkpoint.rescueFailed recorded — re-run the rescue before treating this migration as complete. Do NOT proceed as if funds were recovered.");
+    throw new Error(
+      `Stranded-VEIL rescue FAILED — funds remain in old treasury ${OLD_TREASURY_MAINNET}. Reason: ${rescueMsg}. Re-run the rescue before treating this migration as complete.`
+    );
   }
   const deployFresh = async (key, abi, bytecode, args) => {
     if (outputExists(checkpoint[key]) && (await codeExists(checkpoint[key]))) {

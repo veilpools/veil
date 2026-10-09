@@ -30,10 +30,10 @@ export const TESTNET_0XBOW = {
     ("0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda" as Address),
   entrypointProxy:
     (process.env.NEXT_PUBLIC_TESTNET_ENTRYPOINT_PROXY as Address | undefined) ||
-    ("0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0" as Address),
+    ("0xb68c3d25e5e9902363e8e10d5c0a471e65be8152" as Address),
   pool:
     (process.env.NEXT_PUBLIC_TESTNET_PRIVACY_POOL as Address | undefined) ||
-    ("0x2bea7094f77e3f9a21397c688de8ef105d4848bc" as Address),
+    ("0xea48e6a7ae296ebbd7d58792091b8087032d3aa4" as Address),
   poseidonT3:
     (process.env.NEXT_PUBLIC_TESTNET_POSEIDON_T3 as Address | undefined) ||
     ("0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34" as Address),

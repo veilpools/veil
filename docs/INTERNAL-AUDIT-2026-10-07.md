@@ -1,7 +1,7 @@
 # Veil Internal Audit — 2026-10-07
 
 **Scope:** contracts/ (VeilHook, VeilShieldRouter, VeilTreasury, VeilAttestationRegistry, ShieldedPool, VeilToken), scripts/, app + components + lib, secrets hygiene.
-**Method:** manual source review + live onchain verification on testnet 46630 and mainnet 4663. No external auditor. F4 formal audit and legal review explicitly deferred by owner.
+**Method:** manual source review + live onchain verification on testnet 46630 and mainnet 4663. No external auditor. F4 formal audit and legal review explicitly waived permanently by owner (decisions 6/11).
 **Verdict: PASS WITH CONDITIONS (see §4).** No fund-loss or theft paths found. Three trust-centralization points and two liveness notes below are accepted operator risks, not blockers.
 
 ## 1. Critical — must fix before mainnet (all fixed)
@@ -32,7 +32,7 @@
 
 1. Fund the new deployer, redeploy the 0xbow suite + veil contracts under it (old-compromised-key ownership must not persist anywhere).
 2. Publish the association-set policy (sentinel-only is a placeholder, not a policy).
-3. Decide attestation criteria (owner-allowlist today, ZK proofs later) and the owner-power sunset schedule — publish both.
+3. Decide attestation criteria (open self-attest per decisions 8, no allowlist per 10) and the owner-power posture (indefinite per 3/9) — both published in docs/DECISIONS.md.
 4. Marketing copy: no price promises, no "audited" claims (this is an INTERNAL audit), keep the provisional-verifier labels until Groth16 verifier + Pons token ship.
 
 ## 6. Testnet end-to-end round (2026-10-07, post-audit)

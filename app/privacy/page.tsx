@@ -67,7 +67,7 @@ export default function PrivacyPage() {
               2. Client-Side Proving &amp; Zero Server Logging
             </h2>
             <p style={{ color: "var(--color-muted)", lineHeight: "var(--leading-body)" }}>
-              All cryptographic secrets, nullifiers, and notes are generated locally in your browser using cryptographically secure randomness. At no point are private notes, nullifiers, or secret keys transmitted to any external server or indexer. Proof payloads are assembled client-side; the onchain verifier is currently provisional for old notes only, with Groth16 on 0xbow paths (full Groth16 follows in F4).
+              All cryptographic secrets, nullifiers, and notes are generated locally in your browser using cryptographically secure randomness. At no point are private notes, nullifiers, or secret keys transmitted to any external server or indexer. Proof payloads are assembled client-side; the onchain verifier is provisional for old notes only, with Groth16 live on the 0xbow paths.
             </p>
           </section>
 

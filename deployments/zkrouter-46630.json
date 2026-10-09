@@ -5,5 +5,5 @@
   "entrypoint": "0xb68c3d25e5e9902363e8e10d5c0a471e65be8152",
   "poolManager": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
   "deployer": "0xCAB1E4df4FBD2EF6F73cB03519Ec33cba08879e6",
-  "status": "deployed-unwired (no UI caller yet)"
+  "status": "deployed-wired"
 }

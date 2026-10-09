@@ -133,14 +133,14 @@ export const codosContent = {
       {
         time: "Phase 2",
         name: "ZK-Gated Hooks",
-        body: "Uniswap v4 beforeSwap hook enforcing zero-knowledge proof attestations and protocol fee buyback/burn engine.",
+        body: "Uniswap v4 beforeSwap hook enforcing open self-attestation gating and protocol fee buyback/burn engine.",
         barW: "38%",
         indent: "24%"
       },
       {
         time: "Phase 3",
         name: "Shielded Swaps",
-        body: "Private pool-to-pool token swaps and gasless unlinked withdrawals across Robinhood Chain and Ethereum L1.",
+        body: "Private pool-to-pool token swaps and unlinked withdrawals on Robinhood Chain via self-relay.",
         barW: "48%",
         indent: "52%"
       }
@@ -182,7 +182,7 @@ export const codosContent = {
     items: [
       {
         q: "How does Veil guarantee privacy on a public blockchain?",
-        a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is currently provisional for old notes only, with Groth16 on 0xbow paths; full Groth16 follows in F4."
+        a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is provisional for old notes only; Groth16 serves the live 0xbow paths."
       },
       {
         q: "Can MEV bots or sandwich searchers front-run my swap?",
