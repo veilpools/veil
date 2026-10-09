@@ -14,3 +14,8 @@ DevBrief-Veil.md
 
 .vercel
 .env*
+
+# live note secrets (unspendable-if-leaked funds at stake) - NEVER commit
+deployments/tmp-*.json
+deployments/*-note.json
+deployments/*-note.tmp.json
