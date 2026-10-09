@@ -221,6 +221,18 @@ export function isTestnetChainId(chainId: number | undefined): boolean {
   return chainId === TESTNET_CHAIN_ID;
 }
 
+export interface BowRelayContextArgs {
+  pool: Address;
+  asset: Address;
+  recipient: Address;
+}
+
+export function buildBowRelayContext(args: BowRelayContextArgs) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(args.pool)) throw new Error("Relay pool must be a valid address.");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(args.asset)) throw new Error("Relay asset must be a valid address.");
+  return { pool: args.pool, asset: args.asset, recipient: args.recipient };
+}
+
 export const BOW_DEPOSITED_EVENT = parseAbiItem(
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)"
 );

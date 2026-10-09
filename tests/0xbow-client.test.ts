@@ -12,6 +12,8 @@ import { TESTNET_0XBOW, TESTNET_CHAIN_ID } from "../lib/privacy-pools";
 const EXPECTED_SENTINEL_ROOT =
   "21888242871839275222246405745257275088548364400416034343698204186575808495616";
 
+const VEIL_BOW_POOL = "0x23e9008294ab74875aa3f9cdcd42511bb43c7ed6";
+
 describe("0xbow artifact pins (v1.2.1)", () => {
   it("pins all six circuit artifacts with valid sha256 hex format", () => {
     const names = Object.keys(BOW_ARTIFACT_HASHES).sort();
@@ -78,5 +80,17 @@ describe("0xbow testnet address book", () => {
       expect(actual).toMatch(/^0x[0-9a-fA-F]{40}$/);
       expect(actual.toLowerCase()).toBe(addr.toLowerCase());
     }
+  });
+});
+
+describe("bow VEIL relay params", () => {
+  it("builds relay context for the ERC20 pool, not the ETH pool", async () => {
+    const { buildBowRelayContext } = await import("../lib/0xbow-client");
+    const ctx = buildBowRelayContext({
+      pool: VEIL_BOW_POOL,
+      asset: "0x019086f63407fadf0ccb89516e465baef5031aa9",
+      recipient: "0x000000000000000000000000000000000000dEaD",
+    });
+    expect(ctx.pool.toLowerCase()).toBe(VEIL_BOW_POOL.toLowerCase());
   });
 });
