@@ -49,7 +49,15 @@ contract VeilZkRouter is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IZkEntrypoint public immutable entrypoint;
+    /// @dev Reserved for the future swap leg. No PoolManager callback exists
+    /// yet, so there is intentionally no access-control modifier on this
+    /// skeleton (relay/deposit are permissionless self-relay by design).
     IPoolManager public immutable poolManager;
+
+    /// @dev SNARK scalar field matching 0xbow Constants.SNARK_SCALAR_FIELD.
+    /// 0xbow stores context as uint256(keccak(...)) % SNARK_SCALAR_FIELD.
+    uint256 internal constant SNARK_SCALAR_FIELD =
+        21888242871839275222246405745257275088548364400416034343698204186575808495617;
 
     /// @dev True while a deposit or relay flow is active. receive() only accepts
     /// native asset mid-flow (funds pushed back by the Entrypoint during relay).
@@ -74,15 +82,11 @@ contract VeilZkRouter is ReentrancyGuard {
     error SlippageExceeded();
     error InvalidShieldedPool();
     error InsufficientOutputForDenomination();
-    error OnlyPoolManager();
+    error InvalidPrecommitment();
     error ContextMismatch();
+    error ContextHashMismatch();
     error RelayFeeMismatch();
     error EthReceiveNotInFlow();
-
-    modifier onlyPoolManager() {
-        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
-        _;
-    }
 
     constructor(address _entrypoint, address _poolManager) {
         if (_entrypoint == address(0)) revert ZeroAddress();
@@ -109,7 +113,7 @@ contract VeilZkRouter is ReentrancyGuard {
     /// @notice Entry leg: deposits funds into a 0xbow pool via the Entrypoint.
     /// @param asset Token address, address(0) for the native asset.
     /// @param value Amount to deposit, must be greater than zero.
-    /// @param precommitment Precommitment hash for the deposit.
+    /// @param precommitment Precommitment hash for the deposit, must be non-zero.
     /// @return commitment Deposit commitment hash returned by the Entrypoint.
     function deposit(address asset, uint256 value, uint256 precommitment)
         external
@@ -118,6 +122,7 @@ contract VeilZkRouter is ReentrancyGuard {
         returns (uint256 commitment)
     {
         if (value == 0) revert InsufficientOutputForDenomination();
+        if (precommitment == 0) revert InvalidPrecommitment();
         _inZkFlow = true;
         if (asset == address(0)) {
             if (msg.value != value) revert InsufficientOutputForDenomination();
@@ -128,6 +133,7 @@ contract VeilZkRouter is ReentrancyGuard {
             IERC20(asset).forceApprove(address(entrypoint), value);
             commitment = entrypoint.deposit(IERC20(asset), value, precommitment);
         }
+        if (commitment == 0) revert InvalidPrecommitment();
         _inZkFlow = false;
 
         // Invariant check: router holds zero balance of native asset and input token.
@@ -142,7 +148,12 @@ contract VeilZkRouter is ReentrancyGuard {
     /// @notice Exit leg: relays a 0xbow withdrawal with an onchain-verified Groth16 proof.
     /// @dev The proof is verified onchain by entrypoint.relay, which replaces Mock.
     /// The caller binds pool, minOut, commitment and fee into the proof context;
-    /// this router enforces that the decoded relay recipient and fee match.
+    /// this router enforces that the decoded relay recipient and fee match, that
+    /// the bound context matches proof pubSignals[7] (0xbow ProofLib.context:
+    /// keccak(...) % SNARK_SCALAR_FIELD), and that the proven withdrawn value
+    /// (pubSignals[2]) covers minOut. Skeleton-grade: full swap-leg routing is
+    /// not yet wired; these checks make the context binding enforceable, not
+    /// event-only.
     /// @param withdrawal Withdrawal request carrying the encoded relay data.
     /// @param proof Groth16 withdrawal proof with the context-bound public signals.
     /// @param scope Pool scope to withdraw from.
@@ -164,12 +175,14 @@ contract VeilZkRouter is ReentrancyGuard {
         address asset
     ) external nonReentrant {
         if (recipient == address(0)) revert ZeroAddress();
-        if (pool == address(0)) revert ZeroAddress();
+        if (pool == address(0)) revert InvalidShieldedPool();
         ZkRelayData memory data = abi.decode(withdrawal.data, (ZkRelayData));
         if (data.recipient == address(0)) revert ZeroAddress();
         if (data.recipient != recipient) revert ContextMismatch();
         if (data.relayFeeBPS != relayFeeBPS) revert RelayFeeMismatch();
         bytes32 contextHash = computeContext(pool, minOut, commitmentHash, relayFeeBPS);
+        if (proof.pubSignals[7] != uint256(contextHash) % SNARK_SCALAR_FIELD) revert ContextHashMismatch();
+        if (proof.pubSignals[2] < minOut) revert SlippageExceeded();
 
         _inZkFlow = true;
         entrypoint.relay(withdrawal, proof, scope);

@@ -16,7 +16,7 @@
 //
 // IMPORT-SAFETY: importing this module performs zero RPC calls and zero
 // exits. All CLI side effects (argv checks, dry-run print, live sends) run
-// only when the file is executed directly (main-entry guard below), so Task 6
+// only when the file is executed directly (main-entry guard below), so callers
 // can `import { LEGACY_POOLS, freezeLegacyDeposits }` side-effect-free.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -83,7 +83,6 @@ function buildProvider() {
 }
 
 async function createLiveClients() {
-  loadEnvFile(".env.mainnet.local");
   loadEnvFile(".env.local");
 
   // Viem transport backed by the shared rpc-helper (same endpoint selection as

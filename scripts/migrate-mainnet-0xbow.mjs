@@ -220,7 +220,11 @@ if (!EXECUTE) {
       console.log("old treasury empty, nothing to rescue");
     }
   } catch (e) {
-    console.log("rescue skipped:", String(e.message || e).slice(0, 120));
+    const rescueMsg = String(e?.message || e).slice(0, 300);
+    checkpoint.rescueFailed = { message: rescueMsg, at: new Date().toISOString() };
+    saveCheckpoint();
+    console.error(`BLOCKING WARNING: stranded-VEIL rescue FAILED — funds remain in old treasury ${OLD_TREASURY_MAINNET}. Reason: ${rescueMsg}`);
+    console.error("BLOCKING WARNING: checkpoint.rescueFailed recorded — re-run the rescue before treating this migration as complete. Do NOT proceed as if funds were recovered.");
   }
   const deployFresh = async (key, abi, bytecode, args) => {
     if (outputExists(checkpoint[key]) && (await codeExists(checkpoint[key]))) {
