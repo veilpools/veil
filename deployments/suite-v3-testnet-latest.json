@@ -1,10 +1,13 @@
 {
   "chainId": 46630,
-  "entrypoint": "0xdc473a2fb03585e8870baaf2d4742b2643de300d",
-  "ethPool": "0xf0bdd4cbfcde05b11f401e4b9b3cb6664cbb31ef",
-  "veilPool": "0x23e9008294ab74875aa3f9cdcd42511bb43c7ed6",
+  "entrypoint": "0xb68c3d25e5e9902363e8e10d5c0a471e65be8152",
+  "ethPool": "0xea48e6a7ae296ebbd7d58792091b8087032d3aa4",
+  "veilPool": "0xae2c219e462ca1b80473375bcbcad2b025cae610",
   "veilToken": "0x019086f63407fadf0ccb89516e465baef5031aa9",
+  "withdrawalVerifier": "0xeea9d0f7ee0958c6d59f25162be4e69ba60a0f71",
+  "commitmentVerifier": "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008",
   "aspRoot": "21888242871839275222246405745257275088548364400416034343698204186575808495616",
-  "owner": "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d",
+  "aspCid": "local-v3-asp-46630-sentinel-00000000",
+  "owner": "0xCAB1E4df4FBD2EF6F73cB03519Ec33cba08879e6",
   "maxRelayFeeBPS": 100
 }

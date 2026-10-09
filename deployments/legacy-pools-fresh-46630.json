@@ -1,0 +1,24 @@
+{
+  "chainId": 46630,
+  "guardian": "0xCAB1E4df4FBD2EF6F73cB03519Ec33cba08879e6",
+  "pools": {
+    "eth": {
+      "address": "0x3783db43f4f08294da847c66a0fb7203bb3e005d",
+      "tx": "0x57d2998d6c9f62e7430cf0fd6976599bac476b12ed0299c76621c5c879e1f317",
+      "denomination": "1000000000000000",
+      "cap": "10000000000000000000"
+    },
+    "veil05": {
+      "address": "0x0fb48c9552154ea028cbd812430e1ea3465a9b4c",
+      "tx": "0x1bf99e4d2ad8621902f6ac1d4396aecc333dd6f0661c1a522d6689f0ef17889c",
+      "denomination": "500000000000000000",
+      "cap": "5000000000000000000000"
+    },
+    "veil2": {
+      "address": "0xc144f744f887ebf5746a9974673d626f22431f3b",
+      "tx": "0x34b347bb8dec30fec8ce6a9c7ead2627ff84bebb4ad2797c9c3507d85aa0f9ed",
+      "denomination": "2000000000000000000",
+      "cap": "20000000000000000000000"
+    }
+  }
+}

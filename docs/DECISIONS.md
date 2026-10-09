@@ -36,3 +36,13 @@ Supersedes any sunset language elsewhere in earlier docs.
 # Full-ZK build decision — decided by the owner on 2026-10-09
 
 17. **Full-ZK via audited-circuit reuse, still no external audit.** The router/VEIL flows go ZK by building on the audited 0xbow circuits (commitment + withdrawal, ceremony transcript included) — no novel cryptography, no new ceremony. Item 6 (F4 waive) extends to cover this build for exactly that reason. **Reopener:** if novel circuits become necessary, this item reopens and the audit question returns with it.
+    - **B1 ruling (2026-10-09):** binding for the swap middle is atomicity, not a second proof check — `VeilZkRouter` delegates proof verification to `Entrypoint.relay` (documented in NatSpec) and enforces relay→swap→deposit in one tx (transient stage guard + invariant-0 + events). `minOut`/slippage applies to the post-swap leg only; the withdrawal leg yields exactly the fixed denomination by 0xbow design.
+
+---
+
+# Wallet rotation — executed 2026-10-09 (old keys leaked)
+
+18. **Operator wallet is now `0xCAB1E4df4FBD2EF6F73cB03519Ec33cba08879e6`.** The two old wallets (`0xCdbd…`, `0x2725…`) are retired and must never sign again (old keys used one last time to hand over power, then abandoned).
+    - Rotated live: registry v1/v2, hook v1/v2, testnet treasury ownership; suite-v3 entrypoint OWNER + POSTMAN (old revoked on both). Proofs: `0xecf9…`, `0xae2e…`, `0x5fbf…`, `0x8826…`, `0xddfd…`, `0x9940…/0x2c4e…`, `0xd59d…/0x3f91…`.
+    - Non-transferable by code (guardian roles have no setter, only renounce): legacy pool guardians + 0xbow pool guardians stay on old keys until cutover, when pools are paused + renounced (`pauseDeposits` then `renounceGuardian` = locked shut forever; withdrawals need no guardian and stay open).
+    - Accepted residual: v1 entrypoint is ownerless (OWNER renounced long ago — safe) and its POSTMAN is stuck on the old key (admin renounced, unfixable). Worst case is fake ASP roots on the superseded v1 suite (griefing only, no fund risk); UI runs on v3. All future deployments use the new wallet (env already switched).

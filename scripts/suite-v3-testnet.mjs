@@ -26,7 +26,7 @@ loadEnvFile(".env.mainnet.local");
 loadEnvFile(".env.local");
 
 const VEIL = "0x019086f63407fadf0ccb89516e465baef5031aa9";
-const ETH = "0x0000000000000000000000000000000000000000";
+const ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"; // 0xbow NATIVE_ASSET (NOT address(0))
 const POSEIDON = {
   "node_modules/poseidon-solidity/PoseidonT3.sol:PoseidonT3": "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34",
   "node_modules/poseidon-solidity/PoseidonT4.sol:PoseidonT4": "0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
