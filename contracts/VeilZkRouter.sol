@@ -56,7 +56,10 @@ interface IZkEntrypoint {
 /// @notice Atomic executor for full-ZK flows. Every value movement goes
 /// through audited Groth16 proofs verified onchain by the 0xbow Entrypoint.
 /// @dev Proof verification delegated to Entrypoint; router enforces atomicity, not proof validity.
-/// Relay -> swap -> deposit must complete in ONE transaction via executeFullZkFlow.
+/// Relay -> swap -> deposit must complete in ONE transaction via executeFullZkFlow
+/// or executeMultiFullZkFlow. The multi-note entry consumes N fixed-denomination
+/// withdrawals from the same pool and asset, runs ONE exact-input v4 swap of the
+/// aggregated total, then ONE fixed-denomination deposit.
 /// A relay without a matching same-tx deposit always reverts: there is no
 /// standalone relay entry point, and the transient stage machine rejects nested
 /// or interleaved legs with AtomicityViolation.
@@ -65,7 +68,8 @@ interface IZkEntrypoint {
 /// The Entrypoint enforces the canonical context keccak(abi.encode(withdrawal, scope))
 /// reduced modulo the SNARK field; this router performs no proof re-check.
 /// minOut/slippage applies ONLY to post-swap amountOut: minSwapOut on
-/// executeFullZkFlow is enforced via SlippageExceeded once poolManager.swap lands.
+/// executeFullZkFlow and executeMultiFullZkFlow is enforced via SlippageExceeded
+/// once poolManager.swap lands.
 /// The relay exit must land in this router (recipient equals address(this)) so the
 /// exact relayed amount chains fund-to-fund into the swap input; the deposit leg
 /// is funded from the swap output, msg.value must be zero, and any dust above
@@ -76,8 +80,9 @@ contract VeilZkRouter is ReentrancyGuard {
 
     IZkEntrypoint public immutable entrypoint;
     /// @dev Live swap rail. PoolManager calls back into unlockCallback during
-    /// executeFullZkFlow; the callback is gated by onlyPoolManager plus the
-    /// transient SWAPPING stage, so it is unreachable outside the atomic flow.
+    /// executeFullZkFlow and executeMultiFullZkFlow; the callback is gated by
+    /// onlyPoolManager plus the transient SWAPPING stage, so it is unreachable
+    /// outside the atomic flow.
     IPoolManager public immutable poolManager;
 
     /// @dev Atomicity state machine, cleared automatically at transaction end.
@@ -90,6 +95,9 @@ contract VeilZkRouter is ReentrancyGuard {
     uint8 private constant STAGE_RELAYING = 1;
     uint8 private constant STAGE_SWAPPING = 2;
     uint8 private constant STAGE_DEPOSITING = 3;
+
+    /// @dev Maximum withdrawals per multi-note flow. Caps gas for the relay loop.
+    uint256 private constant MAX_MULTI_WITHDRAWALS = 8;
 
     /// @dev True while a deposit, relay or swap flow is active. receive() only accepts
     /// native asset mid-flow (funds pushed back by the Entrypoint during relay
@@ -134,6 +142,9 @@ contract VeilZkRouter is ReentrancyGuard {
     error EthReceiveNotInFlow();
     error OnlyPoolManager();
     error InvalidSwapLeg();
+    error ArrayLengthMismatch();
+    error EmptyWithdrawals();
+    error TooManyWithdrawals();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
@@ -283,6 +294,132 @@ contract VeilZkRouter is ReentrancyGuard {
         emit ZkSwapExecuted(msg.sender, swapAmountIn, amountOut);
         emit ZkDepositExecuted(msg.sender, depositAsset, depositValue, commitment);
         emit FullZkFlowExecuted(msg.sender, recipient, scope, swapAmountIn, amountOut, commitment);
+    }
+
+    /// @notice Atomic multi-note relay -> swap -> deposit in ONE transaction.
+    /// @dev Proof verification delegated to Entrypoint; router enforces atomicity, not proof validity.
+    /// Fixed-denomination market fix: 0xbow pools enforce a fixed 0.001 denomination
+    /// on both sides, so at 1.5 to 3 VEIL per ETH no single-note cross-asset flow
+    /// clears both denoms. This entry consumes N withdrawals from the same pool and
+    /// asset, aggregates the exact relayed total via balance deltas, runs ONE
+    /// exact-input v4 swap of that total, then deposits EXACTLY depositValue into
+    /// the destination 0xbow pool. The pool accepts depositValue or the deposit
+    /// leg reverts; the existing depositValue pattern is kept, the denomination is
+    /// not read from the pool here.
+    /// The withdrawal legs accept NO minOut param: each 0xbow relay yields exactly
+    /// the fixed denomination, so no withdrawal-leg slippage check exists. minSwapOut
+    /// guards ONLY the post-swap amountOut and reverts with SlippageExceeded.
+    /// The relay recipient must equal address(this) for every withdrawal so the
+    /// aggregated relay exits chain fund-to-fund into the single swap input;
+    /// msg.value must be zero because every leg is funded router-internally.
+    /// Any leg failure reverts the whole transaction: the relay legs run only
+    /// inside this function, the transient stage machine forces the single swap
+    /// then the single deposit to follow, and any nested or interleaved call
+    /// reverts with AtomicityViolation. Dust above depositValue is refunded to
+    /// the caller. Invariant-0 and leg events apply.
+    /// @param withdrawals Withdrawal requests carrying the encoded relay data.
+    /// @param proofs Groth16 withdrawal proofs, each verified onchain by entrypoint.relay.
+    /// @param scopes Pool scopes to withdraw from, one per withdrawal.
+    /// @param recipient Withdrawal recipient, must equal address(this) and match every encoded data.
+    /// @param withdrawAsset Withdrawn asset swapped as exact input, address(0) for native.
+    /// @param depositAsset Deposit asset taken as swap output, address(0) for native.
+    /// @param depositValue Deposit amount carved from the swap output, must be greater than zero.
+    /// @param precommitment Precommitment hash for the deposit, must be non-zero.
+    /// @param swapLeg Exact-input v4 swap path with sqrtPriceLimit bound.
+    /// @param minSwapOut Minimum acceptable post-swap output, enforced on amountOut only.
+    /// @return commitment Deposit commitment hash returned by the Entrypoint.
+    function executeMultiFullZkFlow(
+        ZkWithdrawal[] calldata withdrawals,
+        ZkWithdrawProof[] calldata proofs,
+        uint256[] calldata scopes,
+        address recipient,
+        address withdrawAsset,
+        address depositAsset,
+        uint256 depositValue,
+        uint256 precommitment,
+        ZkSwapLeg calldata swapLeg,
+        uint256 minSwapOut
+    ) external payable nonReentrant returns (uint256 commitment) {
+        if (_stage != STAGE_IDLE) revert AtomicityViolation();
+        uint256 count = withdrawals.length;
+        if (count == 0) revert EmptyWithdrawals();
+        if (proofs.length != count || scopes.length != count) revert ArrayLengthMismatch();
+        if (count > MAX_MULTI_WITHDRAWALS) revert TooManyWithdrawals();
+        if (recipient == address(0)) revert ZeroAddress();
+        if (recipient != address(this)) revert RecipientMismatch();
+        if (depositValue == 0) revert InsufficientOutputForDenomination();
+        if (precommitment == 0) revert InvalidPrecommitment();
+        if (msg.value != 0) revert InsufficientOutputForDenomination();
+        Currency input = swapLeg.zeroForOne ? swapLeg.key.currency0 : swapLeg.key.currency1;
+        Currency output = swapLeg.zeroForOne ? swapLeg.key.currency1 : swapLeg.key.currency0;
+        if (Currency.unwrap(input) != withdrawAsset) revert InvalidSwapLeg();
+        if (Currency.unwrap(output) != depositAsset) revert InvalidSwapLeg();
+        for (uint256 i = 0; i < count; ) {
+            ZkRelayData memory data = abi.decode(withdrawals[i].data, (ZkRelayData));
+            if (data.recipient == address(0)) revert ZeroAddress();
+            if (data.recipient != recipient) revert RecipientMismatch();
+            unchecked {
+                ++i;
+            }
+        }
+
+        _stage = STAGE_RELAYING;
+        _inZkFlow = true;
+        uint256 nativeBefore = address(this).balance;
+        uint256 withdrawBefore = withdrawAsset == address(0)
+            ? 0
+            : IERC20(withdrawAsset).balanceOf(address(this));
+        for (uint256 i = 0; i < count; ) {
+            entrypoint.relay(withdrawals[i], proofs[i], scopes[i]);
+            emit ZkRelayExecuted(msg.sender, recipient, scopes[i]);
+            unchecked {
+                ++i;
+            }
+        }
+
+        _stage = STAGE_SWAPPING;
+        uint256 swapAmountIn = withdrawAsset == address(0)
+            ? address(this).balance - nativeBefore
+            : IERC20(withdrawAsset).balanceOf(address(this)) - withdrawBefore;
+        if (swapAmountIn == 0) revert InsufficientOutputForDenomination();
+        if (swapAmountIn > uint256(uint256(type(int256).max))) revert InsufficientOutputForDenomination();
+        bytes memory result = poolManager.unlock(abi.encode(swapLeg, swapAmountIn));
+        uint256 amountOut = abi.decode(result, (uint256));
+        if (amountOut < minSwapOut) revert SlippageExceeded();
+
+        _stage = STAGE_DEPOSITING;
+        if (amountOut < depositValue) revert InsufficientOutputForDenomination();
+        if (depositAsset == address(0)) {
+            commitment = entrypoint.deposit{value: depositValue}(precommitment);
+        } else {
+            IERC20(depositAsset).forceApprove(address(entrypoint), depositValue);
+            commitment = entrypoint.deposit(IERC20(depositAsset), depositValue, precommitment);
+        }
+        if (commitment == 0) revert InvalidPrecommitment();
+        if (amountOut > depositValue) {
+            uint256 dust = amountOut - depositValue;
+            if (depositAsset == address(0)) {
+                (bool refundOk, ) = msg.sender.call{value: dust}("");
+                require(refundOk, "dust refund failed");
+            } else {
+                IERC20(depositAsset).safeTransfer(msg.sender, dust);
+            }
+        }
+        _stage = STAGE_IDLE;
+        _inZkFlow = false;
+
+        // Invariant check: router holds zero balance of native asset and both leg tokens.
+        if (address(this).balance != 0) revert NonZeroBalanceInvariantFailed();
+        if (withdrawAsset != address(0) && withdrawAsset != depositAsset) {
+            if (IERC20(withdrawAsset).balanceOf(address(this)) != 0) revert NonZeroBalanceInvariantFailed();
+        }
+        if (depositAsset != address(0)) {
+            if (IERC20(depositAsset).balanceOf(address(this)) != 0) revert NonZeroBalanceInvariantFailed();
+        }
+
+        emit ZkSwapExecuted(msg.sender, swapAmountIn, amountOut);
+        emit ZkDepositExecuted(msg.sender, depositAsset, depositValue, commitment);
+        emit FullZkFlowExecuted(msg.sender, recipient, scopes[0], swapAmountIn, amountOut, commitment);
     }
 
     /// @notice Callback invoked by PoolManager.unlock for the atomic swap leg.
