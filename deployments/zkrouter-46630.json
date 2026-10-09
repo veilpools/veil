@@ -1,0 +1,9 @@
+{
+  "chainId": 46630,
+  "router": "0x80b18d51fb6087b65cf8511b78b264d90fee585c",
+  "tx": "0x467615c52af8766eadc669848347e660a92916fc6f5299c263b38f9d8588da16",
+  "entrypoint": "0xb68c3d25e5e9902363e8e10d5c0a471e65be8152",
+  "poolManager": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+  "deployer": "0xCAB1E4df4FBD2EF6F73cB03519Ec33cba08879e6",
+  "status": "deployed-unwired (no UI caller yet)"
+}

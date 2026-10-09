@@ -98,7 +98,9 @@ await call(entrypoint, epAbi, "registerPool", [VEIL, veilPool, parseEther("1"), 
 const SNARK_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const leaves = [SNARK_FIELD - 1n];
 const aspRoot = BigInt(generateMerkleProof(leaves, leaves[0]).root);
-await call(entrypoint, epAbi, "updateRoot", [aspRoot, "local-v3-asp-46630-sentinel"]);
+// CID must be 32-64 chars (Entrypoint reverts InvalidIPFSCIDLength otherwise).
+const aspCid = "local-v3-asp-46630-sentinel-00000000";
+await call(entrypoint, epAbi, "updateRoot", [aspRoot, aspCid]);
 
 const out = {
   chainId: 46630, entrypoint, ethPool, veilPool, veilToken: VEIL,
