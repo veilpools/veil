@@ -29,11 +29,12 @@ import type { ShieldedNote } from "./note";
 // ---------------------------------------------------------------------------
 // Task 4 (testnet end-to-end UI): VeilShieldRouter.shieldedSwap (§7 #5 #6).
 //
-// Alur: saldo shielded A -> withdraw ke router -> swap A->B di pool v4
-//       -> deposit ke pool B (newCommitment) tanpa alamat publik muncul.
+// Flow: shielded balance A -> withdraw to router -> swap A->B on the v4
+//       pool -> deposit into pool B (newCommitment) with no public address
+//       appearing.
 //
-// Relayer fallback (§7 #6): bila relayer offline atau user memilih self-relay,
-// relayerFee = 0 dan msg.sender adalah wallet user sendiri yang membayar gas.
+// Relayer fallback (§7 #6): when the relayer is offline or the user picks
+// self-relay, relayerFee = 0 and msg.sender is the user's own wallet paying gas.
 // ---------------------------------------------------------------------------
 
 export interface ShieldedSwapExecutionParams {
