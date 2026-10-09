@@ -40,19 +40,24 @@ export const TESTNET_CHAIN_ID = 46630;
 // Proven live 2026-10-07 (R2 live A/B): ETH->VEIL swapToShield (~1.35 VEIL)
 // and ETH->VEIL shieldedSwap (~1.07 VEIL), both invariant-clean.
 export const TESTNET_ROUTER_ADDRESS =
-  "0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27" as Address;
+  (process.env.NEXT_PUBLIC_TESTNET_VEIL_SHIELD_ROUTER as Address | undefined) ||
+  ("0x7c73e4b7f9c9cac1f1574c46fd17952be2853e27" as Address);
 export const TESTNET_LEGACY_ETH_POOL =
-  "0x1b1d39e4da649747ecc0e93e7a06452a3061de17" as Address;
+  (process.env.NEXT_PUBLIC_TESTNET_PRIVACY_POOL_ETH as Address | undefined) ||
+  ("0x1b1d39e4da649747ecc0e93e7a06452a3061de17" as Address);
 export const TESTNET_VEIL_TOKEN =
-  "0x019086f63407fadf0ccb89516e465baef5031aa9" as Address;
+  (process.env.NEXT_PUBLIC_TESTNET_VEIL_TOKEN as Address | undefined) ||
+  ("0x019086f63407fadf0ccb89516e465baef5031aa9" as Address);
 // Legacy VEIL-denominated pools (R2 live-A/B destinations): 0.5 VEIL is the
 // preferred destination, 2 VEIL the fallback. Preference ORDER only — the
 // actual choice is decided LIVE from the quote every time (never hardcoded),
 // via pickVeilDestinationPool.
 export const TESTNET_VEIL_POOL_05 =
-  "0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address;
+  (process.env.NEXT_PUBLIC_TESTNET_VEIL_POOL_05 as Address | undefined) ||
+  ("0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address);
 export const TESTNET_VEIL_POOL_2 =
-  "0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address;
+  (process.env.NEXT_PUBLIC_TESTNET_VEIL_POOL_2 as Address | undefined) ||
+  ("0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address);
 export const TESTNET_VEIL_POOL_05_DENOMINATION = 500000000000000000n;
 export const TESTNET_VEIL_DEST_POOLS = [
   TESTNET_VEIL_POOL_05,
