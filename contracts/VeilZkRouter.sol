@@ -8,7 +8,6 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /// @notice Withdrawal request mirrored from the audited 0xbow IPrivacyPool interface.
 /// @dev Field layout matches 0xbow v1.2.1 so the ABI encoding is identical.
-/// Integrity of the data is ensured by the context signal in the Groth16 proof.
 struct ZkWithdrawal {
     address processooor;
     bytes data;
@@ -39,25 +38,38 @@ interface IZkEntrypoint {
 }
 
 /// @title VeilZkRouter
-/// @notice Context-bound executor for full-ZK flows. Every value movement goes
+/// @notice Atomic executor for full-ZK flows. Every value movement goes
 /// through audited Groth16 proofs verified onchain by the 0xbow Entrypoint.
-/// @dev Invariant: Router NEVER retains user custody or dust; all balances must settle to 0.
-/// The exit leg calls entrypoint.relay (proof verified onchain, replaces Mock).
-/// The entry leg calls entrypoint.deposit. Swap params are hashed into the proof
-/// context verified onchain, so relayers cannot tamper with destinations.
+/// @dev Proof verification delegated to Entrypoint; router enforces atomicity, not proof validity.
+/// Relay -> swap -> deposit must complete in ONE transaction via executeFullZkFlow.
+/// A relay without a matching same-tx deposit always reverts: there is no
+/// standalone relay entry point, and the transient stage machine rejects nested
+/// or interleaved legs with AtomicityViolation.
+/// The withdrawal leg yields exactly the 0xbow fixed denomination
+/// (PrivacyPool.DEPOSIT_DENOMINATION); NO minOut check applies on withdrawal.
+/// The Entrypoint enforces the canonical context keccak(abi.encode(withdrawal, scope))
+/// reduced modulo the SNARK field; this router performs no proof re-check.
+/// minOut/slippage applies ONLY to post-swap amountOut: minSwapOut on
+/// executeFullZkFlow is the swap-leg wiring point, enforced via SlippageExceeded
+/// once poolManager.swap lands (skeleton: swap is pass-through, guard documented).
+/// Invariant: Router NEVER retains user custody or dust; all balances must settle to 0.
 contract VeilZkRouter is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IZkEntrypoint public immutable entrypoint;
     /// @dev Reserved for the future swap leg. No PoolManager callback exists
     /// yet, so there is intentionally no access-control modifier on this
-    /// skeleton (relay/deposit are permissionless self-relay by design).
+    /// skeleton (atomic flow and deposit are permissionless self-relay by design).
     IPoolManager public immutable poolManager;
 
-    /// @dev SNARK scalar field matching 0xbow Constants.SNARK_SCALAR_FIELD.
-    /// 0xbow stores context as uint256(keccak(...)) % SNARK_SCALAR_FIELD.
-    uint256 internal constant SNARK_SCALAR_FIELD =
-        21888242871839275222246405745257275088548364400416034343698204186575808495617;
+    /// @dev Atomicity state machine, cleared automatically at transaction end.
+    /// IDLE means no flow is active. RELAYING means the relay leg has started
+    /// and the deposit leg is still pending. DEPOSITING means the deposit leg
+    /// has started. Any unexpected state reverts with AtomicityViolation.
+    uint8 private transient _stage;
+    uint8 private constant STAGE_IDLE = 0;
+    uint8 private constant STAGE_RELAYING = 1;
+    uint8 private constant STAGE_DEPOSITING = 2;
 
     /// @dev True while a deposit or relay flow is active. receive() only accepts
     /// native asset mid-flow (funds pushed back by the Entrypoint during relay).
@@ -73,19 +85,16 @@ contract VeilZkRouter is ReentrancyGuard {
     event ZkRelayExecuted(
         address indexed relayer,
         address indexed recipient,
-        bytes32 indexed contextHash,
         uint256 scope
     );
 
     error ZeroAddress();
     error NonZeroBalanceInvariantFailed();
     error SlippageExceeded();
-    error InvalidShieldedPool();
     error InsufficientOutputForDenomination();
     error InvalidPrecommitment();
-    error ContextMismatch();
-    error ContextHashMismatch();
-    error RelayFeeMismatch();
+    error RecipientMismatch();
+    error AtomicityViolation();
     error EthReceiveNotInFlow();
 
     constructor(address _entrypoint, address _poolManager) {
@@ -93,21 +102,6 @@ contract VeilZkRouter is ReentrancyGuard {
         if (_poolManager == address(0)) revert ZeroAddress();
         entrypoint = IZkEntrypoint(_entrypoint);
         poolManager = IPoolManager(_poolManager);
-    }
-
-    /// @notice Binds swap params into one context hash verified onchain.
-    /// @param pool 0xbow pool address for the flow.
-    /// @param minOut Minimum acceptable output amount.
-    /// @param commitment New commitment hash created by the flow.
-    /// @param relayFeeBPS Relay fee in basis points.
-    /// @return contextHash keccak256 hash of the bound params.
-    function computeContext(
-        address pool,
-        uint256 minOut,
-        bytes32 commitment,
-        uint256 relayFeeBPS
-    ) public pure returns (bytes32 contextHash) {
-        return keccak256(abi.encode(pool, minOut, commitment, relayFeeBPS));
     }
 
     /// @notice Entry leg: deposits funds into a 0xbow pool via the Entrypoint.
@@ -121,6 +115,7 @@ contract VeilZkRouter is ReentrancyGuard {
         nonReentrant
         returns (uint256 commitment)
     {
+        if (_stage != STAGE_IDLE) revert AtomicityViolation();
         if (value == 0) revert InsufficientOutputForDenomination();
         if (precommitment == 0) revert InvalidPrecommitment();
         _inZkFlow = true;
@@ -145,56 +140,82 @@ contract VeilZkRouter is ReentrancyGuard {
         emit ZkDepositExecuted(msg.sender, asset, value, commitment);
     }
 
-    /// @notice Exit leg: relays a 0xbow withdrawal with an onchain-verified Groth16 proof.
-    /// @dev The proof is verified onchain by entrypoint.relay, which replaces Mock.
-    /// The caller binds pool, minOut, commitment and fee into the proof context;
-    /// this router enforces that the decoded relay recipient and fee match, that
-    /// the bound context matches proof pubSignals[7] (0xbow ProofLib.context:
-    /// keccak(...) % SNARK_SCALAR_FIELD), and that the proven withdrawn value
-    /// (pubSignals[2]) covers minOut. Skeleton-grade: full swap-leg routing is
-    /// not yet wired; these checks make the context binding enforceable, not
-    /// event-only.
+    /// @notice Atomic relay -> swap -> deposit in ONE transaction.
+    /// @dev Proof verification delegated to Entrypoint; router enforces atomicity, not proof validity.
+    /// The withdrawal leg accepts NO minOut param: 0xbow always yields exactly the
+    /// fixed denomination, so no withdrawal-leg slippage check exists. minSwapOut
+    /// guards ONLY the post-swap amountOut; swap-leg wiring lands later and is
+    /// enforced via SlippageExceeded once poolManager.swap is wired. Skeleton
+    /// grade: swap is pass-through, so minSwapOut is accepted as the wiring point
+    /// and documented here, not yet enforced against an amountOut.
+    /// A relay without a matching same-tx deposit always reverts: the relay leg
+    /// runs only inside this function, the transient stage machine forces the
+    /// deposit leg to follow, and any nested or interleaved call reverts with
+    /// AtomicityViolation. Existing invariant-0 checks and leg events apply.
     /// @param withdrawal Withdrawal request carrying the encoded relay data.
-    /// @param proof Groth16 withdrawal proof with the context-bound public signals.
+    /// @param proof Groth16 withdrawal proof verified onchain by entrypoint.relay.
     /// @param scope Pool scope to withdraw from.
-    /// @param pool 0xbow pool address bound into the proof context.
-    /// @param minOut Minimum acceptable output bound into the proof context.
-    /// @param commitmentHash New commitment hash bound into the proof context.
-    /// @param relayFeeBPS Relay fee in basis points bound into the proof context.
     /// @param recipient Withdrawal recipient, must be non-zero and match the encoded data.
-    /// @param asset Withdrawn asset for the zero-balance invariant check, address(0) for native.
-    function relay(
+    /// @param withdrawAsset Withdrawn asset for the zero-balance invariant check, address(0) for native.
+    /// @param depositAsset Deposit asset for the entry leg, address(0) for native.
+    /// @param depositValue Deposit amount, must be greater than zero.
+    /// @param precommitment Precommitment hash for the deposit, must be non-zero.
+    /// @param minSwapOut Minimum acceptable post-swap output, swap-leg wiring point.
+    /// @return commitment Deposit commitment hash returned by the Entrypoint.
+    function executeFullZkFlow(
         ZkWithdrawal calldata withdrawal,
         ZkWithdrawProof calldata proof,
         uint256 scope,
-        address pool,
-        uint256 minOut,
-        bytes32 commitmentHash,
-        uint256 relayFeeBPS,
         address recipient,
-        address asset
-    ) external nonReentrant {
+        address withdrawAsset,
+        address depositAsset,
+        uint256 depositValue,
+        uint256 precommitment,
+        uint256 minSwapOut
+    ) external payable nonReentrant returns (uint256 commitment) {
+        if (_stage != STAGE_IDLE) revert AtomicityViolation();
         if (recipient == address(0)) revert ZeroAddress();
-        if (pool == address(0)) revert InvalidShieldedPool();
         ZkRelayData memory data = abi.decode(withdrawal.data, (ZkRelayData));
         if (data.recipient == address(0)) revert ZeroAddress();
-        if (data.recipient != recipient) revert ContextMismatch();
-        if (data.relayFeeBPS != relayFeeBPS) revert RelayFeeMismatch();
-        bytes32 contextHash = computeContext(pool, minOut, commitmentHash, relayFeeBPS);
-        if (proof.pubSignals[7] != uint256(contextHash) % SNARK_SCALAR_FIELD) revert ContextHashMismatch();
-        if (proof.pubSignals[2] < minOut) revert SlippageExceeded();
+        if (data.recipient != recipient) revert RecipientMismatch();
+        if (depositValue == 0) revert InsufficientOutputForDenomination();
+        if (precommitment == 0) revert InvalidPrecommitment();
 
+        _stage = STAGE_RELAYING;
         _inZkFlow = true;
         entrypoint.relay(withdrawal, proof, scope);
+
+        // Swap-leg wiring point: poolManager.swap lands here. Once wired, enforce
+        // post-swap slippage with: if (amountOut < minSwapOut) revert SlippageExceeded();
+        // minSwapOut is intentionally NOT checked against the withdrawal leg, which
+        // always yields exactly the fixed denomination. The param stays in the
+        // signature as the explicit wiring point until the swap leg lands.
+
+        _stage = STAGE_DEPOSITING;
+        if (depositAsset == address(0)) {
+            if (msg.value != depositValue) revert InsufficientOutputForDenomination();
+            commitment = entrypoint.deposit{value: depositValue}(precommitment);
+        } else {
+            if (msg.value != 0) revert InsufficientOutputForDenomination();
+            IERC20(depositAsset).safeTransferFrom(msg.sender, address(this), depositValue);
+            IERC20(depositAsset).forceApprove(address(entrypoint), depositValue);
+            commitment = entrypoint.deposit(IERC20(depositAsset), depositValue, precommitment);
+        }
+        if (commitment == 0) revert InvalidPrecommitment();
+        _stage = STAGE_IDLE;
         _inZkFlow = false;
 
-        // Invariant check: router holds zero balance of native asset and withdrawn token.
+        // Invariant check: router holds zero balance of native asset and both leg tokens.
         if (address(this).balance != 0) revert NonZeroBalanceInvariantFailed();
-        if (asset != address(0)) {
-            if (IERC20(asset).balanceOf(address(this)) != 0) revert NonZeroBalanceInvariantFailed();
+        if (withdrawAsset != address(0) && withdrawAsset != depositAsset) {
+            if (IERC20(withdrawAsset).balanceOf(address(this)) != 0) revert NonZeroBalanceInvariantFailed();
+        }
+        if (depositAsset != address(0)) {
+            if (IERC20(depositAsset).balanceOf(address(this)) != 0) revert NonZeroBalanceInvariantFailed();
         }
 
-        emit ZkRelayExecuted(msg.sender, recipient, contextHash, scope);
+        emit ZkRelayExecuted(msg.sender, recipient, scope);
+        emit ZkDepositExecuted(msg.sender, depositAsset, depositValue, commitment);
     }
 
     /// @notice Accepts native asset only mid-flow from the Entrypoint during relay.
