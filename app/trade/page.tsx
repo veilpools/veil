@@ -120,6 +120,18 @@ import {
   BOW_V3_VEIL_APPROVE_ABI,
 } from "../../lib/0xbow-client";
 import { fetchPinnedBowArtifact } from "../../lib/0xbow-artifacts";
+import { VEIL_ZK_ROUTER_ABI } from "../../lib/veil-artifact";
+import {
+  TESTNET_ZK_ROUTER_ADDRESS,
+  TESTNET_ZK_ROUTER_CHAIN_ID,
+  buildZkSwapLeg,
+  deriveZkMinSwapOut,
+  discoverZkSwapOut,
+  findFullZkFlowExecuted,
+  isZkExecuteDisabled,
+  mapZkRouterError,
+} from "../../lib/zk-router";
+import { ZkSwapToShieldPanel } from "../../components/trade/ZkSwapToShieldPanel";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
 import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
 import { generateMnemonic, english } from "viem/accounts";
@@ -249,6 +261,39 @@ export default function SwapToShieldPage() {
   const [gatedSimNote, setGatedSimNote] = useState<string | null>(null);
   const [isGatedSwapping, setIsGatedSwapping] = useState(false);
   const [gatedTxHash, setGatedTxHash] = useState<string | null>(null);
+
+  // Full-ZK Swap-to-Shield (VeilZkRouter.executeFullZkFlow, testnet only):
+  // quote state is simulation-only (no tx); execution re-simulates pre-send.
+  const [zkQuoteOut, setZkQuoteOut] = useState<bigint | null>(null);
+  const [zkMinOut, setZkMinOut] = useState<bigint | null>(null);
+  const [isZkQuoting, setIsZkQuoting] = useState(false);
+  const [zkQuoteNote, setZkQuoteNote] = useState<string | null>(null);
+  const [zkTxHash, setZkTxHash] = useState<string | null>(null);
+  const [zkBundle, setZkBundle] = useState<{
+    withdrawal: { processooor: Address; data: `0x${string}` };
+    proof: {
+      pA: [bigint, bigint];
+      pB: [[bigint, bigint], [bigint, bigint]];
+      pC: [bigint, bigint];
+      pubSignals: [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    };
+    scope: bigint;
+    withdrawAsset: Address;
+    depositAsset: Address;
+    depositValue: bigint;
+    precommitment: bigint;
+    zeroForOne: boolean;
+    destPool: Address;
+    sourcePool: Address;
+    nullifier: bigint;
+    secret: bigint;
+    label: bigint;
+    newNullifier: bigint;
+    newSecret: bigint;
+    spentNullifier: bigint;
+    quotedSwapOut: bigint;
+    minSwapOut: bigint;
+  } | null>(null);
 
   // Shielded Swap is paused after the full-ZK cutover: the legacy router
   // route only settles into paused legacy pools, so execution stays
@@ -546,6 +591,39 @@ export default function SwapToShieldPage() {
     parsedGatedIn = null;
   }
 
+  // Full-ZK Swap-to-Shield derived state (fresh suite only, legacy stays dead).
+  // Direction follows the selected 0xbow note: ETH notes swap ETH -> VEIL and
+  // shield into the fresh VEIL pool; VEIL notes do the reverse.
+  const zkNote =
+    notes.find((n) => n.nullifier === selectedNoteNullifier && isBowNote(n)) ??
+    notes.find((n) => isBowNote(n)) ??
+    null;
+  const zkIsEthIn = zkNote
+    ? zkNote.asset.toLowerCase() === ETH_ZERO_ADDRESS.toLowerCase()
+    : true;
+  const zkWithdrawAsset = (
+    zkIsEthIn ? ETH_ZERO_ADDRESS : TESTNET_BOW_V3_VEIL_TOKEN
+  ) as Address;
+  const zkDepositAsset = (
+    zkIsEthIn ? TESTNET_BOW_V3_VEIL_TOKEN : ETH_ZERO_ADDRESS
+  ) as Address;
+  const zkDepositValue: bigint | null = zkIsEthIn
+    ? veilMinimum
+    : TESTNET_BOW_V3_ETH_DENOMINATION;
+  const zkNoteValid =
+    zkNote !== null && zkDepositValue !== null && zkDepositValue > 0n;
+  const zkHasQuote =
+    zkBundle !== null && zkQuoteOut !== null && zkMinOut !== null;
+  const zkExecuteDisabled = isZkExecuteDisabled({
+    isExecuting,
+    connected: Boolean(connectedAddress),
+    noteValid: zkNoteValid,
+    isQuoting: isZkQuoting,
+    hasQuote: zkHasQuote,
+  });
+  const zkQuoteDisabled =
+    isExecuting || isZkQuoting || !connectedAddress || !zkNoteValid;
+
   // Task 3: re-read attestation + gating from chain (refresh button and
   // after attest/swap transactions confirm). Live chain state only.
   async function refreshAttestationState(): Promise<void> {
@@ -832,6 +910,524 @@ export default function SwapToShieldPage() {
       setFlowError(mapGatedSwapError(e));
     } finally {
       setIsGatedSwapping(false);
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
+    }
+  }
+
+  // Full-ZK Swap-to-Shield: atomic relay -> swap -> deposit in ONE transaction
+  // via VeilZkRouter.executeFullZkFlow on Robinhood Testnet (fresh suite only,
+  // legacy stays dead). Quote FIRST via free exact-calldata simulations (no tx,
+  // minSwapOut bracketed live), then execute with the slippage-bound min.
+  // Prover-modal steps mirror the 0xbow flows: prove -> relay-in-tx -> swap ->
+  // deposit -> verify. The single send below is guarded by revalidateWallet.
+  function zkProverSteps(): ZkProverStep[] {
+    return [
+      {
+        title: "1. Client-Side Groth16 ZK-SNARK Proving",
+        detail: "Executing snarkjs Groth16 prover in browser against onchain State & ASP Merkle trees",
+        status: "running",
+      },
+      {
+        title: "2. Atomic Relay Leg (relay-in-tx)",
+        detail: "Relay exit lands in the ZK router inside executeFullZkFlow",
+        status: "pending",
+      },
+      {
+        title: "3. Atomic Swap Leg (swap-in-tx)",
+        detail: "Exact-input v4 swap through PoolManager.unlock in the same transaction",
+        status: "pending",
+      },
+      {
+        title: "4. Atomic Deposit Leg + Settlement (deposit-in-tx)",
+        detail: "Swap output shields into the fresh 0xbow pool, dust refunds immediately",
+        status: "pending",
+      },
+      {
+        title: "5. Receipt Verification & Vault Update",
+        detail: "Asserting FullZkFlowExecuted, spent nullifier and Deposited event before saving",
+        status: "pending",
+      },
+    ];
+  }
+
+  async function handleZkQuote() {
+    setFlowError(null);
+    setZkQuoteNote(null);
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    if (connectedChainId !== TESTNET_ZK_ROUTER_CHAIN_ID) {
+      setFlowError(
+        "Full-ZK Swap-to-Shield lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. Nothing was simulated."
+      );
+      return;
+    }
+    if (!isTestnetBowV3Configured()) {
+      setFlowError("The 0xbow deposit suite is not configured. Nothing was simulated.");
+      return;
+    }
+    if (!zkNote || !isBowNote(zkNote)) {
+      setFlowError("Select a 0xbow shielded note first. Nothing was simulated.");
+      return;
+    }
+    if (zkDepositValue === null || zkDepositValue <= 0n) {
+      setFlowError(
+        "The live deposit amount is still loading. Wait for it to load and try again. Nothing was simulated."
+      );
+      return;
+    }
+    const bowNote = zkNote;
+    const zeroForOne = zkIsEthIn;
+    const depositValue = zkDepositValue;
+    const depositAsset = zkDepositAsset;
+    const withdrawAsset = zkWithdrawAsset;
+
+    setIsExecuting(true);
+    setIsZkQuoting(true);
+    setProverTitle("Full-ZK Swap to Shield (Testnet)");
+    setProverTxHash(null);
+    setZkTxHash(null);
+    setProverCommitment(bowNote.commitmentHash);
+    setProverCommitted(false);
+    setProverSteps(zkProverSteps());
+    setIsProverOpen(true);
+
+    try {
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
+      const testnetClient = createTestnetBowPublicClient();
+      const isVeilBowNote =
+        typeof bowNote.asset === "string" &&
+        bowNote.asset.toLowerCase() === TESTNET_BOW_V3_VEIL_TOKEN.toLowerCase();
+      const sourcePool = (isVeilBowNote ? TESTNET_BOW_V3_VEIL_POOL : TESTNET_BOW_V3_ETH_POOL) as Address;
+      const bowEntrypoint = TESTNET_BOW_V3_ENTRYPOINT;
+      const destPool = (zeroForOne ? TESTNET_BOW_V3_VEIL_POOL : TESTNET_BOW_V3_ETH_POOL) as Address;
+
+      // Fresh-suite-only guard: the note scope must match the live source pool.
+      const liveSourceScope = await testnetClient.readContract({
+        address: sourcePool,
+        abi: BOW_POOL_SCOPE_ABI,
+        functionName: "SCOPE",
+      });
+      if (BigInt(liveSourceScope) !== BigInt(bowNote.scope)) {
+        throw new Error(
+          "This note does not belong to the fresh 0xbow suite. Full-ZK Swap-to-Shield serves fresh-suite notes only. No transaction was sent."
+        );
+      }
+      const destScope = BigInt(
+        await testnetClient.readContract({
+          address: destPool,
+          abi: BOW_POOL_SCOPE_ABI,
+          functionName: "SCOPE",
+        })
+      );
+
+      await fetchPinnedBowArtifact("withdraw.wasm");
+      await fetchPinnedBowArtifact("withdraw.zkey");
+      try {
+        await fetch("/api/asp/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: BigInt(bowNote.label).toString() }),
+        });
+      } catch {}
+
+      const scope = BigInt(bowNote.scope);
+      const denomination = BigInt(bowNote.denomination);
+      const label = BigInt(bowNote.label);
+      const nullifier = BigInt(bowNote.nullifier);
+      const secret = BigInt(bowNote.secret);
+      const commitmentHash = BigInt(bowNote.commitmentHash);
+
+      let { orderedCommitments, labels } = await fetchBowPoolEvents(testnetClient, sourcePool);
+      if (!orderedCommitments.includes(commitmentHash)) {
+        throw new Error(
+          "Deposit commitment not found in onchain state tree. Please ensure your deposit transaction was confirmed."
+        );
+      }
+      let stateTree = buildBowStateTree(orderedCommitments);
+      let aspSet = buildBowAssociationSet(labels);
+      if (!aspSet.labels.includes(label)) {
+        throw new Error("Deposit label not found in Association Set. Try syncing ASP.");
+      }
+      let onchainAspRoot = await testnetClient.readContract({
+        address: bowEntrypoint,
+        abi: BOW_ENTRYPOINT_RELAY_ABI,
+        functionName: "latestRoot",
+      });
+      if (aspSet.root !== BigInt(onchainAspRoot)) {
+        const resync = await fetch("/api/asp/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
+        });
+        try {
+          const syncJson = (await resync.json()) as { throttled?: boolean; error?: string };
+          if (resync.status === 429 || syncJson.throttled) {
+            throw new Error(
+              syncJson.error ||
+                "ASP sync is throttled right now. Wait a few minutes and try again."
+            );
+          }
+        } catch (e: unknown) {
+          if (e instanceof Error && /throttl|retry/i.test(e.message)) throw e;
+        }
+        const refreshed = await fetchBowPoolEvents(testnetClient, sourcePool);
+        orderedCommitments = refreshed.orderedCommitments;
+        labels = refreshed.labels;
+        if (!orderedCommitments.includes(commitmentHash)) {
+          throw new Error("Deposit commitment not found in onchain state tree after ASP re-sync.");
+        }
+        stateTree = buildBowStateTree(orderedCommitments);
+        aspSet = buildBowAssociationSet(labels);
+        onchainAspRoot = await testnetClient.readContract({
+          address: bowEntrypoint,
+          abi: BOW_ENTRYPOINT_RELAY_ABI,
+          functionName: "latestRoot",
+        });
+        if (aspSet.root !== BigInt(onchainAspRoot)) {
+          throw new Error(
+            "Association Set root is not synced onchain. Wait for the ASP sync transaction to confirm and try again."
+          );
+        }
+      }
+
+      const stateMerkleProof = stateTree.proof(commitmentHash);
+      const aspMerkleProof = buildBowAssociationProof(aspSet, label);
+      const sdk = createBowSdk();
+      const { withdrawal, context } = createBowWithdrawalContext({
+        entrypoint: bowEntrypoint,
+        recipient: TESTNET_ZK_ROUTER_ADDRESS,
+        feeRecipient: connectedAddress,
+        scope,
+      });
+      const accountService = new AccountService(null as never, {
+        mnemonic: generateMnemonic(english, 256),
+      });
+      accountService.addPoolAccount(
+        scope as never,
+        denomination,
+        nullifier as never,
+        secret as never,
+        label as never,
+        BigInt(bowNote.blockNumber),
+        bowNote.txHash as `0x${string}`
+      );
+      const commitmentObj: AccountCommitment = {
+        hash: commitmentHash as never,
+        label: label as never,
+        nullifier: nullifier as never,
+        secret: secret as never,
+        value: denomination,
+        blockNumber: BigInt(bowNote.blockNumber),
+        txHash: bowNote.txHash as `0x${string}`,
+      };
+      const secretPair = accountService.createWithdrawalSecrets(commitmentObj);
+      const withdrawalProof = await sdk.proveWithdrawal(commitmentObj, {
+        withdrawalAmount: denomination,
+        stateMerkleProof,
+        aspMerkleProof,
+        stateRoot: stateTree.root as never,
+        stateTreeDepth: 32n,
+        aspRoot: aspSet.root as never,
+        aspTreeDepth: 32n,
+        context,
+        newNullifier: secretPair.nullifier,
+        newSecret: secretPair.secret,
+      });
+      const isValid = await sdk.verifyWithdrawal(withdrawalProof);
+      if (!isValid) throw new Error("Local verification of Groth16 withdrawal proof failed.");
+
+      setProverSteps((prev) => [
+        { ...prev[0], status: "completed" },
+        { ...prev[1], status: "running" },
+        prev[2],
+        prev[3],
+        prev[4],
+      ]);
+
+      const pc = withdrawalProof.proof;
+      const proofStruct = {
+        pA: [BigInt(pc.pi_a[0]), BigInt(pc.pi_a[1])] as [bigint, bigint],
+        pB: [
+          [BigInt(pc.pi_b[0][1]), BigInt(pc.pi_b[0][0])],
+          [BigInt(pc.pi_b[1][1]), BigInt(pc.pi_b[1][0])],
+        ] as [[bigint, bigint], [bigint, bigint]],
+        pubSignals: withdrawalProof.publicSignals.map(BigInt),
+        pC: [BigInt(pc.pi_c[0]), BigInt(pc.pi_c[1])] as [bigint, bigint],
+      };
+      if (proofStruct.pubSignals.length !== 8) {
+        throw new Error("Withdrawal proof has an unexpected shape. No transaction was sent.");
+      }
+      const proof = {
+        ...proofStruct,
+        pubSignals: proofStruct.pubSignals as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint],
+      };
+
+      const newSecrets = createBowDepositSecrets(destScope);
+      const slip = parseSlippagePercent(slippage);
+      const base = {
+        withdrawal: {
+          processooor: withdrawal.processooor as Address,
+          data: withdrawal.data as `0x${string}`,
+        },
+        proof,
+        scope,
+        withdrawAsset,
+        depositAsset,
+        depositValue,
+        precommitment: newSecrets.precommitment,
+        zeroForOne,
+      };
+      const { floor, probes } = await discoverZkSwapOut(testnetClient, {
+        account: connectedAddress,
+        base,
+      });
+      const minSwapOut = deriveZkMinSwapOut(floor, slip);
+      const spentNullifier = BigInt(withdrawalProof.publicSignals[1]);
+
+      setZkBundle({
+        ...base,
+        destPool,
+        sourcePool,
+        nullifier,
+        secret,
+        label,
+        newNullifier: newSecrets.nullifier,
+        newSecret: newSecrets.secret,
+        spentNullifier,
+        quotedSwapOut: floor,
+        minSwapOut,
+      });
+      setZkQuoteOut(floor);
+      setZkMinOut(minSwapOut);
+      setZkQuoteNote(
+        `Live quote locked after ${probes} free simulations: ${formatEther(floor)} ${zeroForOne ? "VEIL" : "ETH"} (min ${formatEther(minSwapOut)} at ${slip}% slippage). Review and execute — execution re-simulates before sending.`
+      );
+      setIsProverOpen(true);
+    } catch (e: unknown) {
+      console.error("Full-ZK quote error:", e);
+      setIsProverOpen(false);
+      setZkBundle(null);
+      setZkQuoteOut(null);
+      setZkMinOut(null);
+      setFlowError(mapZkRouterError(e));
+    } finally {
+      setIsZkQuoting(false);
+      setIsExecuting(false);
+      txInFlight.current = Math.max(0, txInFlight.current - 1);
+    }
+  }
+
+  async function handleZkFullFlow() {
+    setFlowError(null);
+    if (!connectedAddress) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const activeProvider = getActiveEvmProvider();
+    if (!activeProvider) {
+      setIsWalletModalOpen(true);
+      return;
+    }
+    const connectedChainId = await getConnectedChainId(activeProvider);
+    if (connectedChainId !== TESTNET_ZK_ROUTER_CHAIN_ID) {
+      setFlowError(
+        "Full-ZK Swap-to-Shield lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
+      );
+      return;
+    }
+    if (!zkBundle) {
+      setFlowError("Refresh the live quote first. No transaction was sent.");
+      return;
+    }
+    let slip: number;
+    try {
+      slip = parseSlippagePercent(slippage);
+    } catch (e: unknown) {
+      setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
+      return;
+    }
+    // Deposit drift re-check: a changed live minimum invalidates the quote.
+    if (!zkIsEthIn && veilMinimum !== zkBundle.depositValue) {
+      setFlowError(
+        "The live VEIL minimum changed onchain since the quote. Refresh the live quote and try again. No transaction was sent."
+      );
+      return;
+    }
+
+    setIsExecuting(true);
+    setProverTitle("Full-ZK Swap to Shield (Testnet)");
+    setProverSteps([
+      { ...zkProverSteps()[0], status: "completed" },
+      { ...zkProverSteps()[1], status: "running" },
+      zkProverSteps()[2],
+      zkProverSteps()[3],
+      zkProverSteps()[4],
+    ]);
+    setIsProverOpen(true);
+
+    try {
+      if (txInFlight.current > 0) return;
+      txInFlight.current += 1;
+      const testnetClient = createTestnetBowPublicClient();
+      const minSwapOut = deriveZkMinSwapOut(zkBundle.quotedSwapOut, slip);
+      const swapLeg = buildZkSwapLeg({ zeroForOne: zkBundle.zeroForOne });
+      const walletClient = createWalletClient({
+        account: connectedAddress,
+        chain: appChain,
+        transport: custom(activeProvider),
+      });
+      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+      const fullHash = await walletClient.writeContract({
+        address: TESTNET_ZK_ROUTER_ADDRESS,
+        abi: VEIL_ZK_ROUTER_ABI,
+        functionName: "executeFullZkFlow",
+        args: [
+          zkBundle.withdrawal,
+          zkBundle.proof as never,
+          zkBundle.scope,
+          TESTNET_ZK_ROUTER_ADDRESS,
+          zkBundle.withdrawAsset,
+          zkBundle.depositAsset,
+          zkBundle.depositValue,
+          zkBundle.precommitment,
+          swapLeg as never,
+          minSwapOut,
+        ],
+      });
+      setProverTxHash(fullHash);
+      setZkTxHash(fullHash);
+
+      const receipt = await waitForTransactionReceipt(testnetClient, { hash: fullHash });
+      if (receipt.status !== "success") throw new Error("Full-ZK flow transaction reverted onchain.");
+
+      setProverSteps((prev) => [
+        prev[0],
+        { ...prev[1], status: "completed" },
+        { ...prev[2], status: "completed" },
+        { ...prev[3], status: "completed" },
+        { ...prev[4], status: "running" },
+      ]);
+
+      const poolLogs = await testnetClient.getContractEvents({
+        address: zkBundle.destPool,
+        abi: parseAbi([
+          "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
+        ]),
+        eventName: "Deposited",
+        fromBlock: receipt.blockNumber,
+        toBlock: receipt.blockNumber,
+      });
+      const ownLog = poolLogs.find(
+        (l) => l.transactionHash.toLowerCase() === fullHash.toLowerCase()
+      );
+      if (!ownLog)
+        throw new Error(
+          "Flow confirmed but our Deposited event was not found in the receipt block. No note was saved. Check the transaction on the explorer."
+        );
+      const destLabel = BigInt(ownLog.args._label ?? 0n);
+      const onchainValue = BigInt(ownLog.args._value ?? 0n);
+      if (onchainValue !== zkBundle.depositValue) {
+        throw new Error("Deposited value mismatch: onchain event does not match the quoted deposit value.");
+      }
+      const destScope = BigInt(
+        await testnetClient.readContract({
+          address: zkBundle.destPool,
+          abi: BOW_POOL_SCOPE_ABI,
+          functionName: "SCOPE",
+        })
+      );
+      const newNote = createBowNote({
+        scope: destScope,
+        denomination: zkBundle.depositValue,
+        label: destLabel,
+        nullifier: zkBundle.newNullifier,
+        secret: zkBundle.newSecret,
+        precommitment: zkBundle.precommitment,
+        txHash: fullHash,
+        blockNumber: receipt.blockNumber,
+        asset: zkBundle.depositAsset,
+        chainId: TESTNET_CHAIN_ID,
+      });
+      if (BigInt(newNote.commitmentHash) !== BigInt(ownLog.args._commitment ?? 0n)) {
+        throw new Error("Commitment derivation mismatch between local note and onchain event.");
+      }
+      const flowEvent = findFullZkFlowExecuted(
+        receipt.logs.map((l) => ({ data: l.data as `0x${string}`, topics: [...l.topics] as `0x${string}`[] })),
+        BigInt(newNote.commitmentHash),
+        connectedAddress
+      );
+      if (!flowEvent) {
+        throw new Error(
+          "Flow confirmed but no matching FullZkFlowExecuted event for this commitment was found. The note was NOT saved — verify on the explorer before retrying."
+        );
+      }
+      const spentOnchain = await testnetClient.readContract({
+        address: zkBundle.sourcePool,
+        abi: parseAbi(["function nullifierHashes(uint256) view returns (bool)"]),
+        functionName: "nullifierHashes",
+        args: [zkBundle.spentNullifier],
+      });
+      if (!spentOnchain) {
+        throw new Error(
+          "Flow confirmed but the nullifier does not read as spent onchain. The note was NOT removed — verify on the explorer before retrying."
+        );
+      }
+
+      const remaining = notes.filter((n) => (isBowNote(n) ? BigInt(n.nullifier) !== zkBundle.nullifier : true));
+      setNotes(remaining);
+      setSelectedNote(newNote);
+      setProverCommitment(newNote.commitmentHash);
+      savePendingNote(newNote, fullHash, zkBundle.destPool);
+      saveNoteLocally(newNote);
+      clearPendingNoteByTx(fullHash);
+      setProverCommitted(true);
+
+      fetch("/api/asp/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: destLabel.toString() }),
+      }).catch((err) => console.warn("Background ASP sync:", err));
+
+      if (connectedAddress) {
+        try {
+          const liveBals = await fetchAllTokenBalances(connectedAddress, SUPPORTED_TOKENS);
+          setTokenBalances(liveBals);
+        } catch {}
+      }
+
+      setZkBundle(null);
+      setZkQuoteOut(null);
+      setZkMinOut(null);
+      setZkQuoteNote("Full-ZK flow confirmed onchain. Refresh the live quote for the next flow.");
+      setProverSteps((prev) => [
+        prev[0],
+        prev[1],
+        prev[2],
+        prev[3],
+        { ...prev[4], status: "completed" },
+      ]);
+      setIsProverOpen(true);
+    } catch (e: unknown) {
+      console.error("Full-ZK flow error:", e);
+      setIsProverOpen(false);
+      let slipForMap: number | undefined;
+      try {
+        slipForMap = parseSlippagePercent(slippage);
+      } catch {
+        slipForMap = undefined;
+      }
+      setFlowError(mapZkRouterError(e, slipForMap));
+    } finally {
+      setIsExecuting(false);
       txInFlight.current = Math.max(0, txInFlight.current - 1);
     }
   }
@@ -2191,50 +2787,80 @@ export default function SwapToShieldPage() {
               )}
           {/* attest body lives in components/trade/AttestPanel.tsx */}
 
-          {/* TAB 2: SHIELDED SWAP (paused after the full-ZK cutover) */}
-          {activeTab === "shielded_swap" && (
-            <div
-              role="status"
-              style={{
-                padding: "var(--space-5)",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "rgba(26, 26, 26, 0.025)",
-                border: "1px solid var(--color-border)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "var(--space-3)",
-                textAlign: "center",
-              }}
-            >
-              <div style={{ color: "var(--color-text)", fontWeight: 600, fontSize: "var(--text-body-sm)" }}>
-                Shielded Swap Is Paused
-              </div>
-              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", lineHeight: 1.6, maxWidth: "420px" }}>
-                The legacy swap route only settles into pools that no longer accept new deposits, so execution stays
-                disabled. To move funds, withdraw a note to a fresh address and re-shield via Shield. No transaction
-                was sent.
-              </p>
-              <button
-                type="button"
-                onClick={() => switchTab("buy_and_shield")}
+          {/* TAB 2: SHIELDED SWAP — full-ZK router on testnet, paused elsewhere.
+              The legacy swap route stays dead: it only settles into pools that
+              no longer accept new deposits. */}
+          {activeTab === "shielded_swap" &&
+            (isTestnetBuild ? (
+              <ZkSwapToShieldPanel
+                connectedAddress={connectedAddress}
+                sourceLabel={
+                  zkNote
+                    ? `${formatEther(BigInt(zkNote.denomination))} ${zkIsEthIn ? "ETH" : "VEIL"} note`
+                    : "No 0xbow note in vault"
+                }
+                routeLabel={
+                  zkIsEthIn ? "ETH -> VEIL via shared v4 pool" : "VEIL -> ETH via shared v4 pool"
+                }
+                routerAddress={TESTNET_ZK_ROUTER_ADDRESS}
+                quotedOut={zkQuoteOut !== null ? formatEther(zkQuoteOut) : null}
+                minSwapOut={zkMinOut !== null ? formatEther(zkMinOut) : null}
+                isQuoting={isZkQuoting}
+                isExecuting={isExecuting}
+                quoteDisabled={zkQuoteDisabled}
+                executeDisabled={zkExecuteDisabled}
+                quoteNote={zkQuoteNote}
+                txHash={zkTxHash}
+                onQuote={() => {
+                  void handleZkQuote();
+                }}
+                onExecute={() => {
+                  void handleZkFullFlow();
+                }}
+              />
+            ) : (
+              <div
+                role="status"
                 style={{
-                  marginTop: "var(--space-2)",
-                  padding: "6px 14px",
-                  borderRadius: "var(--radius-sm)",
-                  backgroundColor: "rgba(255, 140, 0, 0.15)",
-                  border: "1px solid rgba(255, 140, 0, 0.35)",
-                  color: "var(--color-accent-ink)",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  minHeight: "24px",
+                  padding: "var(--space-5)",
+                  borderRadius: "var(--radius-md)",
+                  backgroundColor: "rgba(26, 26, 26, 0.025)",
+                  border: "1px solid var(--color-border)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "var(--space-3)",
+                  textAlign: "center",
                 }}
               >
-                Go to Shield
-              </button>
-            </div>
-          )}
+                <div style={{ color: "var(--color-text)", fontWeight: 600, fontSize: "var(--text-body-sm)" }}>
+                  Shielded Swap Is Paused
+                </div>
+                <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", lineHeight: 1.6, maxWidth: "420px" }}>
+                  The legacy swap route only settles into pools that no longer accept new deposits, so execution stays
+                  disabled. Full-ZK Swap-to-Shield lives on Robinhood Testnet (46630). No transaction
+                  was sent.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => switchTab("buy_and_shield")}
+                  style={{
+                    marginTop: "var(--space-2)",
+                    padding: "6px 14px",
+                    borderRadius: "var(--radius-sm)",
+                    backgroundColor: "rgba(255, 140, 0, 0.15)",
+                    border: "1px solid rgba(255, 140, 0, 0.35)",
+                    color: "var(--color-accent-ink)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    minHeight: "24px",
+                  }}
+                >
+                  Go to Shield
+                </button>
+              </div>
+            ))}
 
           {/* TAB 3: WITHDRAW */}
           {activeTab === "withdraw" && (
