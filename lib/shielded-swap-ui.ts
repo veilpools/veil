@@ -61,7 +61,8 @@ export const SHIELDED_SWAP_ROUTER = TESTNET_ROUTER_ADDRESS;
 // the 0.001 ETH dest note); an ETH source is equally supported — the source
 // follows the spend note (see getShieldedSwapRouteStatus).
 export const SHIELDED_SWAP_SOURCE_POOL =
-  "0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address;
+  (process.env.NEXT_PUBLIC_TESTNET_VEIL_POOL_2 as Address | undefined) ||
+  ("0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address);
 export const SHIELDED_SWAP_SOURCE_DENOMINATION = 2000000000000000000n;
 export const SHIELDED_SWAP_SOURCE_ASSET = TESTNET_VEIL_TOKEN;
 export const SHIELDED_SWAP_DESTINATION_POOL = TESTNET_LEGACY_ETH_POOL;
