@@ -83,3 +83,65 @@ describe("zk router B1 atomicity binding", () => {
     expect(source).not.toContain("Mock");
   });
 });
+
+describe("zk router swap leg (relay -> swap -> deposit, atomic)", () => {
+  it("routes the exact-input swap through PoolManager.unlock with a guarded callback", () => {
+    expect(source).toContain("poolManager.unlock");
+    expect(source).toContain("unlockCallback");
+    expect(source).toContain("OnlyPoolManager");
+    expect(source).toContain("poolManager.swap");
+    expect(source).not.toContain("swap is pass-through");
+  });
+
+  it("performs an exact-input v4 swap with sqrtPriceLimit", () => {
+    expect(source).toContain("SwapParams");
+    expect(source).toContain("amountSpecified");
+    expect(source).toContain("-int256");
+    expect(source).toContain("sqrtPriceLimitX96");
+    expect(source).toContain("zeroForOne");
+  });
+
+  it("enforces post-swap slippage (amountOut >= minSwapOut, not the withdrawal leg)", () => {
+    expect(errNames).toContain("SlippageExceeded");
+    // Live enforcement, not a wiring-point comment.
+    expect(source).toMatch(/\n\s*if \(amountOut < minSwapOut\) revert SlippageExceeded\(\);/);
+    expect(source).not.toContain("pubSignals[7]");
+    expect(source).not.toContain("pubSignals[2]");
+  });
+
+  it("settles input natively via settle{value}, takes output, and refunds dust", () => {
+    expect(source).toContain("_settleCurrency");
+    expect(source).toContain("poolManager.take");
+    expect(source).toContain("poolManager.settle");
+    expect(source).toContain("amountOut > depositValue");
+    expect(source).toContain("dust refund failed");
+  });
+
+  it("deposits swap output into the destination 0xbow pool via entrypoint", () => {
+    expect(source).toContain("entrypoint.deposit");
+    expect(source).toContain("forceApprove");
+    expect(source).toContain("InsufficientOutputForDenomination");
+  });
+
+  it("keeps transient atomicity across relay, swap and deposit with invariant-0", () => {
+    expect(source).toContain("STAGE_SWAPPING");
+    expect(source).toContain("AtomicityViolation");
+    expect(source).toContain("NonZeroBalanceInvariantFailed");
+    expect(source).toContain("EthReceiveNotInFlow");
+    expect(source).toContain("transient");
+  });
+
+  it("exposes the swap leg on executeFullZkFlow and emits swap-style events", () => {
+    const exec = abi.find((e) => e.type === "function" && e.name === "executeFullZkFlow");
+    expect(exec).toBeDefined();
+    const inputBlob = JSON.stringify(exec?.inputs ?? []).toLowerCase();
+    expect(inputBlob).toContain("swapleg");
+    expect(inputBlob).toContain("sqrtpricelimit");
+    const eventNames = abi.filter((e) => e.type === "event").map((e) => e.name);
+    expect(eventNames).toContain("ZkSwapExecuted");
+    expect(eventNames).toContain("FullZkFlowExecuted");
+    const swapEvent = abi.find((e) => e.type === "event" && e.name === "ZkSwapExecuted");
+    expect(JSON.stringify(swapEvent).toLowerCase()).toContain("amountout");
+    expect(source).not.toContain("Mock");
+  });
+});
