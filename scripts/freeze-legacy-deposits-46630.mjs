@@ -13,7 +13,14 @@
 // - Dry run by default: without --execute, prints the three planned
 //   pauseDeposits() calls and exits 0 (zero gas, no key required).
 // - Live ONLY with --execute plus a funded PRIVATE_KEY in the environment.
+//
+// IMPORT-SAFETY: importing this module performs zero RPC calls and zero
+// exits. All CLI side effects (argv checks, dry-run print, live sends) run
+// only when the file is executed directly (main-entry guard below), so Task 6
+// can `import { LEGACY_POOLS, freezeLegacyDeposits }` side-effect-free.
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, custom } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { robinhoodTestnet } from "../lib/chains.mjs";
@@ -22,7 +29,6 @@ import { rpcCall, rpcRequest } from "./rpc-helper.mjs";
 
 const EXPECTED_CHAIN_ID = 46630;
 const MAINNET_CHAIN_ID = 4663;
-const EXECUTE = process.argv.includes("--execute");
 const EXPLORER_TX = "https://explorer.testnet.chain.robinhood.com/tx/";
 
 export const LEGACY_POOLS = [
@@ -31,9 +37,15 @@ export const LEGACY_POOLS = [
   "0x172e9cc542cf9349813f74548eec6e0a1df65e17",
 ];
 
-if (process.argv.includes("--mainnet")) {
-  console.error("REFUSING --mainnet: this script is testnet-only (46630).");
-  process.exit(1);
+function isMainEntry() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    const selfPath = fileURLToPath(import.meta.url);
+    if (entry === selfPath) return true;
+    if (resolve(entry) === resolve(selfPath)) return true;
+  } catch {}
+  return entry.endsWith("freeze-legacy-deposits-46630.mjs");
 }
 
 function loadEnvFile(path) {
@@ -52,81 +64,76 @@ function loadEnvFile(path) {
     }
   } catch {}
 }
-loadEnvFile(".env.mainnet.local");
-loadEnvFile(".env.local");
 
 function isValidAddress(a) {
   return /^0x[0-9a-fA-F]{40}$/.test(a ?? "");
 }
 
-// Viem transport backed by the shared rpc-helper (same endpoint selection as
-// every other script: dedicated testnet URL when configured, else IP bypass).
-const provider = {
-  async request({ method, params }) {
-    const res = await rpcRequest(
-      EXPECTED_CHAIN_ID,
-      { jsonrpc: "2.0", id: 1, method, params }
-    );
-    if (res.error) throw new Error(`RPC error: ${res.error.message}`);
-    return res.result;
-  },
-};
-const transport = custom(provider);
-const publicClient = createPublicClient({
-  chain: robinhoodTestnet,
-  transport,
-});
+function buildProvider() {
+  return {
+    async request({ method, params }) {
+      const res = await rpcRequest(
+        EXPECTED_CHAIN_ID,
+        { jsonrpc: "2.0", id: 1, method, params }
+      );
+      if (res.error) throw new Error(`RPC error: ${res.error.message}`);
+      return res.result;
+    },
+  };
+}
 
-if (!EXECUTE) {
-  console.log("DRY-RUN (zero gas): planned pauseDeposits() calls:");
-  for (const pool of LEGACY_POOLS) {
-    if (!isValidAddress(pool)) {
-      console.error(`BLOCKED: malformed pool address ${pool}.`);
-      process.exit(1);
-    }
-    console.log(`  pauseDeposits() -> ${pool}`);
+async function createLiveClients() {
+  loadEnvFile(".env.mainnet.local");
+  loadEnvFile(".env.local");
+
+  // Viem transport backed by the shared rpc-helper (same endpoint selection as
+  // every other script: dedicated testnet URL when configured, else IP bypass).
+  const transport = custom(buildProvider());
+  const publicClient = createPublicClient({
+    chain: robinhoodTestnet,
+    transport,
+  });
+
+  // Live RPC chainId assert via rpc-helper (same guard as
+  // deploy-shieldedpool-veil-testnet.mjs: refuse non-46630, exit non-zero).
+  const chainIdHex = await rpcCall(EXPECTED_CHAIN_ID, "eth_chainId", []);
+  const chainId = Number.parseInt(chainIdHex, 16);
+  if (chainId === MAINNET_CHAIN_ID) {
+    console.error("REFUSING: connected to mainnet (4663). Testnet 46630 only.");
+    process.exit(1);
   }
-  console.log("Re-run with --execute plus a funded PRIVATE_KEY to send live transactions.");
-  process.exit(0);
+  if (chainId !== EXPECTED_CHAIN_ID) {
+    console.error(`REFUSING: chainId ${chainId} is not testnet 46630.`);
+    process.exit(1);
+  }
+  console.log(`chainId assert passed: ${chainId}`);
+
+  const rawKey = (process.env.PRIVATE_KEY || "").trim();
+  const normalizedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalizedKey)) {
+    console.error("Missing or malformed PRIVATE_KEY in env. Stopping without sending.");
+    process.exit(1);
+  }
+  const account = privateKeyToAccount(normalizedKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: robinhoodTestnet,
+    transport,
+  });
+  console.log("guardian:", account.address);
+
+  const balance = await publicClient.getBalance({ address: account.address });
+  if (balance <= 0n) {
+    console.error("BLOCKED: guardian balance is zero. Fund the key first. Stopping.");
+    process.exit(2);
+  }
+
+  return { publicClient, walletClient, account };
 }
 
-// ---- Live path below. Fail closed on every doubt. ----
-
-// Live RPC chainId assert via rpc-helper (same guard as
-// deploy-shieldedpool-veil-testnet.mjs: refuse non-46630, exit non-zero).
-const chainIdHex = await rpcCall(EXPECTED_CHAIN_ID, "eth_chainId", []);
-const chainId = Number.parseInt(chainIdHex, 16);
-if (chainId === MAINNET_CHAIN_ID) {
-  console.error("REFUSING: connected to mainnet (4663). Testnet 46630 only.");
-  process.exit(1);
-}
-if (chainId !== EXPECTED_CHAIN_ID) {
-  console.error(`REFUSING: chainId ${chainId} is not testnet 46630.`);
-  process.exit(1);
-}
-console.log(`chainId assert passed: ${chainId}`);
-
-const rawKey = (process.env.PRIVATE_KEY || "").trim();
-const normalizedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
-if (!/^0x[0-9a-fA-F]{64}$/.test(normalizedKey)) {
-  console.error("Missing or malformed PRIVATE_KEY in env. Stopping without sending.");
-  process.exit(1);
-}
-const account = privateKeyToAccount(normalizedKey);
-const walletClient = createWalletClient({
-  account,
-  chain: robinhoodTestnet,
-  transport,
-});
-console.log("guardian:", account.address);
-
-const balance = await publicClient.getBalance({ address: account.address });
-if (balance <= 0n) {
-  console.error("BLOCKED: guardian balance is zero. Fund the key first. Stopping.");
-  process.exit(2);
-}
-
-export async function freezeLegacyDeposits(poolAddresses) {
+export async function freezeLegacyDeposits(poolAddresses, deps) {
+  const clients = deps ?? (await createLiveClients());
+  const { publicClient, walletClient, account } = clients;
   const hashes = [];
   for (const pool of poolAddresses) {
     if (!isValidAddress(pool)) {
@@ -159,6 +166,38 @@ export async function freezeLegacyDeposits(poolAddresses) {
   return hashes;
 }
 
-const hashes = await freezeLegacyDeposits(LEGACY_POOLS);
-console.log("All legacy deposits frozen. Transactions:");
-for (const h of hashes) console.log(`  ${EXPLORER_TX}${h}`);
+function runDryRun() {
+  console.log("DRY-RUN (zero gas): planned pauseDeposits() calls:");
+  for (const pool of LEGACY_POOLS) {
+    if (!isValidAddress(pool)) {
+      console.error(`BLOCKED: malformed pool address ${pool}.`);
+      process.exit(1);
+    }
+    console.log(`  pauseDeposits() -> ${pool}`);
+  }
+  console.log("Re-run with --execute plus a funded PRIVATE_KEY to send live transactions.");
+  process.exit(0);
+}
+
+async function main() {
+  if (process.argv.includes("--mainnet")) {
+    console.error("REFUSING --mainnet: this script is testnet-only (46630).");
+    process.exit(1);
+  }
+
+  const execute = process.argv.includes("--execute");
+  if (!execute) {
+    runDryRun();
+    return;
+  }
+
+  // ---- Live path below. Fail closed on every doubt. ----
+  const clients = await createLiveClients();
+  const hashes = await freezeLegacyDeposits(LEGACY_POOLS, clients);
+  console.log("All legacy deposits frozen. Transactions:");
+  for (const h of hashes) console.log(`  ${EXPLORER_TX}${h}`);
+}
+
+if (isMainEntry()) {
+  await main();
+}
