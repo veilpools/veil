@@ -182,7 +182,7 @@ export const codosContent = {
     items: [
       {
         q: "How does Veil guarantee privacy on a public blockchain?",
-        a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is currently provisional and Groth16 follows in F4."
+        a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is currently provisional for old notes only, with Groth16 on 0xbow paths; full Groth16 follows in F4."
       },
       {
         q: "Can MEV bots or sandwich searchers front-run my swap?",

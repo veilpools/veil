@@ -128,6 +128,7 @@ import {
   createBowSdk,
   createBowWithdrawalContext,
   createTestnetBowPublicClient,
+  buildBowRelayContext,
   buildBowStateTree,
   fetchBowPoolEvents,
   fetchBowAspSet,
@@ -1788,7 +1789,7 @@ export default function SwapToShieldPage() {
     // (withdraw(tuple,tuple) through Entrypoint.relay with Groth16) and can
     // never enter this router — fail closed with directions instead of a
     // revert that burns gas.
-    if (isBowNote(noteToSwap)) {
+    if (getWithdrawPath(noteToSwap) === "0xbow" || isBowNote(noteToSwap)) {
       setFlowError(
         "The selected note is a 0xbow note, and VeilShieldRouter.shieldedSwap only spends legacy-pool notes: its source pool must expose withdraw(bytes,bytes32,bytes32,address,uint256), which 0xbow pools do not. Spend 0xbow notes via Withdraw instead. No transaction was sent."
       );
@@ -2133,6 +2134,15 @@ export default function SwapToShieldPage() {
         const bowNote = noteToWithdraw;
         setProverCommitment(bowNote.commitmentHash);
 
+        // Explicit relay context: pool, asset and recipient bound up front.
+        // The asset is derived from the note itself, never hardcoded, so
+        // VEIL notes carry the VEIL token into the relay call.
+        const bowRelayContext = buildBowRelayContext({
+          pool: TESTNET_0XBOW.pool,
+          asset: bowNote.asset as Address,
+          recipient: cleanRecipient as Address,
+        });
+
         const testnetClient = createTestnetBowPublicClient();
         const scope = BigInt(bowNote.scope);
         const denomination = BigInt(bowNote.denomination);
@@ -2144,7 +2154,7 @@ export default function SwapToShieldPage() {
         // Scope live re-check (deep-audit S10): the note's scope must still
         // match the pool's, or minutes of proving + gas burn on a stale proof.
         const liveScope = await testnetClient.readContract({
-          address: TESTNET_0XBOW.pool,
+          address: bowRelayContext.pool,
           abi: BOW_POOL_SCOPE_ABI,
           functionName: "SCOPE",
         });
@@ -2185,7 +2195,7 @@ export default function SwapToShieldPage() {
         // Fetch pool events to build State Tree and Association Set
         let { orderedCommitments, labels } = await fetchBowPoolEvents(
           testnetClient,
-          TESTNET_0XBOW.pool
+          bowRelayContext.pool
         );
 
         if (!orderedCommitments.includes(commitmentHash)) {
@@ -2227,7 +2237,7 @@ export default function SwapToShieldPage() {
           } catch (e: unknown) {
             if (e instanceof Error && /throttl|retry/i.test(e.message)) throw e;
           }
-          const refreshed = await fetchBowPoolEvents(testnetClient, TESTNET_0XBOW.pool);
+          const refreshed = await fetchBowPoolEvents(testnetClient, bowRelayContext.pool);
           orderedCommitments = refreshed.orderedCommitments;
           labels = refreshed.labels;
           if (!orderedCommitments.includes(commitmentHash)) {
@@ -2255,7 +2265,7 @@ export default function SwapToShieldPage() {
         const sdk = createBowSdk();
         const { withdrawal, context } = createBowWithdrawalContext({
           entrypoint: TESTNET_0XBOW.entrypointProxy,
-          recipient: cleanRecipient as Address,
+          recipient: bowRelayContext.recipient,
           feeRecipient: connectedAddress,
           scope,
         });
@@ -2354,7 +2364,7 @@ export default function SwapToShieldPage() {
         // spent before the note leaves the vault — never on receipt alone.
         const spentNullifier = BigInt(withdrawalProof.publicSignals[1]);
         const spentOnchain = await testnetClient.readContract({
-          address: TESTNET_0XBOW.pool,
+          address: bowRelayContext.pool,
           abi: parseAbi(["function nullifierHashes(uint256) view returns (bool)"]),
           functionName: "nullifierHashes",
           args: [spentNullifier],
@@ -2492,13 +2502,13 @@ export default function SwapToShieldPage() {
         status: "pending",
       },
       {
-        title: "3. Provisional Proof Payload Assembly",
-        detail: "Packing the proof payload for the provisional onchain verifier",
+        title: "3. Provisional Proof Payload Assembly (old notes only)",
+        detail: "Packing the legacy Mock proof payload for the provisional onchain verifier (old notes only)",
         status: "pending",
       },
       {
         title: "4. On-Chain Verifier Dispatch",
-        detail: "Submitting to ShieldedVerifier contract; the withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4)",
+        detail: "Submitting to ShieldedVerifier contract; the withdraw call carries no depositor address. Provisional verifier for old notes only — Groth16 on 0xbow paths (F4)",
         status: "pending",
       },
     ];
@@ -2553,7 +2563,7 @@ export default function SwapToShieldPage() {
         abi: VERIFIER_ABI,
         functionName: "shouldPass",
       });
-      if (!pass) throw new Error("Provisional verifier is disabled, withdrawals are unavailable.");
+      if (!pass) throw new Error("Provisional verifier is disabled, old-notes withdrawals are unavailable.");
       const spent = await publicClient.readContract({
         address: withdrawPool,
         abi: POOL_WITHDRAW_ABI,
@@ -2734,7 +2744,7 @@ export default function SwapToShieldPage() {
           >
             {APP_CHAIN_ID === TESTNET_CHAIN_ID
               ? "Direct shielded deposits into non-custodial Merkle privacy pools with client-side Groth16 ZK-SNARK proofs and verifiable Association Sets (ASP)."
-              : "Direct shielded deposits into non-custodial Merkle privacy pools with client-side proof payloads and verifiable Association Sets. Provisional verifier — Groth16 follows (F4)."}
+              : "Direct shielded deposits into non-custodial Merkle privacy pools with client-side proof payloads and verifiable Association Sets. Provisional verifier for old notes only — Groth16 on 0xbow paths (F4)."}
           </p>
         </div>
 
@@ -3180,7 +3190,7 @@ export default function SwapToShieldPage() {
                 </span>
                 <span style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
                   <strong style={{ color: "var(--color-text)", display: "block" }}>Non-Blocking Withdrawals</strong>
-                  The withdraw path has no pause or guardian switch, and nullifiers cannot be reused. Bounds: legacy withdrawals additionally require the provisional verifier to pass and a known Merkle root (roots older than the 100-entry history cannot be spent) — see the internal audit.
+                  The withdraw path has no pause or guardian switch, and nullifiers cannot be reused. Bounds: legacy withdrawals of old notes additionally require the provisional verifier to pass and a known Merkle root (roots older than the 100-entry history cannot be spent) — see the internal audit.
                 </span>
               </div>
 

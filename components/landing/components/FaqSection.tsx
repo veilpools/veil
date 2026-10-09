@@ -11,7 +11,7 @@ interface FaqItem {
 const faqItems: FaqItem[] = [
   {
     q: "How does Veil guarantee privacy on a public blockchain?",
-    a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is currently provisional and Groth16 follows in F4.",
+      a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is currently provisional for old notes only, with Groth16 on 0xbow paths; full Groth16 follows in F4.",
   },
   {
     q: "Can MEV bots or sandwich searchers front-run my swap?",
@@ -23,7 +23,7 @@ const faqItems: FaqItem[] = [
   },
   {
     q: "Can anyone freeze my funds or block withdrawals?",
-    a: "The withdraw path has no pause or guardian switch, and nullifiers cannot be reused. Bounds apply on the legacy path: the provisional verifier must pass and the Merkle root must be within the 100-entry onchain history. See the published internal audit for the full picture.",
+      a: "The withdraw path has no pause or guardian switch, and nullifiers cannot be reused. Bounds apply on the legacy path for old notes: the provisional verifier must pass and the Merkle root must be within the 100-entry onchain history. See the published internal audit for the full picture.",
   },
 ];
 

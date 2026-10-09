@@ -49,7 +49,7 @@ const ROWS: ContractRow[] = [
     key: "verifier",
     label: "Shielded Verifier",
     address: BOOK.verifier || "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
-    note: "Provisional verifier",
+    note: "Provisional verifier (old notes only)",
   },
   {
     key: "deployer",

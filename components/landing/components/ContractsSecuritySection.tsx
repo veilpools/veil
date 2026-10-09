@@ -91,10 +91,10 @@ export const ContractsSecuritySection: React.FC = () => {
     },
     {
       name: "ShieldedVerifier",
-      role: "Groth16 Verifier",
+      role: "Legacy Mock Verifier (old notes only)",
       address: "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
       category: "core",
-      description: "Provisional ZK proof verifier validating withdrawal knowledge and clean association set membership. Groth16 follows in F4.",
+      description: "Provisional ZK proof verifier for old notes only, validating withdrawal knowledge and clean association set membership. Groth16 serves 0xbow paths and follows for all flows in F4.",
       source: "contracts/ShieldedVerifierMock.sol",
       explorerUrl: "https://explorer.mainnet.chain.robinhood.com/address/0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
     },
@@ -158,7 +158,7 @@ export const ContractsSecuritySection: React.FC = () => {
     { id: 1, scenario: "Standard 1-Tx Swap-to-Shield", detail: "Commitment enters tree, router balance = 0 invariant confirmed" },
     { id: 2, scenario: "Slippage threshold exceeded", detail: "Reverted on-chain, 100% user funds returned" },
     { id: 3, scenario: "Double withdrawal of same note", detail: "Rejected automatically with NullifierAlreadySpent" },
-    { id: 4, scenario: "Relayer tampers minOut / recipient / fee", detail: "Groth16 proof fails on the 0xbow path; legacy router path relies on invariant + event asserts (provisional verifier)" },
+    { id: 4, scenario: "Relayer tampers minOut / recipient / fee", detail: "Groth16 proof fails on the 0xbow path; legacy router path relies on invariant + event asserts (provisional verifier, old notes only)" },
     { id: 5, scenario: "Shielded swap A -> B", detail: "Shielded B balance increases, zero public wallet linkage" },
     { id: 6, scenario: "Relayer offline / unavailable", detail: "Permissionless self-relay fallback functions seamlessly" },
     { id: 7, scenario: "Unregistered address in gated pool", detail: "Swap rejected with GatingActiveUserNotAttested" },
@@ -351,7 +351,7 @@ export const ContractsSecuritySection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Notes (secret + nullifier) are generated in the browser with secure randomness and never sent to any central server or relayer. Proof payloads are assembled client-side against a provisional verifier; Groth16 follows in F4.
+              Notes (secret + nullifier) are generated in the browser with secure randomness and never sent to any central server or relayer. Proof payloads are assembled client-side against a provisional verifier for old notes only; Groth16 serves 0xbow paths and follows for all flows in F4.
             </p>
           </div>
 

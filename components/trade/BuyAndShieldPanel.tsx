@@ -357,7 +357,7 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
               : "Direct ShieldedPool deposit — no swap route yet"}
           </span>
           <span style={{ color: "var(--color-muted)", fontSize: "11px" }}>
-            Provisional Proof Payload
+            {isTestnetBuild && forceDirect ? "Groth16 Proof Payload" : "Legacy Mock Proof Payload (old notes)"}
           </span>
         </div>
       </div>

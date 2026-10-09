@@ -287,7 +287,7 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
         <span id="clean-recipient-help" style={{ fontSize: "11px", color: "var(--color-muted)" }}>
           {APP_CHAIN_ID === TESTNET_CHAIN_ID
             ? "The withdraw call carries no depositor address. Unlinkable withdrawal with client-side Groth16 ZK-SNARK verification."
-            : "The withdraw call carries no depositor address. Provisional verifier — Groth16 follows (F4)."}
+            : "The withdraw call carries no depositor address. Provisional verifier for old notes only — Groth16 on 0xbow paths (F4)."}
         </span>
       </div>
 
