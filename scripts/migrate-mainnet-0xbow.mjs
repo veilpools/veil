@@ -177,9 +177,91 @@ const leaves = [SNARK_FIELD - 1n];
 const aspRoot = BigInt(generateMerkleProof(leaves, leaves[0]).root);
 await call(entrypoint, epAbi, "updateRoot", [aspRoot, "local-mainnet-asp-sentinel-00000000"]);
 
-const TREASURY_MAINNET = process.env.NEXT_PUBLIC_VEIL_TREASURY || "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34";
-const CREATE2_MAINNET = process.env.NEXT_PUBLIC_VEIL_CREATE2_DEPLOYER || "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008";
+// ---- Full-fresh mainnet suite: the old Mock suite (Mock 0x797e, ETH pool
+// 0xdd0f paused, treasury 0x8cd3 holding ~145.8k stranded VEIL, create2
+// 0xe4c3, hook 0x9df0, router 0x01a0 buggy) is ABANDONED. Nothing is reused:
+// fresh treasury, create2, Mock, legacy ETH pool, router, VEIL pools.
 const V4_PM_MAINNET = "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+const ZERO_ASSET = "0x0000000000000000000000000000000000000000";
+const FRESH_ASSOC_ROOT =
+  "0x2188824287183927522224640574525727508854836440041603434369820418";
+const OLD_TREASURY_MAINNET = "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34";
+let treasuryFresh = `0x${"88".repeat(20)}`;
+let create2Fresh = `0x${"99".repeat(20)}`;
+let mockFresh = `0x${"aa".repeat(20)}`;
+let legacyEthFresh = `0x${"bb".repeat(20)}`;
+if (!EXECUTE) {
+  console.log("[dry-run] would rescue stranded VEIL from old treasury + deploy fresh VeilTreasury/Create2Deployer/Mock/legacy-ETH-pool");
+} else {
+  const {
+    VEIL_TREASURY_ABI,
+    VEIL_TREASURY_BYTECODE,
+    VEIL_CREATE2_DEPLOYER_ABI,
+    VEIL_CREATE2_DEPLOYER_BYTECODE,
+    SHIELDED_VERIFIER_MOCK_ABI,
+    SHIELDED_VERIFIER_MOCK_BYTECODE,
+    SHIELDED_POOL_ABI,
+    SHIELDED_POOL_BYTECODE,
+  } = await import("../lib/veil-artifact.mjs");
+  try {
+    const erc20bal = [
+      { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
+    ];
+    const stranded = await publicClient.readContract({
+      address: VEIL,
+      abi: erc20bal,
+      functionName: "balanceOf",
+      args: [OLD_TREASURY_MAINNET],
+    });
+    if (stranded > 0n) {
+      await call(OLD_TREASURY_MAINNET, VEIL_TREASURY_ABI, "rescue", [VEIL, account.address, stranded]);
+      console.log("rescued stranded VEIL from old treasury:", stranded.toString());
+    } else {
+      console.log("old treasury empty, nothing to rescue");
+    }
+  } catch (e) {
+    console.log("rescue skipped:", String(e.message || e).slice(0, 120));
+  }
+  const deployFresh = async (key, abi, bytecode, args) => {
+    if (outputExists(checkpoint[key]) && (await codeExists(checkpoint[key]))) {
+      console.log(`${key} (resumed):`, checkpoint[key]);
+      return checkpoint[key];
+    }
+    const hh = await wallet.deployContract({ abi, bytecode, args });
+    const rrc = await publicClient.waitForTransactionReceipt({ hash: hh });
+    if (rrc.status !== "success" || !rrc.contractAddress) throw new Error(`${key} deploy reverted`);
+    checkpoint[key] = rrc.contractAddress;
+    saveCheckpoint();
+    console.log(`${key}:`, rrc.contractAddress);
+    return rrc.contractAddress;
+  };
+  treasuryFresh = await deployFresh("treasuryFresh", VEIL_TREASURY_ABI, VEIL_TREASURY_BYTECODE, [account.address, VEIL]);
+  create2Fresh = await deployFresh("create2Fresh", VEIL_CREATE2_DEPLOYER_ABI, VEIL_CREATE2_DEPLOYER_BYTECODE, []);
+  mockFresh = await deployFresh("mockFresh", SHIELDED_VERIFIER_MOCK_ABI, SHIELDED_VERIFIER_MOCK_BYTECODE, []);
+  legacyEthFresh = await deployFresh("legacyEthFresh", SHIELDED_POOL_ABI, SHIELDED_POOL_BYTECODE, [
+    ZERO_ASSET,
+    mockFresh,
+    parseEther("0.001"),
+    parseEther("10"),
+    FRESH_ASSOC_ROOT,
+    account.address,
+  ]);
+  const poolVerifyAbi = [
+    { type: "function", name: "denomination", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+    { type: "function", name: "asset", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+    { type: "function", name: "depositsPaused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  ];
+  const [d, a, p] = await Promise.all([
+    publicClient.readContract({ address: legacyEthFresh, abi: poolVerifyAbi, functionName: "denomination" }),
+    publicClient.readContract({ address: legacyEthFresh, abi: poolVerifyAbi, functionName: "asset" }),
+    publicClient.readContract({ address: legacyEthFresh, abi: poolVerifyAbi, functionName: "depositsPaused" }),
+  ]);
+  if (d !== parseEther("0.001") || a !== ZERO_ASSET || p !== false) throw new Error("legacy ETH pool mismatch after deploy");
+  console.log("legacy ETH pool verified: open for deposits");
+}
+const TREASURY_MAINNET = EXECUTE ? treasuryFresh : (process.env.NEXT_PUBLIC_VEIL_TREASURY || treasuryFresh);
+const CREATE2_MAINNET = EXECUTE ? create2Fresh : (process.env.NEXT_PUBLIC_VEIL_CREATE2_DEPLOYER || create2Fresh);
+const MOCK_MAINNET = EXECUTE ? mockFresh : (process.env.NEXT_PUBLIC_SHIELDED_VERIFIER || mockFresh);
 let registryV2 = `0x${"33".repeat(20)}`;
 let hookV2 = `0x${"44".repeat(20)}`;
 let hookSalt = `0x${"00".repeat(32)}`;
@@ -227,10 +309,8 @@ if (!EXECUTE) {
 }
 
 // ---- Legacy-path parity with testnet FINAL (router fixed + VEIL pools) ----
-const MAINNET_ASSOC_ROOT =
-  "0x2188824287183927522224640574525727508854836440041603434369820418";
-const MAINNET_MOCK_VERIFIER =
-  process.env.NEXT_PUBLIC_SHIELDED_VERIFIER || "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda";
+const MAINNET_ASSOC_ROOT = FRESH_ASSOC_ROOT;
+const MAINNET_MOCK_VERIFIER = MOCK_MAINNET;
 let routerFixed = `0x${"55".repeat(20)}`;
 let veilPool05 = `0x${"66".repeat(20)}`;
 let veilPool2 = `0x${"77".repeat(20)}`;
@@ -315,7 +395,18 @@ const out = {
   withdrawalVerifier: wdr, commitmentVerifier: cmt,
   poseidonT3: libs.PoseidonT3, poseidonT4: libs.PoseidonT4,
   registryV2, hookV2, hookSalt, treasury: TREASURY_MAINNET,
+  create2Deployer: CREATE2_MAINNET, mockVerifier: MOCK_MAINNET,
+  legacyEthPool: legacyEthFresh,
   routerFixed, veilPool05, veilPool2,
+  abandonedOldSuite: {
+    mockVerifier: "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
+    poolEth: "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0",
+    treasury: OLD_TREASURY_MAINNET,
+    create2Deployer: "0xe4c3615db1bdeaf7b82b5568bd73f20f5666f008",
+    registry: "0xa7f7e7887a4fa00cc934abe39cdd470cfdc9a855",
+    hook: "0x9df0b52bf290a13e11c73c56c4c533e3887760c4",
+    router: "0x01a05f87c2c227a1b382cbc2e7e63b186538c86d",
+  },
   aspRoot: aspRoot.toString(), owner: account.address, maxRelayFeeBPS: 100,
 };
 writeFileSync(join(root, "deployments", "privacy-pools-mainnet-latest.json"), JSON.stringify(out, null, 2));
@@ -334,6 +425,10 @@ for (const f of [".env.local", ".env.mainnet.local"]) {
   set("NEXT_PUBLIC_VEIL_SHIELD_ROUTER", routerFixed);
   set("NEXT_PUBLIC_VEIL_POOL_05", veilPool05);
   set("NEXT_PUBLIC_VEIL_POOL_2", veilPool2);
+  set("NEXT_PUBLIC_VEIL_CREATE2_DEPLOYER", CREATE2_MAINNET);
+  set("NEXT_PUBLIC_SHIELDED_VERIFIER", MOCK_MAINNET);
+  set("NEXT_PUBLIC_PRIVACY_POOL_ETH", legacyEthFresh);
+  set("NEXT_PUBLIC_VEIL_TREASURY", TREASURY_MAINNET);
   writeFileSync(f, txt);
   console.log("env updated:", f);
 }

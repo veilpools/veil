@@ -51,6 +51,8 @@ pnpm migrate:mainnet       # executes once deployer holds >= 0.0015 ETH
 ```
 
 ### Execution sequence (`scripts/migrate-mainnet-0xbow.mjs`):
+0. **Rescue stranded funds** — pulls ~145.8k VEIL out of the abandoned treasury `0x8cd3…` back to the deployer (owner key matches). Skipped safely if empty.
+1. **VeilTreasury (fresh)** — owner + mainnet VEIL token wired at construction (buyback 70% default). **VeilCreate2Deployer (fresh), ShieldedVerifierMock (fresh), legacy ShieldedPool_ETH (fresh, 0.001/10 ETH, open)** — the entire old Mock suite (`deployments/mainnet-latest.json`) is abandoned: nothing is reused, nothing new points at it.
 1. **PoseidonT3/T4** libraries.
 2. **WithdrawalVerifier + CommitmentVerifier** (Groth16, audited 0xbow v1.2.1).
 3. **Entrypoint implementation + ERC1967Proxy** (initialize owner twice).

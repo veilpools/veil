@@ -37,6 +37,14 @@ import { mineHookSalt } from "./mine-hook.mjs";
 
 const isMainnet = process.argv.includes("--mainnet");
 const isTestnet = process.argv.includes("--testnet");
+if (isMainnet) {
+  console.error(
+    "REFUSING --mainnet: the legacy Mock suite must not be redeployed. " +
+      "Mainnet uses the 0xbow migration instead: pnpm migrate:mainnet:dry, then pnpm migrate:mainnet once funded. " +
+      "See docs/MAINNET_RUNBOOK.md §3."
+  );
+  process.exit(1);
+}
 const chain = isMainnet ? robinhoodMainnet : robinhoodTestnet;
 const networkName = isMainnet ? "mainnet" : "testnet";
 

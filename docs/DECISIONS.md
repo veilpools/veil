@@ -30,3 +30,9 @@ Supersedes any sunset language elsewhere in earlier docs.
 14. **Fuzz/invariant §6.9: CLOSED by live check.** `scripts/verify-pool-invariant.mjs` asserts `totalDeposits − totalWithdrawn = pool balance` per pool (native + ERC20). Must pass on testnet before F5 and again after mainnet migration. No Foundry fuzz harness — the invariant is enforced by contract math plus this live gate.
 15. **Blockscout verification post-deploy: MANDATORY (§6.8).** No mainnet pool opens for deposits before its source is verified (fallback if the explorer rejects valid builds: vendored source + byte-identical proof, same as testnet).
 16. **Rollback plan: pause-first.** On incident: guardian `pauseDeposits()` on every pool (withdrawals stay open by code, cannot be blocked), keep the old Mock suite paused, fix forward from `migrate-mainnet-pending.json` checkpoints. UI already fails closed (no quote = no execution). Full steps in `docs/MAINNET_RUNBOOK.md` §6.
+
+---
+
+# Full-ZK build decision — decided by the owner on 2026-10-09
+
+17. **Full-ZK via audited-circuit reuse, still no external audit.** The router/VEIL flows go ZK by building on the audited 0xbow circuits (commitment + withdrawal, ceremony transcript included) — no novel cryptography, no new ceremony. Item 6 (F4 waive) extends to cover this build for exactly that reason. **Reopener:** if novel circuits become necessary, this item reopens and the audit question returns with it.
