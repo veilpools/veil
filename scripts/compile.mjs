@@ -8,6 +8,7 @@ const sources = {
   "VeilAttestationRegistry.sol": { content: readFileSync("contracts/VeilAttestationRegistry.sol", "utf8") },
   "VeilHook.sol": { content: readFileSync("contracts/VeilHook.sol", "utf8") },
   "VeilShieldRouter.sol": { content: readFileSync("contracts/VeilShieldRouter.sol", "utf8") },
+  "VeilZkRouter.sol": { content: readFileSync("contracts/VeilZkRouter.sol", "utf8") },
   "VeilCreate2Deployer.sol": { content: readFileSync("contracts/VeilCreate2Deployer.sol", "utf8") },
   "VeilToken.sol": { content: readFileSync("contracts/VeilToken.sol", "utf8") },
 };
@@ -50,6 +51,7 @@ if (errors.length > 0) {
 for (const [file, name] of [
   ["VeilHook.sol", "VeilHook"],
   ["VeilShieldRouter.sol", "VeilShieldRouter"],
+  ["VeilZkRouter.sol", "VeilZkRouter"],
   ["ShieldedPool.sol", "ShieldedPool"],
 ]) {
   const bytes = out.contracts[file][name].evm.deployedBytecode.object.length / 2;
@@ -72,6 +74,7 @@ const artifactsList = [
   ["VEIL_ATTESTATION_REGISTRY", out.contracts["VeilAttestationRegistry.sol"]["VeilAttestationRegistry"]],
   ["VEIL_HOOK", out.contracts["VeilHook.sol"]["VeilHook"]],
   ["VEIL_SHIELD_ROUTER", out.contracts["VeilShieldRouter.sol"]["VeilShieldRouter"]],
+  ["VEIL_ZK_ROUTER", out.contracts["VeilZkRouter.sol"]["VeilZkRouter"]],
   ["VEIL_CREATE2_DEPLOYER", out.contracts["VeilCreate2Deployer.sol"]["VeilCreate2Deployer"]],
   ["VEIL_TOKEN", out.contracts["VeilToken.sol"]["VeilToken"]],
 ];
