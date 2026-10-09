@@ -233,6 +233,91 @@ export function buildBowRelayContext(args: BowRelayContextArgs) {
   return { pool: args.pool, asset: args.asset, recipient: args.recipient };
 }
 
+/**
+ * Fail-closed VEIL approve gate for 0xbow ERC20 deposits
+ * (Entrypoint.deposit(asset, value, precommitment)). The entrypoint pulls
+ * VEIL via transferFrom, so a deposit with allowance < value always reverts
+ * and burns gas. Callers must approve first, re-read allowance, then call
+ * this gate before sending the deposit. Throws an honest Error when the
+ * allowance does not cover the deposit value; nothing is sent.
+ */
+export function assertVeilAllowanceForBowDeposit(allowance: bigint, required: bigint): void {
+  if (allowance < required) {
+    throw new Error(
+      "VEIL allowance too low for the 0xbow entrypoint: approve VEIL first, then deposit. No transaction was sent."
+    );
+  }
+}
+
+// v3 suite deposit ABIs (Entrypoint: native payable + ERC20 pull).
+// No new cryptography: verbatim 0xbow v1.2.1 interface shapes, already
+// proven by scripts/swap-and-shield-veil.mjs on testnet.
+export const BOW_V3_NATIVE_DEPOSIT_ABI = [
+  {
+    type: "function",
+    name: "deposit",
+    stateMutability: "payable",
+    inputs: [{ name: "_precommitment", type: "uint256" }],
+    outputs: [{ name: "_commitment", type: "uint256" }],
+  },
+] as const;
+
+export const BOW_V3_ERC20_DEPOSIT_ABI = [
+  {
+    type: "function",
+    name: "deposit",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "_asset", type: "address" },
+      { name: "_value", type: "uint256" },
+      { name: "_precommitment", type: "uint256" },
+    ],
+    outputs: [{ name: "_commitment", type: "uint256" }],
+  },
+] as const;
+
+export const BOW_V3_VEIL_APPROVE_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "assetConfig",
+    stateMutability: "view",
+    inputs: [{ name: "_asset", type: "address" }],
+    outputs: [
+      { name: "pool", type: "address" },
+      { name: "minimumDepositAmount", type: "uint256" },
+      { name: "vettingFeeBPS", type: "uint256" },
+      { name: "maxRelayFeeBPS", type: "uint256" },
+    ],
+  },
+] as const;
+
 export const BOW_DEPOSITED_EVENT = parseAbiItem(
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)"
 );

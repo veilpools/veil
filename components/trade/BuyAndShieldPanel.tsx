@@ -2,102 +2,49 @@
 
 import React from "react";
 import { formatEther } from "viem";
-import { ArrowDown, ChevronDown } from "lucide-react";
-import { ETH_ZERO_ADDRESS, formatNoteAmount } from "../../lib/note-format";
-import { TESTNET_VEIL_TOKEN } from "../../lib/router-swap";
-import { RouteInspector } from "../RouteInspector";
-import type { TokenItem } from "../TokenSelectModal";
+import { TESTNET_BOW_V3_VEIL_TOKEN } from "../../lib/privacy-pools";
 
-export interface RouterQuote {
-  quotedOut: bigint;
-  minAmountOut: bigint;
-}
+export type BowDepositAsset = "ETH" | "VEIL";
 
 export interface BuyAndShieldPanelProps {
-  isTestnetRouterMode: boolean;
-  isEthRouterInput: boolean;
-  routerPaySymbol: "VEIL" | "ETH";
-  onSelectPayToken: (sym: "VEIL" | "ETH") => void;
-  inputToken: TokenItem;
-  outputToken: TokenItem;
-  inputAmount: string;
-  veilAmountIn: string;
-  onInputAmount: (v: string) => void;
-  onVeilAmountIn: (v: string) => void;
+  depositAsset: BowDepositAsset;
+  onSelectDepositAsset: (asset: BowDepositAsset) => void;
+  depositAmount: string;
+  onDepositAmount: (v: string) => void;
+  ethDenomination: bigint;
+  veilMinimum: bigint | null;
   veilBalance: string | null;
-  onOpenInputTokenModal: () => void;
-  onOpenOutputTokenModal: () => void;
-  onPercentage: (pct: number) => void;
-  onFlipTokens: () => void;
-  liveDenomination: bigint | null;
-  routerDestDenom: bigint | null;
-  routerQuote: RouterQuote | null;
-  routerQuoteNote: string | null;
-  isQuoting: boolean;
-  slippage: string;
-  routerInputValid: boolean;
-  routerQuoteBelowDenomination: boolean;
-  parsedInput: number;
-  inputMatchesDenomination: boolean;
+  ethBalance: string;
   connectedAddress: string | null;
   isExecuting: boolean;
+  amountValid: boolean;
   executeDisabled: boolean;
   onExecute: () => void;
-  forceDirect: boolean;
-  onToggleForceDirect: () => void;
-  isTestnetBuild: boolean;
 }
 
-/** Buy & Shield tab: pay surface, shield output, live quote, execute. */
+/** Buy & Shield tab: 0xbow-only shield surface (native ETH + ERC20 VEIL). */
 export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
-  isTestnetRouterMode,
-  isEthRouterInput,
-  routerPaySymbol,
-  onSelectPayToken,
-  inputToken,
-  outputToken,
-  inputAmount,
-  veilAmountIn,
-  onInputAmount,
-  onVeilAmountIn,
+  depositAsset,
+  onSelectDepositAsset,
+  depositAmount,
+  onDepositAmount,
+  ethDenomination,
+  veilMinimum,
   veilBalance,
-  onOpenInputTokenModal,
-  onOpenOutputTokenModal,
-  onPercentage,
-  onFlipTokens,
-  liveDenomination,
-  routerDestDenom,
-  routerQuote,
-  routerQuoteNote,
-  isQuoting,
-  slippage,
-  routerInputValid,
-  routerQuoteBelowDenomination,
-  parsedInput,
-  inputMatchesDenomination,
+  ethBalance,
   connectedAddress,
   isExecuting,
+  amountValid,
   executeDisabled,
   onExecute,
-  forceDirect,
-  onToggleForceDirect,
-  isTestnetBuild,
 }) => {
-  const paySymbol = isTestnetRouterMode ? routerPaySymbol : inputToken.symbol;
-  const payAmount = isTestnetRouterMode
-    ? isEthRouterInput
-      ? inputAmount
-      : veilAmountIn
-    : inputAmount;
-  const outAsset = isTestnetRouterMode && isEthRouterInput ? "VEIL" : "ETH";
-  const outDenomLabel =
-    isTestnetRouterMode && isEthRouterInput
-      ? routerDestDenom !== null
-        ? `${formatEther(routerDestDenom)} VEIL`
-        : "…"
-      : liveDenomination !== null
-      ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS)
-      : "…";
+  const isEth = depositAsset === "ETH";
+  const denomLabel = isEth
+    ? `${formatEther(ethDenomination)} ETH`
+    : veilMinimum !== null
+    ? `${formatEther(veilMinimum)} VEIL`
+    : "…";
+  const balanceLabel = isEth ? `${ethBalance} ETH` : `${veilBalance ?? "…"} VEIL`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
@@ -117,52 +64,20 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
           <span style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
             You Pay (Public Wallet)
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-            <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
-              Bal: {isTestnetRouterMode ? (isEthRouterInput ? `${inputToken.balance} ETH` : `${veilBalance ?? "…"} VEIL`) : `${inputToken.balance} ${inputToken.symbol}`}
-            </span>
-            {!isTestnetRouterMode && (
-            <div style={{ display: "flex", gap: "4px" }}>
-              {[0.25, 0.5, 0.75, 1.0].map((pct) => (
-                <button
-                  key={pct}
-                  type="button"
-                  onClick={() => onPercentage(pct)}
-                  aria-label={`Set amount to ${pct === 1 ? "max" : `${pct * 100} percent`} of balance`}
-                  className="hover:border-[#FF8C00] hover:text-[#FF8C00] active:scale-95 transition-all"
-                  style={{
-                    padding: "4px 8px",
-                    minHeight: "24px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    borderRadius: "var(--radius-sm)",
-                    backgroundColor: "#ffffff",
-                    border: "1px solid var(--color-border-strong)",
-                    color: "var(--color-text)",
-                    fontFamily: "monospace",
-                    fontSize: "11px",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    boxShadow: "0 1px 2px rgba(26, 26, 26, 0.04)",
-                  }}
-                >
-                  {pct === 1.0 ? "MAX" : `${pct * 100}%`}
-                </button>
-              ))}
-            </div>
-            )}
-          </div>
+          <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
+            Bal: {balanceLabel}
+          </span>
         </div>
 
-        {/* Amount Input & Token Selector Row */}
+        {/* Amount Input & Asset Selector Row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
           <input
             type="number"
             step="any"
             inputMode="decimal"
-            aria-label={isTestnetRouterMode ? (isEthRouterInput ? "ETH amount to swap and shield" : "VEIL amount to swap and shield") : "Amount to pay"}
-            value={payAmount}
-            onChange={(e) => (isTestnetRouterMode ? (isEthRouterInput ? onInputAmount(e.target.value) : onVeilAmountIn(e.target.value)) : onInputAmount(e.target.value))}
+            aria-label={isEth ? "ETH amount to shield" : "VEIL amount to shield"}
+            value={depositAmount}
+            onChange={(e) => onDepositAmount(e.target.value)}
             placeholder="0.0"
             style={{
               background: "transparent",
@@ -177,105 +92,53 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
             }}
           />
 
-          {/* Pay-token toggle (R3): ETH (faucet-funded) or test VEIL
-              (pre-held, no faucet). Direction drives quote and value. */}
-          {isTestnetRouterMode ? (
-            <div
-              role="group"
-              aria-label="Router pay token: test VEIL or test ETH"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-2)",
-                padding: "8px 14px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "rgba(255, 140, 0, 0.08)",
-                border: "1px solid rgba(255, 140, 0, 0.3)",
-                color: "var(--color-text)",
-              }}
-            >
-              {(["VEIL", "ETH"] as const).map((sym) => {
-                const active = routerPaySymbol === sym;
-                return (
-                  <button
-                    key={sym}
-                    type="button"
-                    aria-pressed={active}
-                    aria-label={`Pay with test ${sym}`}
-                    onClick={() => onSelectPayToken(sym)}
-                    style={{
-                      padding: "6px 12px",
-                      minHeight: "28px",
-                      borderRadius: "var(--radius-sm)",
-                      fontFamily: "var(--font-body)",
-                      fontSize: "var(--text-body-sm)",
-                      fontWeight: active ? 700 : 500,
-                      cursor: "pointer",
-                      border: active
-                        ? "1px solid var(--color-accent)"
-                        : "1px solid transparent",
-                      backgroundColor: active ? "#ffffff" : "transparent",
-                      color: active ? "var(--color-accent-ink)" : "var(--color-muted)",
-                      transition: "all var(--duration-fast)",
-                    }}
-                  >
-                    {sym}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-          <button
-            onClick={onOpenInputTokenModal}
+          {/* Shield-asset toggle: native test ETH or test VEIL.
+              Direction drives the entrypoint deposit leg. */}
+          <div
+            role="group"
+            aria-label="Shield asset: test ETH or test VEIL"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "var(--space-2)",
               padding: "8px 14px",
               borderRadius: "var(--radius-md)",
-              backgroundColor: "#ffffff",
-              border: "1px solid var(--color-border-strong)",
+              backgroundColor: "rgba(255, 140, 0, 0.08)",
+              border: "1px solid rgba(255, 140, 0, 0.3)",
               color: "var(--color-text)",
-              cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(26, 26, 26, 0.06)",
-              transition: "all var(--duration-fast)",
             }}
           >
-            <div className="w-6 h-6 flex items-center justify-center shrink-0">
-              {inputToken.iconSvg}
-            </div>
-            <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
-              {inputToken.symbol}
-            </span>
-            <ChevronDown className="w-4 h-4 text-[#FF8C00]" aria-hidden="true" />
-          </button>
-          )}
+            {(["VEIL", "ETH"] as const).map((sym) => {
+              const active = depositAsset === sym;
+              return (
+                <button
+                  key={sym}
+                  type="button"
+                  aria-pressed={active}
+                  aria-label={`Shield test ${sym}`}
+                  onClick={() => onSelectDepositAsset(sym)}
+                  style={{
+                    padding: "6px 12px",
+                    minHeight: "28px",
+                    borderRadius: "var(--radius-sm)",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "var(--text-body-sm)",
+                    fontWeight: active ? 700 : 500,
+                    cursor: "pointer",
+                    border: active
+                      ? "1px solid var(--color-accent)"
+                      : "1px solid transparent",
+                    backgroundColor: active ? "#ffffff" : "transparent",
+                    color: active ? "var(--color-accent-ink)" : "var(--color-muted)",
+                    transition: "all var(--duration-fast)",
+                  }}
+                >
+                  {sym}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
-
-      {/* Swap Direction Divider with Flip Action (hidden on the testnet router route) */}
-      <div style={{ display: isTestnetRouterMode ? "none" : "flex", justifyContent: "center", margin: "-10px 0", position: "relative", zIndex: 10 }}>
-        <button
-          type="button"
-          onClick={onFlipTokens}
-          title="Flip token direction"
-          className="hover:scale-110 hover:border-[#FF8C00] active:rotate-180 transition-all duration-300"
-          style={{
-            width: "38px",
-            height: "38px",
-            borderRadius: "var(--radius-full)",
-            backgroundColor: "#ffffff",
-            border: "1px solid var(--color-border-strong)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--color-accent-ink)",
-            boxShadow: "0 4px 12px rgba(26, 26, 26, 0.1)",
-            cursor: "pointer",
-          }}
-        >
-          <ArrowDown className="w-4 h-4" aria-hidden="true" />
-        </button>
       </div>
 
       {/* Receive / Shield Output Surface */}
@@ -292,129 +155,59 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            You Shield (LeanIMT Pool)
+            You Shield (0xbow Privacy Pool)
           </span>
           <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
-            Fixed {outDenomLabel} / note
+            Fixed {denomLabel} / note
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
-          <div
-            style={{
-              fontSize: "clamp(1.75rem, 2.5vw, 2.35rem)",
-              fontFamily: "var(--font-headline)",
-              fontWeight: 600,
-              color: "var(--color-text)",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {outDenomLabel === "…" ? "Loading live denomination…" : outDenomLabel}
-          </div>
-
-          {/* Token Button: fixed by route direction in router mode (the
-              destination pool follows pay direction, chosen live) */}
-          <button
-            onClick={onOpenOutputTokenModal}
-            disabled={isTestnetRouterMode}
-            title={
-              isTestnetRouterMode
-                ? `Destination fixed by direction: ${isEthRouterInput ? "VEIL pool (live-picked)" : "0.001 ETH pool"}`
-                : "Choose shield pool token"
-            }
-            aria-disabled={isTestnetRouterMode}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-2)",
-              padding: "8px 14px",
-              borderRadius: "var(--radius-md)",
-              backgroundColor: "#ffffff",
-              border: "1px solid var(--color-border-strong)",
-              color: "var(--color-text)",
-              cursor: isTestnetRouterMode ? "not-allowed" : "pointer",
-              opacity: isTestnetRouterMode ? 0.6 : 1,
-              boxShadow: "0 2px 6px rgba(26, 26, 26, 0.06)",
-              transition: "all var(--duration-fast)",
-            }}
-          >
-            <div className="w-6 h-6 flex items-center justify-center shrink-0">
-              {outputToken.iconSvg}
-            </div>
-            <span style={{ fontWeight: 600, fontFamily: "var(--font-body)", fontSize: "var(--text-body)" }}>
-              {isTestnetRouterMode ? (isEthRouterInput ? "VEIL" : "ETH") : outputToken.symbol}
-            </span>
-            <ChevronDown className="w-4 h-4 text-[#FF8C00]" aria-hidden="true" />
-          </button>
+        <div
+          style={{
+            fontSize: "clamp(1.75rem, 2.5vw, 2.35rem)",
+            fontFamily: "var(--font-headline)",
+            fontWeight: 600,
+            color: "var(--color-text)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {denomLabel === "…" ? "Loading live VEIL minimum…" : denomLabel}
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--text-caption)", color: "var(--color-muted)", fontFamily: "monospace" }}>
           <span>
-            {isTestnetRouterMode
-              ? (isEthRouterInput
-                ? "VeilShieldRouter.swapToShield — ETH to VEIL note (live simulation quote)"
-                : "VeilShieldRouter.swapToShield — VEIL to ETH to 0.001 ETH note (live simulation quote)")
-              : "Direct ShieldedPool deposit — no swap route yet"}
+            {isEth
+              ? "Entrypoint.deposit — native ETH to 0xbow ETH note"
+              : "Entrypoint.deposit(asset, value, precommitment) — VEIL to 0xbow VEIL note"}
           </span>
           <span style={{ color: "var(--color-muted)", fontSize: "11px" }}>
-            {isTestnetBuild && forceDirect ? "Groth16 Proof Payload" : "Legacy Mock Proof Payload (old notes)"}
+            Groth16 Proof Payload
           </span>
         </div>
       </div>
 
-      {/* Route Inspector */}
-      <RouteInspector
-        inputAmount={payAmount}
-        inputToken={isTestnetRouterMode ? paySymbol : inputToken.symbol}
-        outputToken={outputToken.symbol}
-        slippage={slippage}
-      />
-
-      {/* Testnet router live quote + faucet guidance (R1/R3) */}
-      {isTestnetRouterMode && (
-        <div
-          role="status"
-          style={{
-            padding: "var(--space-3) var(--space-4)",
-            borderRadius: "var(--radius-sm)",
-            backgroundColor: "rgba(26, 26, 26, 0.025)",
-            border: "1px solid var(--color-border)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
-            fontSize: "var(--text-caption)",
-            fontFamily: "monospace",
-            minWidth: 0,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "var(--color-muted)" }}>Live simulated output:</span>
-            <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-              {isQuoting
-                ? "Simulating…"
-                : routerQuote !== null
-                ? `${formatEther(routerQuote.quotedOut)} ${outAsset}`
-                : "Unavailable"}
-            </span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "var(--color-muted)" }}>Minimum accepted ({slippage}%):</span>
-            <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-              {routerQuote !== null ? `${formatEther(routerQuote.minAmountOut)} ${outAsset}` : "—"}
-            </span>
-          </div>
-          {routerQuoteNote && (
-            <span style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
-              {routerQuoteNote}
-            </span>
-          )}
-          <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
-            {isEthRouterInput
-              ? "Fund testnet ETH at the testnet faucet (https://faucet.testnet.chain.robinhood.com/) — gas plus swap input both need it."
-              : `Needs test VEIL already in your wallet — there is no onchain faucet; the proven route ran on a pre-funded operator balance. Test VEIL: ${TESTNET_VEIL_TOKEN}.`}
-          </span>
-        </div>
-      )}
+      {/* Asset guidance */}
+      <div
+        role="status"
+        style={{
+          padding: "var(--space-3) var(--space-4)",
+          borderRadius: "var(--radius-sm)",
+          backgroundColor: "rgba(26, 26, 26, 0.025)",
+          border: "1px solid var(--color-border)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          fontSize: "var(--text-caption)",
+          fontFamily: "monospace",
+          minWidth: 0,
+        }}
+      >
+        <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
+          {isEth
+            ? "Fund testnet ETH at the testnet faucet (https://faucet.testnet.chain.robinhood.com/) — gas plus shield input both need it."
+            : `Needs test VEIL already in your wallet — there is no onchain faucet. Test VEIL: ${TESTNET_BOW_V3_VEIL_TOKEN}. VEIL deposits approve the entrypoint first; the app sends the approval in the same flow when allowance is short.`}
+        </span>
+      </div>
 
       {/* Main Action Button */}
       <button
@@ -442,31 +235,17 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
         }}
       >
         <span>
-          {isTestnetRouterMode
-            ? isExecuting
-              ? (isEthRouterInput ? "Swapping ETH to Shielded VEIL..." : "Swapping VEIL to Shielded ETH...")
-              : !connectedAddress
-              ? "Connect Wallet to Trade"
-              : !routerInputValid
-              ? `Enter ${paySymbol} Amount`
-              : routerQuoteBelowDenomination
-              ? "Output Below Note Size"
-              : isQuoting || routerQuote === null
-              ? "Simulating Live Output…"
-              : "Execute Router Swap-to-Shield"
-            : isExecuting
-            ? "Synthesizing Proof & Routing..."
+          {isExecuting
+            ? (isEth ? "Shielding ETH..." : "Approving & Shielding VEIL...")
             : !connectedAddress
             ? "Connect Wallet to Trade"
-            : !inputAmount || parsedInput <= 0
-            ? "Enter Amount"
-            : !inputMatchesDenomination
-            ? "Enter Exact Denomination"
-            : "Execute 1-Tx Swap-to-Shield"}
+            : !amountValid
+            ? `Enter ${depositAsset} Amount`
+            : `Shield ${depositAsset} (0xbow)`}
         </span>
       </button>
 
-      {/* Quote Breakdown Details */}
+      {/* Breakdown Details */}
       <div
         style={{
           padding: "var(--space-3) var(--space-4)",
@@ -483,55 +262,24 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-muted)" }}>You Pay:</span>
           <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-            {isTestnetRouterMode ? `${payAmount} ${paySymbol}` : `${inputAmount} ${inputToken.symbol}`}
+            {depositAmount} {depositAsset}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-muted)" }}>You Shield:</span>
           <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-            fixed {outDenomLabel}
+            fixed {denomLabel}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "var(--color-muted)" }}>Slippage:</span>
-          <span style={{ color: "var(--color-text)", fontWeight: 600 }}>{slippage}%</span>
+          <span style={{ color: "var(--color-muted)" }}>Proof System:</span>
+          <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Groth16 (0xbow v1.2.1)</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "var(--color-muted)" }}>VeilHook Protocol Fee:</span>
-          <span style={{ color: "var(--color-accent-ink)", fontWeight: 600 }}>30 bps (Buyback &amp; Burn)</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "var(--color-muted)" }}>Zero-Custody Guarantee:</span>
-          <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Router Balance = 0 Invariant</span>
+          <span style={{ color: "var(--color-muted)" }}>Settlement:</span>
+          <span style={{ color: "var(--color-text)", fontWeight: 600 }}>0xbow Entrypoint</span>
         </div>
       </div>
-
-      {/* Honest fallback toggle (testnet only): direct pool deposit
-          without the swap route, for use only when the router
-          route is unavailable. The router stays the default path. */}
-      {isTestnetBuild && (
-        <button
-          type="button"
-          onClick={onToggleForceDirect}
-          aria-pressed={forceDirect}
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            padding: "4px",
-            minHeight: "24px",
-            fontSize: "var(--text-caption)",
-            fontFamily: "monospace",
-            color: "var(--color-muted)",
-            textDecoration: "underline",
-            textAlign: "center",
-          }}
-        >
-          {forceDirect
-            ? "Fallback active: direct ShieldedPool deposit (no swap). Switch back to the router route."
-            : "Router route unavailable? Fall back to direct ShieldedPool deposit (no swap)."}
-        </button>
-      )}
     </div>
   );
 };

@@ -10,12 +10,10 @@ import {
   X,
 } from "lucide-react";
 import {
-  createShieldedNote,
   createBowDepositSecrets,
   createBowNote,
   isBowNote,
   getWithdrawPath,
-  generateRandomBytes32,
   serializeNotesList,
   deserializeNotesList,
   deserializeAnyNote,
@@ -28,7 +26,6 @@ import {
 import { ShieldNoteBackupModal } from "../../components/ShieldNoteBackupModal";
 import { VaultPanel } from "../../components/trade/VaultPanel";
 import { WithdrawPanel } from "../../components/trade/WithdrawPanel";
-import { ShieldedSwapPanel } from "../../components/trade/ShieldedSwapPanel";
 import { BuyAndShieldPanel } from "../../components/trade/BuyAndShieldPanel";
 import { AttestPanel } from "../../components/trade/AttestPanel";
 import { ZkShieldRadar } from "../../components/ZkShieldRadar";
@@ -62,29 +59,7 @@ import {
   type LegacyPoolCandidate,
 } from "../../lib/legacy-pool-resolve";
 import { CONTRACT_ABIS, CONTRACT_ADDRESSES } from "../../lib/contracts";
-import {
-  buildSwapToShieldParams,
-  findSwapToShieldExecuted,
-  isRouterExecuteDisabled,
-  mapRouterSwapError,
-  parseSlippagePercent,
-  pickVeilDestinationPool,
-  quoteSwapToShieldOutput,
-  readSwapGuards,
-  readVeilAllowance,
-  readVeilBalance,
-  withAllowanceHint,
-  PROVEN_SCRIPT_VEIL_AMOUNT_IN,
-  TESTNET_LEGACY_ETH_POOL,
-  TESTNET_ROUTER_ADDRESS,
-  TESTNET_VEIL_DEST_POOLS,
-  TESTNET_VEIL_POOL_05,
-  TESTNET_VEIL_POOL_2,
-  TESTNET_VEIL_POOL_05_DENOMINATION,
-  TESTNET_VEIL_TOKEN,
-  UINT128_MAX,
-  VEIL_ERC20_ABI,
-} from "../../lib/router-swap";
+import { parseSlippagePercent } from "../../lib/router-swap";
 import { calculateSlippageBound } from "../../lib/router-client";
 import {
   buildGatedHookInnerHash,
@@ -121,7 +96,13 @@ import {
   TESTNET_0XBOW,
   TESTNET_CHAIN_ID,
   MAINNET_CHAIN_ID,
+  TESTNET_BOW_V3_ENTRYPOINT,
+  TESTNET_BOW_V3_ETH_POOL,
+  TESTNET_BOW_V3_VEIL_POOL,
+  TESTNET_BOW_V3_VEIL_TOKEN,
+  TESTNET_BOW_V3_ETH_DENOMINATION,
   isTestnetBowConfigured,
+  isTestnetBowV3Configured,
   getBowSuite,
 } from "../../lib/privacy-pools";
 import {
@@ -133,44 +114,25 @@ import {
   fetchBowPoolEvents,
   fetchBowAspSet,
   proveBowWithdrawal,
+  assertVeilAllowanceForBowDeposit,
+  BOW_V3_NATIVE_DEPOSIT_ABI,
+  BOW_V3_ERC20_DEPOSIT_ABI,
+  BOW_V3_VEIL_APPROVE_ABI,
 } from "../../lib/0xbow-client";
 import { fetchPinnedBowArtifact } from "../../lib/0xbow-artifacts";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
 import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
 import { generateMnemonic, english } from "viem/accounts";
-import {
-  buildSelfRelayShieldedSwapArgs,
-  getShieldedSwapRouteStatus,
-  isShieldedSwapExecuteDisabled,
-  readShieldedSwapRouteStatusLive,
-  selectShieldedSwapRelayPath,
-  shieldedSwapPendingMessage,
-  SHIELDED_SWAP_DESTINATION_POOL,
-  SHIELDED_SWAP_ROUTER,
-  SHIELDED_SWAP_SOURCE_DENOMINATION,
-  SHIELDED_SWAP_SOURCE_POOL,
-} from "../../lib/shielded-swap-ui";
-import {
-  findShieldedSwapExecuted,
-  generateNewShieldedNoteSecrets,
-  mapShieldedSwapError,
-} from "../../lib/shielded-swap";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
-// Single address source: follows lib/contracts.ts (env override or live mainnet default).
+// Legacy exit only: the keccak-pool withdraw resolver still needs the live
+// ETH-pool address for old notes. No new deposit may reference it.
 const SHIELDED_POOL_ETH = CONTRACT_ADDRESSES.poolEth as Address;
-
-const POOL_DEPOSIT_ABI = parseAbi([
-  "function deposit(bytes32 commitment) payable returns (uint32)",
-]);
-
-const POOL_DEPOSIT_ABI_EXT = parseAbi([
-  "function deposit(bytes32 commitment) payable returns (uint32)",
-  "function denomination() view returns (uint256)",
-  "function poolCap() view returns (uint256)",
-  "function totalDeposits() view returns (uint256)",
-  "function depositsPaused() view returns (bool)",
-]);
+// Frozen legacy VEIL pools (pause + renounce at cutover). EXIT ONLY: old
+// VEIL-denominated notes resolve here via resolveLegacyPoolForNote. Never
+// a deposit target.
+const LEGACY_EXIT_VEIL_POOL_05 = "0xd73920a3cbfdf3f6be530cab73fc9c876619517a" as Address;
+const LEGACY_EXIT_VEIL_POOL_2 = "0x172e9cc542cf9349813f74548eec6e0a1df65e17" as Address;
 
 const POOL_WITHDRAW_ABI = parseAbi([
   "function withdraw(bytes proof, bytes32 root, bytes32 nullifierHash, address recipient, uint256 fee)",
@@ -264,28 +226,14 @@ export default function SwapToShieldPage() {
   const [slippage, setSlippage] = useState("0.5");
   const [deadlineMinutes, setDeadlineMinutes] = useState("20");
 
-  // Testnet router path (Task 2): Buy & Shield defaults to the REAL
-  // VeilShieldRouter.swapToShield route (VEIL -> ETH -> shielded ETH) on
-  // chain 46630. Direct pool deposit stays as an explicit, honestly labeled
-  // fallback only (forceDirect).
+  // Full-ZK cutover: Buy & Shield deposits ONLY into the audited 0xbow v3
+  // suite (native ETH + ERC20 VEIL via Entrypoint.deposit). Legacy pools are
+  // paused for new deposits onchain, so no direct-deposit path exists here.
   const isTestnetBuild = APP_CHAIN_ID === TESTNET_CHAIN_ID;
-  const [forceDirect, setForceDirect] = useState(false);
-  const isTestnetRouterMode = isTestnetBuild && !forceDirect;
-  const [veilAmountIn, setVeilAmountIn] = useState(PROVEN_SCRIPT_VEIL_AMOUNT_IN);
-  const [routerQuote, setRouterQuote] = useState<{
-    quotedOut: bigint;
-    minAmountOut: bigint;
-  } | null>(null);
-  const [routerQuoteNote, setRouterQuoteNote] = useState<string | null>(null);
-  const [isQuoting, setIsQuoting] = useState(false);
+  const [bowDepositAsset, setBowDepositAsset] = useState<"ETH" | "VEIL">("ETH");
   const [veilBalance, setVeilBalance] = useState<string | null>(null);
-  // Quote refresh trigger (root-audit F13): bumped after in-flow approvals
-  // so the displayed quote never lags the new allowance.
-  const [quoteNonce, setQuoteNonce] = useState(0);
-  // Live-picked VEIL destination (R3): set by the ETH-direction quote from
-  // pickVeilDestinationPool; the execute handler re-picks live before sending.
-  const [routerDestPool, setRouterDestPool] = useState<Address | null>(null);
-  const [routerDestDenom, setRouterDestDenom] = useState<bigint | null>(null);
+  // Live VEIL minimum from Entrypoint.assetConfig (never hardcoded).
+  const [veilMinimum, setVeilMinimum] = useState<bigint | null>(null);
 
   // Testnet self-attest + gated pool (Task 3): live onchain attestation
   // status per connected address plus the gated ETH/VEIL pool config, read
@@ -302,14 +250,9 @@ export default function SwapToShieldPage() {
   const [isGatedSwapping, setIsGatedSwapping] = useState(false);
   const [gatedTxHash, setGatedTxHash] = useState<string | null>(null);
 
-  // Testnet shielded swap (Task 4 + R3): VeilShieldRouter.shieldedSwap via the
-  // connected wallet with the self-relay fallback (relayerFee 0). Route
-  // status is live-read (lib/shielded-swap-ui.ts): both directions executable
-  // via the fixed router; the source pool follows the spend note's asset.
-  const [isShieldedSwapping, setIsShieldedSwapping] = useState(false);
-  const [isShieldedProving, setIsShieldedProving] = useState(false);
-  const [shieldedSwapTxHash, setShieldedSwapTxHash] = useState<string | null>(null);
-
+  // Shielded Swap is paused after the full-ZK cutover: the legacy router
+  // route only settles into paused legacy pools, so execution stays
+  // disabled with an honest notice (see the shielded_swap tab body).
   // Form Inputs
   const [inputAmount, setInputAmount] = useState("0.001");
   const [cleanRecipient, setCleanRecipient] = useState("");
@@ -320,7 +263,7 @@ export default function SwapToShieldPage() {
 
   // Prover Modal States
   const [isProverOpen, setIsProverOpen] = useState(false);
-  const [proverTitle, setProverTitle] = useState("Executing Swap-to-Shield");
+  const [proverTitle, setProverTitle] = useState("Executing Shielded Deposit");
   const [proverSteps, setProverSteps] = useState<ZkProverStep[]>([]);
   const [proverTxHash, setProverTxHash] = useState<string | null>(null);
   const [proverCommitment, setProverCommitment] = useState<string | null>(null);
@@ -473,146 +416,63 @@ export default function SwapToShieldPage() {
     };
   }, [isTestnetBuild, activeTab, connectedAddress]);
 
-  // Live ShieldedPool_ETH denomination for honest quotes and deposits.
-  const [liveDenomination, setLiveDenomination] = useState<bigint | null>(null);
-
+  // Live VEIL minimum for honest 0xbow deposits: read from
+  // Entrypoint.assetConfig every time the tab, wallet or asset changes.
+  // Fail closed (null minimum disables VEIL execution, never a guess).
   useEffect(() => {
-    async function loadDenomination() {
-      if (APP_CHAIN_ID === TESTNET_CHAIN_ID) {
-        setLiveDenomination(1000000000000000n);
-        return;
-      }
+    if (activeTab !== "buy_and_shield" || bowDepositAsset !== "VEIL") return;
+    let cancelled = false;
+    (async () => {
       try {
-        const denom = await publicClient.readContract({
-          address: SHIELDED_POOL_ETH,
-          abi: POOL_DEPOSIT_ABI_EXT,
-          functionName: "denomination",
+        const config = await publicClient.readContract({
+          address: TESTNET_BOW_V3_ENTRYPOINT,
+          abi: BOW_V3_VEIL_APPROVE_ABI,
+          functionName: "assetConfig",
+          args: [TESTNET_BOW_V3_VEIL_TOKEN],
         });
-        setLiveDenomination(denom);
+        if (cancelled) return;
+        const minimum = config[1] as bigint;
+        const pool = config[0] as Address;
+        if (pool.toLowerCase() !== TESTNET_BOW_V3_VEIL_POOL.toLowerCase() || minimum <= 0n) {
+          setVeilMinimum(null);
+          return;
+        }
+        setVeilMinimum(minimum);
       } catch (e) {
-        console.warn("Could not read live pool denomination", e);
+        if (!cancelled) {
+          console.warn("Could not read live VEIL minimum", e);
+          setVeilMinimum(null);
+        }
       }
-    }
-    loadDenomination();
-  }, []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, bowDepositAsset]);
 
-  // Testnet router live quote (R1/R2): a REAL exact-output simulation — an
-  // eth_call of the router's own swapToShield (minAmountOut = 0) against the
-  // latest block. No hardcoded output. A random commitment is used because the
-  // simulation persists nothing; execution re-simulates with the real note
-  // commitment inside the send window before deriving minAmountOut.
-  // Testnet router live quote (R1/R2): a REAL exact-output simulation — an
-  // eth_call of the router's own swapToShield (minAmountOut = 0) against the
-  // latest block. No hardcoded output.
-  // Supports both ETH -> VEIL (zeroForOne=true) and VEIL -> ETH (zeroForOne=false).
+  // Live VEIL balance for the connected wallet (display only).
   useEffect(() => {
-    if (!isTestnetRouterMode || activeTab !== "buy_and_shield") return;
-    const isEthInput = inputToken.symbol === "ETH";
-    const amountStr = isEthInput ? inputAmount : veilAmountIn;
-    let amountIn: bigint;
-    try {
-      amountIn = parseEther(amountStr);
-    } catch {
-      setRouterQuote(null);
-      setRouterQuoteNote(`Enter a valid ${inputToken.symbol} amount to simulate the live router output.`);
-      return;
-    }
-    if (amountIn <= 0n || amountIn > UINT128_MAX) {
-      setRouterQuote(null);
-      setRouterQuoteNote(`Enter a ${inputToken.symbol} amount greater than zero to simulate the live router output.`);
-      return;
-    }
-    if (!connectedAddress) {
-      setRouterQuote(null);
-      setRouterDestPool(null);
-      setRouterDestDenom(null);
-      setRouterQuoteNote("Connect a wallet to simulate the live router output.");
+    if (activeTab !== "buy_and_shield" || bowDepositAsset !== "VEIL" || !connectedAddress) {
       return;
     }
     let cancelled = false;
-    setIsQuoting(true);
-    const timer = setTimeout(() => {
-      (async () => {
-        let preAllow = 0n;
-        let slippagePct = 0.5;
-        try {
-          slippagePct = parseSlippagePercent(slippage);
-        } catch {
-          slippagePct = 0.5;
-        }
-        try {
-          if (isEthInput) {
-            const quotedOut = await quoteSwapToShieldOutput(publicClient, {
-              account: connectedAddress,
-              amountIn,
-              commitment: generateRandomBytes32(),
-              zeroForOne: true,
-              shieldedPool: TESTNET_VEIL_POOL_05,
-            });
-            const minAmountOut = calculateSlippageBound(quotedOut, slippagePct);
-            if (cancelled) return;
-            setRouterQuote({ quotedOut, minAmountOut });
-
-            const [g05, g2] = await Promise.all([
-              readSwapGuards(publicClient, TESTNET_VEIL_POOL_05),
-              readSwapGuards(publicClient, TESTNET_VEIL_POOL_2),
-            ]);
-            const veilPools = [
-              { pool: TESTNET_VEIL_POOL_05, denomination: g05.denomination, asset: TESTNET_VEIL_TOKEN, paused: g05.paused, cap: g05.cap, total: g05.total },
-              { pool: TESTNET_VEIL_POOL_2, denomination: g2.denomination, asset: TESTNET_VEIL_TOKEN, paused: g2.paused, cap: g2.cap, total: g2.total },
-            ];
-            const picked = pickVeilDestinationPool(quotedOut, veilPools);
-            setRouterDestPool(picked ? picked.pool : null);
-            setRouterDestDenom(picked ? picked.denomination : null);
-            setRouterQuoteNote(
-              !picked
-                ? "Live simulated output is below the 0.5 VEIL note denomination. Increase the ETH input; execution stays disabled until the route can fund a full note."
-                : null
-            );
-          } else {
-            const [bal, allow] = await Promise.all([
-              readVeilBalance(publicClient, connectedAddress),
-              readVeilAllowance(publicClient, connectedAddress),
-            ]);
-            preAllow = allow;
-            if (!cancelled) setVeilBalance(formatEther(bal));
-            const quotedOut = await quoteSwapToShieldOutput(publicClient, {
-              account: connectedAddress,
-              amountIn,
-              commitment: generateRandomBytes32(),
-              zeroForOne: false,
-              shieldedPool: TESTNET_LEGACY_ETH_POOL,
-            });
-            const minAmountOut = calculateSlippageBound(quotedOut, slippagePct);
-            if (cancelled) return;
-            setRouterQuote({ quotedOut, minAmountOut });
-            setRouterDestPool(null);
-            setRouterDestDenom(null);
-            setRouterQuoteNote(
-              quotedOut < (liveDenomination ?? 1000000000000000n)
-                ? "Live simulated output is below the 0.001 ETH note denomination. Increase the VEIL input; execution stays disabled until the route can fund a full note."
-                : null
-            );
-          }
-        } catch (e: unknown) {
-          if (cancelled) return;
-          setRouterQuote(null);
-          setRouterDestPool(null);
-          setRouterDestDenom(null);
-          // Review fix I-2: surface the ACTUAL revert reason first
-          setRouterQuoteNote(
-            `${withAllowanceHint(mapRouterSwapError(e), !isEthInput && preAllow < amountIn)} (Slippage setting: ${slippagePct}%. Raise it in Execution Settings if the quote trails the market.)`
-          );
-        } finally {
-          if (!cancelled) setIsQuoting(false);
-        }
-      })();
-    }, 600);
+    (async () => {
+      try {
+        const bal = await publicClient.readContract({
+          address: TESTNET_BOW_V3_VEIL_TOKEN,
+          abi: BOW_V3_VEIL_APPROVE_ABI,
+          functionName: "balanceOf",
+          args: [connectedAddress],
+        });
+        if (!cancelled) setVeilBalance(formatEther(bal));
+      } catch {
+        if (!cancelled) setVeilBalance(null);
+      }
+    })();
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [isTestnetRouterMode, activeTab, veilAmountIn, inputAmount, inputToken.symbol, connectedAddress, slippage, liveDenomination, quoteNonce]);
+  }, [activeTab, bowDepositAsset, connectedAddress]);
 
   function saveNoteLocally(newNote: AnyShieldedNote) {
     const updated = [newNote, ...notes.filter((n) => n.nullifier !== newNote.nullifier)];
@@ -652,97 +512,29 @@ export default function SwapToShieldPage() {
     return Math.min(86400, Math.max(300, Math.floor(minutes * 60)));
   }
 
-  function handlePercentage(pct: number) {
-    const bal = parseFloat(inputToken.balance);
-    if (bal > 0) {
-      const val = (bal * pct).toFixed(4);
-      if (isTestnetRouterMode && inputToken.symbol === "VEIL") {
-        setVeilAmountIn(val);
-      } else {
-        setInputAmount(val);
-      }
-    }
-  }
-
-  function handleFlipTokens() {
-    if (isTestnetRouterMode) {
-      if (inputToken.symbol === "ETH") {
-        const veilToken = SUPPORTED_TOKENS.find((t) => t.symbol === "VEIL") || {
-          ...SUPPORTED_TOKENS[0],
-          symbol: "VEIL",
-          name: "Veil Protocol Token",
-          address: TESTNET_VEIL_TOKEN,
-        };
-        setInputToken(veilToken);
-        setOutputToken(SUPPORTED_TOKENS[0]);
-      } else {
-        const veilToken = SUPPORTED_TOKENS.find((t) => t.symbol === "VEIL") || {
-          ...SUPPORTED_TOKENS[0],
-          symbol: "VEIL",
-          name: "Veil Protocol Token",
-          address: TESTNET_VEIL_TOKEN,
-        };
-        setInputToken(SUPPORTED_TOKENS[0]);
-        setOutputToken(veilToken);
-      }
-      return;
-    }
-    const temp = inputToken;
-    setInputToken(outputToken);
-    setOutputToken(temp);
-  }
-
-  // Router pay direction follows the selected pay token (R3): ETH -> VEIL
-  // deposits into a VEIL pool, anything else -> VEIL branch (fixed router
-  // route). Anything that is not ETH pays VEIL.
-  const routerPaySymbol = inputToken.symbol === "ETH" ? "ETH" : "VEIL";
-  const isEthRouterInput = isTestnetRouterMode && routerPaySymbol === "ETH";
-  const parsedInput = parseFloat(inputAmount) || 0;
-  // Displayed pay must equal the value actually sent (liveDenomination).
-  const inputMatchesDenomination =
-    liveDenomination !== null &&
-    Math.abs(parsedInput - parseFloat(formatEther(liveDenomination))) < 1e-9;
-
-  // Router-path input validity (uint128-bounded, R1). Null disables
-  // execution; the reason is shown in the quote panel, never an alert().
-  let parsedRouterIn: bigint | null = null;
+  // 0xbow deposit input validity: the amount must parse to the exact live
+  // denomination (fixed 0.001 ETH, live VEIL minimum). Anything else
+  // disables execution with an honest message, never an alert().
+  const isBowEthDeposit = bowDepositAsset === "ETH";
+  let parsedBowDeposit: bigint | null = null;
   try {
-    const candidate = parseEther(isEthRouterInput ? inputAmount : veilAmountIn);
-    if (candidate > 0n && candidate <= UINT128_MAX) parsedRouterIn = candidate;
+    const candidate = parseEther(inputAmount);
+    if (candidate > 0n) parsedBowDeposit = candidate;
   } catch {
-    parsedRouterIn = null;
+    parsedBowDeposit = null;
   }
-  const parsedVeilIn = parsedRouterIn;
-  const routerQuoteBelowDenomination =
-    routerQuote !== null &&
-    (isEthRouterInput
-      ? routerQuote.quotedOut < TESTNET_VEIL_POOL_05_DENOMINATION
-      : (liveDenomination !== null && routerQuote.quotedOut < liveDenomination));
+  const bowExpectedDenomination = isBowEthDeposit ? TESTNET_BOW_V3_ETH_DENOMINATION : veilMinimum;
+  const bowDepositMatchesDenomination =
+    parsedBowDeposit !== null &&
+    bowExpectedDenomination !== null &&
+    parsedBowDeposit === bowExpectedDenomination;
   // Buy CTA state, computed once and shared with BuyAndShieldPanel.
-  const buyCtaDisabled = isTestnetRouterMode
-    ? isRouterExecuteDisabled({
-        isExecuting,
-        connected: Boolean(connectedAddress),
-        veilInValid: parsedVeilIn !== null,
-        quoteBelowDenomination: routerQuoteBelowDenomination,
-        isQuoting,
-        hasQuote: routerQuote !== null,
-      })
-    : isExecuting ||
-      (Boolean(connectedAddress) &&
-        (!inputAmount || parsedInput <= 0 || !inputMatchesDenomination));
-
-  // Router pay-token toggle target (R3): full TokenItem so balances follow.
-  function selectRouterPayToken(sym: "VEIL" | "ETH") {
-    if (sym === "ETH") {
-      setInputToken({ ...SUPPORTED_TOKENS[0] });
-    } else {
-      const veilEntry = SUPPORTED_TOKENS.find((t) => t.symbol === "VEIL");
-      if (veilEntry) {
-        setInputToken({ ...veilEntry, address: TESTNET_VEIL_TOKEN });
-      }
-    }
-  }
+  const buyCtaDisabled =
+    isExecuting ||
+    (Boolean(connectedAddress) &&
+      (parsedBowDeposit === null ||
+        (!isBowEthDeposit && veilMinimum === null) ||
+        !bowDepositMatchesDenomination));
 
   // Task 3 gated-path VEIL input validity. Null disables gated execution;
   // the reason is shown in the gated panel, never an alert().
@@ -752,363 +544,6 @@ export default function SwapToShieldPage() {
     if (gatedCandidate > 0n) parsedGatedIn = gatedCandidate;
   } catch {
     parsedGatedIn = null;
-  }
-
-  // Testnet router execution (Task 2 & R3): REAL VeilShieldRouter.swapToShield via
-  // the connected wallet on chain 46630.
-  // Supports both directions honestly:
-  // - ETH in -> VEIL out -> exact-denomination deposit into VEIL pool (0.5 or 2 VEIL) with msg.value
-  // - VEIL in -> ETH out -> exact-denomination deposit into legacy ETH pool (0.001 ETH)
-  async function handleRouterSwapToShield(
-    activeProvider: NonNullable<ReturnType<typeof getActiveEvmProvider>>,
-    connectedChainId: number | null
-  ) {
-    if (connectedChainId !== null && connectedChainId !== TESTNET_CHAIN_ID) {
-      setFlowError(
-        "The router swap-to-shield route lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
-      );
-      return;
-    }
-    let slippagePct: number;
-    // Read-only parse runs unguarded; the guard is acquired inside the main
-    // try below so validation failures can never leak it (deep-audit F1).
-    try {
-      slippagePct = parseSlippagePercent(slippage);
-    } catch (e: unknown) {
-      setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
-      return;
-    }
-    if (parsedRouterIn === null) {
-      setFlowError(`Enter a valid ${inputToken.symbol} amount greater than zero.`);
-      return;
-    }
-    const amountIn = parsedRouterIn;
-    // Review fix I-1 (defense in depth): never send a real approve+swap tx
-    // while the live quote is missing or still simulating. The button is
-    // disabled in this state; this guard covers keyboard/programmatic clicks.
-    if (
-      isRouterExecuteDisabled({
-        isExecuting,
-        connected: Boolean(connectedAddress),
-        veilInValid: parsedRouterIn !== null,
-        quoteBelowDenomination: routerQuoteBelowDenomination,
-        isQuoting,
-        hasQuote: routerQuote !== null,
-      })
-    ) {
-      setFlowError(
-        "Live router quote is not ready yet — wait for the simulated output to load. No transaction was sent."
-      );
-      return;
-    }
-
-    setIsExecuting(true);
-    setProverTitle(
-      isEthRouterInput
-        ? "Executing Router Swap-to-Shield (ETH -> VEIL Note)"
-        : "Executing Router Swap-to-Shield (VEIL -> ETH Note)"
-    );
-    setProverTxHash(null);
-    setProverCommitment(null);
-    setProverCommitted(false);
-    setProverSteps([
-      {
-        title: "1. Client-Side Commitment Key Derivation",
-        detail: "Generating secret & nullifier with CSPRNG entropy for the exact-denomination note",
-        status: "running",
-      },
-      {
-        title: "2. Live Guards & Output Simulation",
-        detail: "Reading pool denomination, pause and cap, then simulating swapToShield via eth_call",
-        status: "pending",
-      },
-      {
-        title: "3. VeilShieldRouter.swapToShield Execution",
-        detail: isEthRouterInput
-          ? "Swapping native ETH to VEIL into the shielded pool with value attached"
-          : "Approving VEIL when needed, then swapping VEIL to ETH into the shielded pool",
-        status: "pending",
-      },
-      {
-        title: "4. Invariant Assert & Vault Storage",
-        detail: "Verifying SwapToShieldExecuted and the router zero-balance invariant, then persisting the note",
-        status: "pending",
-      },
-    ]);
-    setIsProverOpen(true);
-
-    try {
-      if (txInFlight.current > 0) return;
-      txInFlight.current += 1;
-      const walletClient = createWalletClient({
-        account: connectedAddress as Address,
-        chain: appChain,
-        transport: custom(activeProvider),
-      });
-
-      if (isEthRouterInput) {
-        // ETH -> VEIL direction
-        const ethBal = await publicClient.getBalance({ address: connectedAddress as Address });
-        if (ethBal < amountIn) {
-          throw new Error("Insufficient testnet ETH balance to fund this swap and pay gas.");
-        }
-
-        const [g05, g2] = await Promise.all([
-          readSwapGuards(publicClient, TESTNET_VEIL_POOL_05),
-          readSwapGuards(publicClient, TESTNET_VEIL_POOL_2),
-        ]);
-        const veilPools = [
-          { pool: TESTNET_VEIL_POOL_05, denomination: g05.denomination, asset: TESTNET_VEIL_TOKEN, paused: g05.paused, cap: g05.cap, total: g05.total },
-          { pool: TESTNET_VEIL_POOL_2, denomination: g2.denomination, asset: TESTNET_VEIL_TOKEN, paused: g2.paused, cap: g2.cap, total: g2.total },
-        ];
-
-        // Fresh live quote inside the send window
-        const freshOut = await quoteSwapToShieldOutput(publicClient, {
-          account: connectedAddress as Address,
-          amountIn,
-          commitment: generateRandomBytes32(),
-          zeroForOne: true,
-          shieldedPool: TESTNET_VEIL_POOL_05,
-        });
-        const destPool = pickVeilDestinationPool(freshOut, veilPools);
-        if (!destPool) {
-          throw new Error(
-            "Live simulated output is below the VEIL destination pool denomination (InsufficientOutputForDenomination). Increase the ETH input and try again. No transaction was sent."
-          );
-        }
-
-        const note = createShieldedNote(destPool.denomination, TESTNET_VEIL_TOKEN);
-        setProverCommitment(note.commitment);
-        setProverSteps((prev) => [
-          { ...prev[0], status: "completed" },
-          { ...prev[1], status: "completed" },
-          { ...prev[2], status: "running" },
-          prev[3],
-        ]);
-
-        const minAmountOut = calculateSlippageBound(freshOut, slippagePct);
-        const params = buildSwapToShieldParams({
-          amountIn,
-          quotedOut: freshOut,
-          slippagePercent: slippagePct,
-          commitment: note.commitment,
-          zeroForOne: true,
-          shieldedPool: destPool.pool,
-        });
-
-        const routerBalBefore = await publicClient.getBalance({
-          address: TESTNET_ROUTER_ADDRESS,
-        });
-
-        // Drift re-check (testnet-final): abort if the wallet account or
-        // chain changed since handler entry. No transaction was sent.
-        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
-        const swapHash = await walletClient.writeContract({
-          address: TESTNET_ROUTER_ADDRESS,
-          abi: CONTRACT_ABIS.VeilShieldRouter,
-          functionName: "swapToShield",
-          args: [params],
-          value: amountIn,
-        });
-        setProverTxHash(swapHash);
-        // Journal pre-receipt (root-audit F5): crash between send and persist
-        // must not strand secrets.
-        savePendingNote(note, swapHash, destPool.pool);
-        setProverSteps((prev) => [
-          prev[0],
-          prev[1],
-          { ...prev[2], status: "completed" },
-          { ...prev[3], status: "running" },
-        ]);
-
-        const receipt = await waitForTransactionReceipt(publicClient, { hash: swapHash });
-        if (receipt.status !== "success") {
-          throw new Error("Router swap-to-shield transaction reverted onchain.");
-        }
-        const executed = findSwapToShieldExecuted(receipt.logs, note.commitment, connectedAddress as Address);
-        if (!executed) {
-          throw new Error(
-            "SwapToShieldExecuted event not found for this commitment. Treating the deposit as unverified: the note was NOT saved. Check the transaction in your wallet history."
-          );
-        }
-        if (executed.shieldedPool.toLowerCase() !== destPool.pool.toLowerCase()) {
-          throw new Error(
-            "Swap settled into an unexpected shielded pool. The note was NOT saved. Check the transaction on the explorer before retrying."
-          );
-        }
-        const routerBalAfter = await publicClient.getBalance({
-          address: TESTNET_ROUTER_ADDRESS,
-        });
-        if (routerBalAfter !== routerBalBefore) {
-          throw new Error(
-            "Router safety invariant failed: router ETH balance changed across the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
-          );
-        }
-        // VEIL leg of the invariant (R2 live-B asserted routerVeilAfter 0):
-        // the router must not retain any swap output.
-        const routerVeilAfter = await readVeilBalance(publicClient, TESTNET_ROUTER_ADDRESS);
-        if (routerVeilAfter !== 0n) {
-          throw new Error(
-            "Router safety invariant failed: router holds VEIL after the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
-          );
-        }
-
-        setSelectedNote(note);
-        saveNoteLocally(note);
-        clearPendingNoteByTx(swapHash);
-        setProverCommitted(true);
-        setProverSteps((prev) => [
-          prev[0],
-          prev[1],
-          prev[2],
-          { ...prev[3], status: "completed" },
-        ]);
-        setIsProverOpen(true);
-      } else {
-        // VEIL -> ETH direction (existing proven path)
-        const guards = await readSwapGuards(publicClient);
-        if (guards.paused) {
-          throw new Error("Shielded ETH pool deposits are paused. No transaction was sent.");
-        }
-        if (guards.total + guards.denomination > guards.cap) {
-          throw new Error("Shielded ETH pool cap is reached. No transaction was sent.");
-        }
-        const veilBal = await readVeilBalance(publicClient, connectedAddress as Address);
-        if (veilBal < amountIn) {
-          throw new Error(
-            `Insufficient test VEIL balance. The router route needs ${formatEther(amountIn)} test VEIL (${TESTNET_VEIL_TOKEN}) already in your wallet — the proven script ran on a pre-funded operator balance and there is no onchain faucet. Fund test VEIL and try again.`
-          );
-        }
-        setProverSteps((prev) => [
-          { ...prev[0], status: "completed" },
-          { ...prev[1], status: "running" },
-          prev[2],
-          prev[3],
-        ]);
-
-        const allowance = await readVeilAllowance(publicClient, connectedAddress as Address);
-        if (allowance < amountIn) {
-          await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
-          const approveHash = await walletClient.writeContract({
-              address: TESTNET_VEIL_TOKEN,
-              abi: VEIL_ERC20_ABI,
-              functionName: "approve",
-              args: [TESTNET_ROUTER_ADDRESS, amountIn],
-            });
-          const approveReceipt = await waitForTransactionReceipt(publicClient, {
-            hash: approveHash,
-          });
-          if (approveReceipt.status !== "success") {
-            throw new Error("VEIL approval reverted onchain. No swap was sent.");
-          }
-          // Allowance changed: refresh the displayed quote (root-audit F13).
-          setQuoteNonce((n) => n + 1);
-        }
-
-        const note = createShieldedNote(guards.denomination, ETH_ZERO_ADDRESS);
-        setProverCommitment(note.commitment);
-
-        const routerBalBefore = await publicClient.getBalance({
-          address: TESTNET_ROUTER_ADDRESS,
-        });
-        const freshOut = await quoteSwapToShieldOutput(publicClient, {
-          account: connectedAddress as Address,
-          amountIn,
-          commitment: note.commitment,
-          zeroForOne: false,
-          shieldedPool: TESTNET_LEGACY_ETH_POOL,
-        });
-        if (freshOut < guards.denomination) {
-          throw new Error(
-            "Live simulated output is below the 0.001 ETH shielded-note denomination (InsufficientOutputForDenomination). Increase the VEIL input and try again. No transaction was sent."
-          );
-        }
-        const minAmountOut = calculateSlippageBound(freshOut, slippagePct);
-        setRouterQuote({ quotedOut: freshOut, minAmountOut });
-        setProverSteps((prev) => [
-          prev[0],
-          { ...prev[1], status: "completed" },
-          { ...prev[2], status: "running" },
-          prev[3],
-        ]);
-
-        const params = buildSwapToShieldParams({
-          amountIn,
-          quotedOut: freshOut,
-          slippagePercent: slippagePct,
-          commitment: note.commitment,
-          zeroForOne: false,
-          shieldedPool: TESTNET_LEGACY_ETH_POOL,
-        });
-        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
-        const swapHash = await walletClient.writeContract({
-          address: TESTNET_ROUTER_ADDRESS,
-          abi: CONTRACT_ABIS.VeilShieldRouter,
-          functionName: "swapToShield",
-          args: [params],
-        });
-        setProverTxHash(swapHash);
-        savePendingNote(note, swapHash, TESTNET_LEGACY_ETH_POOL);
-        setProverSteps((prev) => [
-          prev[0],
-          prev[1],
-          { ...prev[2], status: "completed" },
-          { ...prev[3], status: "running" },
-        ]);
-
-        const receipt = await waitForTransactionReceipt(publicClient, { hash: swapHash });
-        if (receipt.status !== "success") {
-          throw new Error("Router swap-to-shield transaction reverted onchain.");
-        }
-        const executed = findSwapToShieldExecuted(receipt.logs, note.commitment, connectedAddress as Address);
-        if (!executed) {
-          throw new Error(
-            "SwapToShieldExecuted event not found for this commitment. Treating the deposit as unverified: the note was NOT saved. Check the transaction in your wallet history."
-          );
-        }
-        if (executed.shieldedPool.toLowerCase() !== TESTNET_LEGACY_ETH_POOL.toLowerCase()) {
-          throw new Error(
-            "Swap settled into an unexpected shielded pool. The note was NOT saved. Check the transaction on the explorer before retrying."
-          );
-        }
-        const routerBalAfter = await publicClient.getBalance({
-          address: TESTNET_ROUTER_ADDRESS,
-        });
-        if (routerBalAfter !== routerBalBefore) {
-          throw new Error(
-            "Router safety invariant failed: router ETH balance changed across the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
-          );
-        }
-        // VEIL leg of the invariant (deep-audit S3): VEIL-in leg must also
-        // leave zero VEIL behind (approval pull + forceApprove pattern).
-        const routerVeilAfter = await readVeilBalance(publicClient, TESTNET_ROUTER_ADDRESS);
-        if (routerVeilAfter !== 0n) {
-          throw new Error(
-            "Router safety invariant failed: router holds VEIL after the swap (NonZeroBalanceInvariantFailed). The note was NOT saved — verify the transaction on the explorer before retrying."
-          );
-        }
-
-        setLiveDenomination(guards.denomination);
-        setSelectedNote(note);
-        saveNoteLocally(note);
-        clearPendingNoteByTx(swapHash);
-        setProverCommitted(true);
-        setProverSteps((prev) => [
-          prev[0],
-          prev[1],
-          prev[2],
-          { ...prev[3], status: "completed" },
-        ]);
-        setIsProverOpen(true);
-      }
-    } catch (e: unknown) {
-      console.error("Router swap-to-shield transaction error:", e);
-      setIsProverOpen(false);
-      setFlowError(mapRouterSwapError(e, slippagePct));
-    } finally {
-      setIsExecuting(false);
-      txInFlight.current = Math.max(0, txInFlight.current - 1);
-    }
   }
 
   // Task 3: re-read attestation + gating from chain (refresh button and
@@ -1341,7 +776,6 @@ export default function SwapToShieldPage() {
         if (approveReceipt.status !== "success") {
           throw new Error("VEIL approval reverted onchain. No swap was sent.");
         }
-        setQuoteNonce((n) => n + 1);
       }
       const deadline = BigInt(Math.floor(Date.now() / 1000) + userDeadlineSeconds());
       const inner = buildGatedHookInnerHash({
@@ -1402,6 +836,10 @@ export default function SwapToShieldPage() {
     }
   }
 
+  // Full-ZK cutover: 0xbow v3 deposits ONLY (native ETH + ERC20 VEIL via
+  // Entrypoint.deposit on Robinhood Testnet 46630). No legacy pool is ever
+  // touched: legacy pools pause deposits onchain, so any such path would
+  // only ever revert and burn gas.
   async function handleBuyAndShield() {
     setFlowError(null);
     if (!connectedAddress) {
@@ -1416,76 +854,70 @@ export default function SwapToShieldPage() {
     }
 
     const connectedChainId = await getConnectedChainId(activeProvider);
-    // Testnet default (Task 2): the REAL router path
-    // (VeilShieldRouter.swapToShield). Direct pool deposit remains available
-    // only through the honestly labeled fallback toggle.
-    if (isTestnetRouterMode) {
-      await handleRouterSwapToShield(activeProvider, connectedChainId);
-      return;
-    }
-
-    if (!inputAmount || parsedInput <= 0) return;
-    if (!inputMatchesDenomination) {
+    if (connectedChainId !== null && connectedChainId !== TESTNET_CHAIN_ID) {
       setFlowError(
-        `Enter the exact pool denomination shown under You Shield (${liveDenomination !== null ? formatNoteAmount(liveDenomination, ETH_ZERO_ADDRESS) : "live value"}).`
+        "0xbow shielded deposits live on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
       );
       return;
     }
-    const useTestnetBow =
-      (connectedChainId === TESTNET_CHAIN_ID || (!connectedChainId && APP_CHAIN_ID === TESTNET_CHAIN_ID)) &&
-      isTestnetBowConfigured();
+    if (!isTestnetBowV3Configured()) {
+      setFlowError(
+        "The 0xbow deposit suite is not configured. No transaction was sent."
+      );
+      return;
+    }
+    if (parsedBowDeposit === null) {
+      setFlowError(`Enter a valid ${bowDepositAsset} amount greater than zero.`);
+      return;
+    }
+    if (!bowDepositMatchesDenomination) {
+      setFlowError(
+        isBowEthDeposit
+          ? `Enter the exact 0xbow note denomination (${formatEther(TESTNET_BOW_V3_ETH_DENOMINATION)} ETH). No transaction was sent.`
+          : veilMinimum === null
+          ? "The live VEIL minimum is still loading. Wait for it to load and try again. No transaction was sent."
+          : `Enter the exact live VEIL minimum (${formatEther(veilMinimum)} VEIL). No transaction was sent.`
+      );
+      return;
+    }
+    const depositValue = parsedBowDeposit;
 
     setIsExecuting(true);
-    setProverTitle(useTestnetBow ? "Executing 0xbow Shielded Deposit (Testnet)" : "Executing Shielded Deposit");
+    setProverTitle(
+      isBowEthDeposit
+        ? "Executing 0xbow Shielded Deposit (ETH, Testnet)"
+        : "Executing 0xbow Shielded Deposit (VEIL, Testnet)"
+    );
     setProverTxHash(null);
     setProverCommitment(null);
     setProverCommitted(false);
 
-    const initialSteps: ZkProverStep[] = useTestnetBow
-      ? [
-          {
-            title: "1. Client-Side 0xbow Key Derivation",
-            detail: "Deriving nullifier, secret & precommitment using BIP-39 entropy & Poseidon hash",
-            status: "running",
-          },
-          {
-            title: "2. Privacy Pools Precommitment Preparation",
-            detail: "Binding commitment preimage to Testnet Privacy Pool scope",
-            status: "pending",
-          },
-          {
-            title: "3. On-Chain Deposit Execution",
-            detail: "Calling entrypointProxy.deposit() with 0.001 ETH on Robinhood Testnet",
-            status: "pending",
-          },
-          {
-            title: "4. Settlement, ASP Sync & Local Vault Storage",
-            detail: "Confirming block receipt, syncing Association Set & persisting note",
-            status: "pending",
-          },
-        ]
-      : [
-          {
-            title: "1. Client-Side Cryptographic Key Derivation",
-            detail: "Generating cryptographically secure secret & nullifier with CSPRNG entropy",
-            status: "running",
-          },
-          {
-            title: "2. Merkle Tree Commitment Construction",
-            detail: "Computing keccak256 commitment for Robinhood privacy pool insertion",
-            status: "pending",
-          },
-          {
-            title: "3. ShieldedPool Deposit Execution",
-            detail: "Depositing fixed-denomination commitment to ShieldedPool_ETH on Robinhood Chain Mainnet",
-            status: "pending",
-          },
-          {
-            title: "4. Settlement & Local Encrypted Vault Storage",
-            detail: "Verifying Merkle root update on Robinhood Chain Mainnet",
-            status: "pending",
-          },
-        ];
+    const initialSteps: ZkProverStep[] = [
+      {
+        title: "1. Client-Side 0xbow Key Derivation",
+        detail: "Deriving nullifier, secret & precommitment using BIP-39 entropy & Poseidon hash",
+        status: "running",
+      },
+      {
+        title: "2. Privacy Pools Precommitment Preparation",
+        detail: isBowEthDeposit
+          ? "Binding commitment preimage to the v3 ETH pool scope"
+          : "Binding commitment preimage to the v3 VEIL pool scope",
+        status: "pending",
+      },
+      {
+        title: "3. On-Chain Deposit Execution",
+        detail: isBowEthDeposit
+          ? "Calling entrypoint.deposit() with 0.001 ETH on Robinhood Testnet"
+          : "Approving VEIL when needed, then calling entrypoint.deposit(asset, value, precommitment)",
+        status: "pending",
+      },
+      {
+        title: "4. Settlement, ASP Sync & Local Vault Storage",
+        detail: "Confirming block receipt, syncing Association Set & persisting note",
+        status: "pending",
+      },
+    ];
 
     setProverSteps(initialSteps);
     setIsProverOpen(true);
@@ -1493,159 +925,16 @@ export default function SwapToShieldPage() {
     try {
       if (txInFlight.current > 0) return;
       txInFlight.current += 1;
-      if (useTestnetBow) {
-        await new Promise((r) => setTimeout(r, 400));
-        const testnetClient = createTestnetBowPublicClient();
-        const scope = await testnetClient.readContract({
-          address: TESTNET_0XBOW.pool,
-          abi: BOW_POOL_SCOPE_ABI,
-          functionName: "SCOPE",
-        });
-
-        const secrets = createBowDepositSecrets(scope);
-        setProverCommitment(secrets.precommitment.toString());
-
-        setProverSteps((prev) => [
-          { ...prev[0], status: "completed" },
-          { ...prev[1], status: "running" },
-          prev[2],
-          prev[3],
-        ]);
-
-        await new Promise((r) => setTimeout(r, 400));
-        setProverSteps((prev) => [
-          prev[0],
-          { ...prev[1], status: "completed" },
-          { ...prev[2], status: "running" },
-          prev[3],
-        ]);
-
-        const walletClient = createWalletClient({
-          account: connectedAddress,
-          chain: appChain,
-          transport: custom(activeProvider),
-        });
-
-        const depositDenomination = 1000000000000000n; // 0.001 ETH
-        // Deep-audit note: denomination is intentionally pinned to
-        // TESTNET_0XBOW_META.denominationWei (no onchain per-asset minimum is
-        // exposed for native-ETH pools via assetConfig). A pool reconfig
-        // fails closed downstream (commitment/value checks), never silently.
-        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
-        const depositHash = await walletClient.writeContract({
-          address: TESTNET_0XBOW.entrypointProxy,
-          abi: parseAbi(["function deposit(uint256 _precommitmentHash) payable returns (uint256)"]),
-          functionName: "deposit",
-          args: [secrets.precommitment],
-          value: depositDenomination,
-        });
-
-        setProverTxHash(depositHash);
-        setProverSteps((prev) => [
-          prev[0],
-          prev[1],
-          { ...prev[2], status: "completed" },
-          { ...prev[3], status: "running" },
-        ]);
-
-        const receipt = await waitForTransactionReceipt(testnetClient, { hash: depositHash });
-        if (receipt.status !== "success") throw new Error("0xbow deposit transaction reverted onchain.");
-
-        const poolLogs = await testnetClient.getContractEvents({
-          address: TESTNET_0XBOW.pool,
-          abi: parseAbi([
-            "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
-          ]),
-          eventName: "Deposited",
-          fromBlock: receipt.blockNumber,
-          toBlock: receipt.blockNumber,
-        });
-        const ownLog = poolLogs.find(
-          (l) => l.transactionHash.toLowerCase() === depositHash.toLowerCase()
-        );
-        if (!ownLog)
-          throw new Error(
-            "Deposit confirmed but our Deposited event was not found in the receipt block. No note was saved. Check the transaction on the explorer and retry with a fresh deposit."
-          );
-
-        const label = BigInt(ownLog.args._label ?? 0n);
-        const onchainValue = BigInt(ownLog.args._value ?? 0n);
-        if (onchainValue !== depositDenomination) {
-          throw new Error("Deposited value mismatch: onchain event does not match the 0.001 ETH denomination.");
-        }
-        const bowNote = createBowNote({
-          scope,
-          denomination: depositDenomination,
-          label,
-          nullifier: secrets.nullifier,
-          secret: secrets.secret,
-          precommitment: secrets.precommitment,
-          txHash: depositHash,
-          blockNumber: receipt.blockNumber,
-          chainId: TESTNET_CHAIN_ID,
-        });
-
-        // Commitment recompute check: locally derived Poseidon commitment must
-        // match the onchain Deposited event (script parity).
-        if (BigInt(bowNote.commitmentHash) !== BigInt(ownLog.args._commitment ?? 0n)) {
-          throw new Error("Commitment derivation mismatch between local note and onchain event.");
-        }
-
-        setSelectedNote(bowNote);
-        setProverCommitment(bowNote.commitmentHash);
-        // Journal first (root-audit F5), then confirm: crash between here and
-        // the vault write must not strand secrets.
-        savePendingNote(bowNote, depositHash, TESTNET_0XBOW.pool);
-        saveNoteLocally(bowNote);
-      clearPendingNoteByTx(depositHash);
-      setProverCommitted(true);
-        setProverCommitted(true);
-
-        fetch("/api/asp/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
-        }).catch((err) => console.warn("Background ASP sync:", err));
-
-        setProverSteps((prev) => [
-          prev[0],
-          prev[1],
-          prev[2],
-          { ...prev[3], status: "completed" },
-        ]);
-        setIsProverOpen(true);
-        return;
-      }
-
-      await new Promise((r) => setTimeout(r, 650));
-      // Only ShieldedPool_ETH exists onchain, so v1 always targets it with its live
-      // denomination. Non-ETH outputs stay selectable for display but deposit as ETH.
-      const onchainDenomination = await publicClient.readContract({
-        address: SHIELDED_POOL_ETH,
-        abi: POOL_DEPOSIT_ABI_EXT,
-        functionName: "denomination",
+      const testnetClient = createTestnetBowPublicClient();
+      const depositPool = isBowEthDeposit ? TESTNET_BOW_V3_ETH_POOL : TESTNET_BOW_V3_VEIL_POOL;
+      const scope = await testnetClient.readContract({
+        address: depositPool,
+        abi: BOW_POOL_SCOPE_ABI,
+        functionName: "SCOPE",
       });
-      const paused = await publicClient.readContract({
-        address: SHIELDED_POOL_ETH,
-        abi: POOL_DEPOSIT_ABI_EXT,
-        functionName: "depositsPaused",
-      });
-      const cap = await publicClient.readContract({
-        address: SHIELDED_POOL_ETH,
-        abi: POOL_DEPOSIT_ABI_EXT,
-        functionName: "poolCap",
-      });
-      const total = await publicClient.readContract({
-        address: SHIELDED_POOL_ETH,
-        abi: POOL_DEPOSIT_ABI_EXT,
-        functionName: "totalDeposits",
-      });
-      if (paused || total + onchainDenomination > cap) {
-        throw new Error("Pool is paused or the deposit cap is reached.");
-      }
-      const note = createShieldedNote(onchainDenomination, ETH_ZERO_ADDRESS);
-      setSelectedNote(note);
-      setProverCommitment(note.commitment);
+
+      const secrets = createBowDepositSecrets(scope);
+      setProverCommitment(secrets.precommitment.toString());
 
       setProverSteps((prev) => [
         { ...prev[0], status: "completed" },
@@ -1654,7 +943,7 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, 400));
       setProverSteps((prev) => [
         prev[0],
         { ...prev[1], status: "completed" },
@@ -1662,25 +951,96 @@ export default function SwapToShieldPage() {
         prev[3],
       ]);
 
-      // Step 3: Real On-Chain Transaction Execution via Connected Wallet
       const walletClient = createWalletClient({
         account: connectedAddress,
         chain: appChain,
         transport: custom(activeProvider),
       });
 
-      // Deposit note commitment to Robinhood Chain ShieldedPool_ETH
-      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
-      const depositHash = await walletClient.writeContract({
-        address: SHIELDED_POOL_ETH,
-        abi: POOL_DEPOSIT_ABI,
-        functionName: "deposit",
-        args: [note.commitment as `0x${string}`],
-        value: onchainDenomination,
-      });
+      let depositHash: `0x${string}`;
+      if (isBowEthDeposit) {
+        const ethBal = await testnetClient.getBalance({ address: connectedAddress });
+        if (ethBal < depositValue) {
+          throw new Error(
+            "Insufficient testnet ETH balance to fund this shield and pay gas. Fund testnet ETH at the faucet and try again. No transaction was sent."
+          );
+        }
+        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+        depositHash = await walletClient.writeContract({
+          address: TESTNET_BOW_V3_ENTRYPOINT,
+          abi: BOW_V3_NATIVE_DEPOSIT_ABI,
+          functionName: "deposit",
+          args: [secrets.precommitment],
+          value: depositValue,
+        });
+      } else {
+        const [bal, allow, liveConfig] = await Promise.all([
+          testnetClient.readContract({
+            address: TESTNET_BOW_V3_VEIL_TOKEN,
+            abi: BOW_V3_VEIL_APPROVE_ABI,
+            functionName: "balanceOf",
+            args: [connectedAddress],
+          }),
+          testnetClient.readContract({
+            address: TESTNET_BOW_V3_VEIL_TOKEN,
+            abi: BOW_V3_VEIL_APPROVE_ABI,
+            functionName: "allowance",
+            args: [connectedAddress, TESTNET_BOW_V3_ENTRYPOINT],
+          }),
+          testnetClient.readContract({
+            address: TESTNET_BOW_V3_ENTRYPOINT,
+            abi: BOW_V3_VEIL_APPROVE_ABI,
+            functionName: "assetConfig",
+            args: [TESTNET_BOW_V3_VEIL_TOKEN],
+          }),
+        ]);
+        if (bal < depositValue) {
+          throw new Error(
+            `Insufficient test VEIL balance. Shielding needs ${formatEther(depositValue)} test VEIL (${TESTNET_BOW_V3_VEIL_TOKEN}) already in your wallet — there is no onchain faucet. Fund test VEIL and try again. No transaction was sent.`
+          );
+        }
+        // Live-minimum drift re-check inside the send window: the deposit
+        // must equal the current onchain minimum, never a stale display.
+        const liveMinimum = liveConfig[1] as bigint;
+        if (liveMinimum !== depositValue) {
+          throw new Error(
+            "The live VEIL minimum changed onchain since this screen loaded. Reload the minimum and try again. No transaction was sent."
+          );
+        }
+        if (allow < depositValue) {
+          await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+          const approveHash = await walletClient.writeContract({
+            address: TESTNET_BOW_V3_VEIL_TOKEN,
+            abi: BOW_V3_VEIL_APPROVE_ABI,
+            functionName: "approve",
+            args: [TESTNET_BOW_V3_ENTRYPOINT, depositValue],
+          });
+          const approveReceipt = await waitForTransactionReceipt(testnetClient, {
+            hash: approveHash,
+          });
+          if (approveReceipt.status !== "success") {
+            throw new Error("VEIL approval reverted onchain. No deposit was sent.");
+          }
+          const allowAfter = await testnetClient.readContract({
+            address: TESTNET_BOW_V3_VEIL_TOKEN,
+            abi: BOW_V3_VEIL_APPROVE_ABI,
+            functionName: "allowance",
+            args: [connectedAddress, TESTNET_BOW_V3_ENTRYPOINT],
+          });
+          assertVeilAllowanceForBowDeposit(allowAfter, depositValue);
+        } else {
+          assertVeilAllowanceForBowDeposit(allow, depositValue);
+        }
+        await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+        depositHash = await walletClient.writeContract({
+          address: TESTNET_BOW_V3_ENTRYPOINT,
+          abi: BOW_V3_ERC20_DEPOSIT_ABI,
+          functionName: "deposit",
+          args: [TESTNET_BOW_V3_VEIL_TOKEN, depositValue, secrets.precommitment],
+        });
+      }
 
       setProverTxHash(depositHash);
-
       setProverSteps((prev) => [
         prev[0],
         prev[1],
@@ -1688,30 +1048,66 @@ export default function SwapToShieldPage() {
         { ...prev[3], status: "running" },
       ]);
 
-      const receipt = await waitForTransactionReceipt(publicClient, { hash: depositHash });
-      if (receipt.status !== "success") throw new Error("Deposit transaction reverted onchain.");
-      // Direct-path event proof (root-audit F4): the note is persisted only
-      // when its commitment actually entered the tree — same bar as the
-      // router and 0xbow paths.
-      const directLogs = await publicClient.getContractEvents({
-        address: SHIELDED_POOL_ETH,
+      const receipt = await waitForTransactionReceipt(testnetClient, { hash: depositHash });
+      if (receipt.status !== "success") throw new Error("0xbow deposit transaction reverted onchain.");
+
+      const poolLogs = await testnetClient.getContractEvents({
+        address: depositPool,
         abi: parseAbi([
-          "event Deposit(uint32 indexed index, bytes32 indexed commitment, uint256 leafIndex, uint256 timestamp)",
+          "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
         ]),
-        eventName: "Deposit",
-        args: { commitment: note.commitment as `0x${string}` },
+        eventName: "Deposited",
         fromBlock: receipt.blockNumber,
         toBlock: receipt.blockNumber,
       });
-      if (directLogs.length === 0) {
+      const ownLog = poolLogs.find(
+        (l) => l.transactionHash.toLowerCase() === depositHash.toLowerCase()
+      );
+      if (!ownLog)
         throw new Error(
-          "Deposit confirmed but our commitment was not found in the receipt block. The note was NOT saved. Check the transaction on the explorer before retrying."
+          "Deposit confirmed but our Deposited event was not found in the receipt block. No note was saved. Check the transaction on the explorer and retry with a fresh deposit."
+        );
+
+      const label = BigInt(ownLog.args._label ?? 0n);
+      const onchainValue = BigInt(ownLog.args._value ?? 0n);
+      if (onchainValue !== depositValue) {
+        throw new Error(
+          `Deposited value mismatch: onchain event does not match the ${formatEther(depositValue)} ${bowDepositAsset} denomination.`
         );
       }
-      setLiveDenomination(onchainDenomination);
-      savePendingNote(note, depositHash, SHIELDED_POOL_ETH);
-      saveNoteLocally(note);
+      const bowNote = createBowNote({
+        scope,
+        denomination: depositValue,
+        label,
+        nullifier: secrets.nullifier,
+        secret: secrets.secret,
+        precommitment: secrets.precommitment,
+        txHash: depositHash,
+        blockNumber: receipt.blockNumber,
+        asset: (isBowEthDeposit ? ETH_ZERO_ADDRESS : TESTNET_BOW_V3_VEIL_TOKEN) as Address,
+        chainId: TESTNET_CHAIN_ID,
+      });
+
+      // Commitment recompute check: locally derived Poseidon commitment must
+      // match the onchain Deposited event (script parity).
+      if (BigInt(bowNote.commitmentHash) !== BigInt(ownLog.args._commitment ?? 0n)) {
+        throw new Error("Commitment derivation mismatch between local note and onchain event.");
+      }
+
+      setSelectedNote(bowNote);
+      setProverCommitment(bowNote.commitmentHash);
+      // Journal first (root-audit F5), then confirm: crash between here and
+      // the vault write must not strand secrets.
+      savePendingNote(bowNote, depositHash, depositPool);
+      saveNoteLocally(bowNote);
       clearPendingNoteByTx(depositHash);
+      setProverCommitted(true);
+
+      fetch("/api/asp/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
+      }).catch((err) => console.warn("Background ASP sync:", err));
 
       setProverSteps((prev) => [
         prev[0],
@@ -1719,10 +1115,9 @@ export default function SwapToShieldPage() {
         prev[2],
         { ...prev[3], status: "completed" },
       ]);
-      // Surface the result even if the user hid the modal mid-proof.
       setIsProverOpen(true);
     } catch (e: unknown) {
-      console.error("Swap-to-shield transaction error:", e);
+      console.error("0xbow shielded deposit error:", e);
       setIsProverOpen(false);
       setFlowError(
         e instanceof Error
@@ -1735,324 +1130,24 @@ export default function SwapToShieldPage() {
     }
   }
 
-  // Task 4 (R1/R2/R4): the Shielded Swap tab executes REAL
-  // VeilShieldRouter.shieldedSwap via the connected wallet on chain 46630 —
-  // source-pool withdraw with proof-bound params (recipient = router itself)
-  // -> v4 ETH/VEIL swap -> deposit of newCommitment into the destination
-  // pool, with relayerFee 0 (self-relay default: the user pays gas). No
-  // hardcoded minOut: a zero-floor eth_call simulation returns the live
-  // output first, then minAmountOut derives from it and the user's slippage.
-  //
-  // R3 live gate (load-bearing, Task 4b): the pools MUST exist AND be unpaused
-  // onchain, and the v4 route must be liquid — enforced by
-  // readShieldedSwapRouteStatusLive below, never by config alone.
-  // Both directions executable via the FIXED router (R1 settle fix, proven
-  // live R2): the source pool follows the selected note's asset (ETH notes ->
-  // ETH pool, VEIL notes -> matching VEIL pool); the destination is the live
-  // readable opposite-asset pool. 0xbow notes are rejected (router needs
-  // legacy withdraw interface) with directions to Withdraw instead.
-  // The post-gate execution path below is real (not stubbed).
+
+  // Full-ZK cutover: the Shielded Swap tab is paused. The legacy router
+  // route only settles into legacy pools whose deposits are paused onchain,
+  // so any swap execution would only ever revert and burn gas. 0xbow notes
+  // move via Withdraw (relay to a fresh address) plus a fresh Shield deposit
+  // instead. This handler stays wired to the tab CTA so the UI fails closed
+  // with directions and never sends a transaction.
   async function handleShieldedSwap() {
     setFlowError(null);
     if (!connectedAddress) {
       setIsWalletModalOpen(true);
       return;
     }
-    if (notes.length === 0) {
-      setFlowError("No shielded notes available in vault to spend. Create one via Swap-to-Shield first.");
-      return;
-    }
-    const activeProvider = getActiveEvmProvider();
-    if (!activeProvider) {
-      setIsWalletModalOpen(true);
-      return;
-    }
-    const connectedChainId = await getConnectedChainId(activeProvider);
-    if (connectedChainId !== TESTNET_CHAIN_ID) {
-      setFlowError(
-        "Shielded Swap lives on Robinhood Testnet (46630). Switch your wallet to testnet and try again. No transaction was sent."
-      );
-      return;
-    }
-
-    const noteToSwap = notes.find((n) => n.nullifier === selectedNoteNullifier);
-    if (!noteToSwap) {
-      // Deep-audit #24: never silently substitute another note — the sync
-      // effect normally guarantees a selection, but a stale nullifier plus a
-      // fast click must fail closed, not spend the wrong note.
-      setFlowError("Select a shielded note first. No transaction was sent.");
-      return;
-    }
-    // Router interface gate: shieldedSwap spends via
-    // IShieldedPool.withdraw(bytes,bytes32,bytes32,address,uint256), which
-    // only legacy Veil pools expose. 0xbow notes live in 0xbow pools
-    // (withdraw(tuple,tuple) through Entrypoint.relay with Groth16) and can
-    // never enter this router — fail closed with directions instead of a
-    // revert that burns gas.
-    if (getWithdrawPath(noteToSwap) === "0xbow" || isBowNote(noteToSwap)) {
-      setFlowError(
-        "The selected note is a 0xbow note, and VeilShieldRouter.shieldedSwap only spends legacy-pool notes: its source pool must expose withdraw(bytes,bytes32,bytes32,address,uint256), which 0xbow pools do not. Spend 0xbow notes via Withdraw instead. No transaction was sent."
-      );
-      return;
-    }
-
-    const isEthSource = !noteToSwap.asset || noteToSwap.asset === ETH_ZERO_ADDRESS;
-    const noteSourcePool = isEthSource
-      ? TESTNET_LEGACY_ETH_POOL
-      : (noteToSwap.denomination === TESTNET_VEIL_POOL_05_DENOMINATION
-          ? TESTNET_VEIL_POOL_05
-          : SHIELDED_SWAP_SOURCE_POOL);
-
-    const route = getShieldedSwapRouteStatus(noteSourcePool);
-    if (!route.executable || route.destination === null) {
-      setFlowError(shieldedSwapPendingMessage(route));
-      return;
-    }
-    const destination = route.destination;
-
-    // LIVE-READ enforcement (Task 4b R2, fixes T4 I-1): re-read every known
-    // pool onchain (denomination/asset/paused) plus v4 route liquidity before
-    // building any params. Config alone never enables execution.
-    const liveGate = await readShieldedSwapRouteStatusLive(publicClient);
-    if (!liveGate.executable) {
-      setFlowError(
-        liveGate.reason ??
-          "Shielded swap is not executable against live chain state right now. No transaction was sent."
-      );
-      return;
-    }
-
-    let slippagePct: number;
-    // Read-only parse runs unguarded; the guard is acquired inside the main
-    // try below so validation failures can never leak it (deep-audit F1).
-    try {
-      slippagePct = parseSlippagePercent(slippage);
-    } catch (e: unknown) {
-      setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
-      return;
-    }
-
-    setIsShieldedSwapping(true);
-    setShieldedSwapTxHash(null);
-    setProverTitle("Executing Shielded Swap (Testnet, Self-Relay)");
-    setProverTxHash(null);
-    setProverCommitment(null);
-    setProverCommitted(false);
-    setProverSteps([
-      {
-        title: "1. Source Note & Live Pool Guards",
-        detail: "Checking denomination, pause, cap and nullifier against the source shielded pool",
-        status: "running",
-      },
-      {
-        title: "2. Proof-Bound Params & Live Output Simulation",
-        detail: "Binding the router-recipient proof, fresh root and slippage-bound minOut via eth_call",
-        status: "pending",
-      },
-      {
-        title: "3. VeilShieldRouter.shieldedSwap Execution",
-        detail: "Self-relay: your wallet submits with relayerFee 0 and pays gas",
-        status: "pending",
-      },
-      {
-        title: "4. Event Assert & Vault Rollover",
-        detail: "Verifying ShieldedSwapExecuted, persisting the new note and marking the old note spent",
-        status: "pending",
-      },
-    ]);
-    setIsProverOpen(true);
-
-    try {
-      if (txInFlight.current > 0) return;
-      txInFlight.current += 1;
-      const guards = await readSwapGuards(publicClient, route.sourcePool);
-      if (guards.paused) {
-        throw new Error("Shielded source pool deposits are paused. No transaction was sent.");
-      }
-      if (noteToSwap.denomination !== guards.denomination) {
-        throw new Error(
-          "Selected note denomination does not match the live source pool denomination. No transaction was sent."
-        );
-      }
-      const spent = await publicClient.readContract({
-        address: route.sourcePool,
-        abi: POOL_WITHDRAW_ABI,
-        functionName: "isNullifierSpent",
-        args: [noteToSwap.nullifierHash],
-      });
-      if (spent) throw new Error("Note already spent onchain. No transaction was sent.");
-      const idx = await publicClient.readContract({
-        address: route.sourcePool,
-        abi: POOL_WITHDRAW_ABI,
-        functionName: "nextIndex",
-      });
-      if (idx === 0) throw new Error("Source pool is empty, nothing to swap against.");
-      const root = await publicClient.readContract({
-        address: route.sourcePool,
-        abi: POOL_WITHDRAW_ABI,
-        functionName: "rootHistory",
-        args: [BigInt(idx - 1)],
-      });
-      const known = await publicClient.readContract({
-        address: route.sourcePool,
-        abi: POOL_WITHDRAW_ABI,
-        functionName: "isKnownRoot",
-        args: [root],
-      });
-      if (!known) throw new Error("Unknown Merkle root for the source pool. No transaction was sent.");
-      setProverSteps((prev) => [
-        { ...prev[0], status: "completed" },
-        { ...prev[1], status: "running" },
-        prev[2],
-        prev[3],
-      ]);
-
-      setIsShieldedProving(true);
-      // Proof-bound withdraw params: the router itself is the recipient and
-      // the fee is 0 (self-relay, bound into the proof context).
-      const withdrawArgs = buildWithdrawArgs(noteToSwap, root, SHIELDED_SWAP_ROUTER);
-      // Destination note kind follows the destination pool: denomination and
-      // asset are read live, never hardcoded.
-      const destDenomination = await publicClient.readContract({
-        address: destination,
-        abi: POOL_DEPOSIT_ABI_EXT,
-        functionName: "denomination",
-      });
-      const destAsset = await publicClient.readContract({
-        address: destination,
-        abi: parseAbi(["function asset() view returns (address)"]),
-        functionName: "asset",
-      });
-      const secrets = generateNewShieldedNoteSecrets(destDenomination, destAsset);
-      setProverCommitment(secrets.commitment);
-
-      // Live output simulation with a zero floor, then slippage-bound params.
-      // M-2 fix: the relay selection is USED — its relayerFee flows into both
-      // param builds instead of being discarded.
-      const relaySelection = selectShieldedSwapRelayPath();
-      const simParams = buildSelfRelayShieldedSwapArgs({
-        note: noteToSwap,
-        proof: withdrawArgs.proof,
-        root: withdrawArgs.root,
-        poolSource: route.sourcePool,
-        zeroForOne: route.zeroForOne,
-        quotedAmountOut: 0n,
-        slippagePercent: 0,
-        newCommitment: secrets.commitment,
-        poolDestination: destination,
-        relayerFee: relaySelection.relayerFee,
-      });
-      const walletClient = createWalletClient({
-        account: connectedAddress,
-        chain: appChain,
-        transport: custom(activeProvider),
-      });
-      const { result: simResult } = await publicClient.simulateContract({
-        address: SHIELDED_SWAP_ROUTER,
-        abi: CONTRACT_ABIS.VeilShieldRouter,
-        functionName: "shieldedSwap",
-        args: [simParams],
-        account: connectedAddress,
-      });
-      const expectedOut = simResult as bigint;
-      if (expectedOut < destDenomination) {
-        throw new Error(
-          "Live simulated output is below the destination note denomination (InsufficientOutputForDenomination). No transaction was sent."
-        );
-      }
-      const params = buildSelfRelayShieldedSwapArgs({
-        note: noteToSwap,
-        proof: withdrawArgs.proof,
-        root: withdrawArgs.root,
-        poolSource: route.sourcePool,
-        zeroForOne: route.zeroForOne,
-        quotedAmountOut: expectedOut,
-        slippagePercent: slippagePct,
-        newCommitment: secrets.commitment,
-        poolDestination: destination,
-        relayerFee: relaySelection.relayerFee,
-      });
-      setIsShieldedProving(false);
-      setProverSteps((prev) => [
-        prev[0],
-        { ...prev[1], status: "completed" },
-        { ...prev[2], status: "running" },
-        prev[3],
-      ]);
-
-      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
-      const swapHash = await walletClient.writeContract({
-        address: SHIELDED_SWAP_ROUTER,
-        abi: CONTRACT_ABIS.VeilShieldRouter,
-        functionName: "shieldedSwap",
-        args: [params],
-      });
-      setProverTxHash(swapHash);
-      setShieldedSwapTxHash(swapHash);
-      setProverSteps((prev) => [
-        prev[0],
-        prev[1],
-        { ...prev[2], status: "completed" },
-        { ...prev[3], status: "running" },
-      ]);
-
-      const receipt = await waitForTransactionReceipt(publicClient, { hash: swapHash });
-      if (receipt.status !== "success") {
-        throw new Error("Shielded swap transaction reverted onchain.");
-      }
-      const executed = findShieldedSwapExecuted(receipt.logs, noteToSwap.nullifierHash);
-      if (!executed) {
-        throw new Error(
-          "ShieldedSwapExecuted event not found for this nullifier. Treating the deposit as unverified: the new note was NOT saved. Check the transaction in your wallet history."
-        );
-      }
-      if (executed.poolDestination.toLowerCase() !== destination.toLowerCase()) {
-        throw new Error(
-          "Swap settled into an unexpected destination pool. The new note was NOT saved. Check the transaction on the explorer before retrying."
-        );
-      }
-
-      // Vault rollover: persist the new destination note, mark the old spent.
-      // Journaled first (root-audit F5) so a crash cannot strand the secret.
-      savePendingNote(secrets.newNote, swapHash, destination);
-      const updated = [secrets.newNote, ...notes.filter((n) => n.nullifier !== noteToSwap.nullifier)];
-      setNotes(updated);
-      setSelectedNote(secrets.newNote);
-      setSelectedNoteNullifier(secrets.newNote.nullifier);
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(updated));
-          const check = localStorage.getItem(LOCAL_STORAGE_KEY) || "";
-          if (!check.includes(secrets.newNote.nullifier.slice(2, 10))) {
-            throw new Error("vault write verification failed");
-          }
-        } catch (e: unknown) {
-          throw new Error(
-            "Browser vault storage failed — your new note was NOT saved. Copy the commitment from the prover modal and retry. " +
-              (e instanceof Error ? e.message : "Storage unavailable.")
-          );
-        }
-      }
-      clearPendingNoteByTx(swapHash);
-      setProverCommitted(true);
-      setProverSteps((prev) => [
-        prev[0],
-        prev[1],
-        prev[2],
-        { ...prev[3], status: "completed" },
-      ]);
-      // Surface the result even if the user hid the modal mid-proof.
-      setIsProverOpen(true);
-    } catch (e: unknown) {
-      console.error("Shielded swap transaction error:", e);
-      setIsProverOpen(false);
-      setFlowError(mapShieldedSwapError(e, slippagePct));
-    } finally {
-      setIsShieldedSwapping(false);
-      txInFlight.current = Math.max(0, txInFlight.current - 1);
-      setIsShieldedProving(false);
-    }
+    setFlowError(
+      "Shielded Swap is paused after the full-ZK cutover: legacy pools no longer accept new deposits. To move funds, withdraw the note to a fresh address and re-shield via Shield. No transaction was sent."
+    );
   }
+
 
   async function handleWithdraw() {
     setFlowError(null);
@@ -2066,7 +1161,7 @@ export default function SwapToShieldPage() {
       return;
     }
     if (notes.length === 0) {
-      setFlowError("No shielded notes available in local storage. Create one via Swap-to-Shield first.");
+      setFlowError("No shielded notes available in local storage. Create one via Shield first.");
       return;
     }
 
@@ -2087,7 +1182,9 @@ export default function SwapToShieldPage() {
     const withdrawPath = getWithdrawPath(noteToWithdraw);
     const connectedChainId = await getConnectedChainId(activeProvider);
     const useTestnetBow =
-      withdrawPath === "0xbow" && connectedChainId === TESTNET_CHAIN_ID && isTestnetBowConfigured();
+      withdrawPath === "0xbow" &&
+      connectedChainId === TESTNET_CHAIN_ID &&
+      (isTestnetBowConfigured() || isTestnetBowV3Configured());
 
     // 0xbow testnet (46630) path: real Groth16 SDK flow, no Mock verifier.
     if (useTestnetBow) {
@@ -2127,23 +1224,71 @@ export default function SwapToShieldPage() {
 
         if (withdrawPath !== "0xbow" || !isBowNote(noteToWithdraw)) {
           throw new Error(
-            "The selected note is a legacy note. Please select a 0xbow shielded note (0.001 ETH) created on testnet."
+            "The selected note is a legacy note. Please select a 0xbow shielded note (ETH or VEIL) created on testnet."
           );
         }
 
         const bowNote = noteToWithdraw;
         setProverCommitment(bowNote.commitmentHash);
 
+        const testnetClient = createTestnetBowPublicClient();
+        // Pool resolution: VEIL notes relay through the v3 VEIL pool; ETH
+        // notes match by live scope (v3 ETH pool for new notes, the
+        // original suite pool for notes created before the cutover).
+        // Fail closed when no live pool matches the note.
+        const isVeilBowNote =
+          typeof bowNote.asset === "string" &&
+          bowNote.asset.toLowerCase() === TESTNET_BOW_V3_VEIL_TOKEN.toLowerCase();
+        let bowPool: Address;
+        let bowEntrypoint: Address;
+        if (isVeilBowNote) {
+          if (!isTestnetBowV3Configured()) {
+            throw new Error(
+              "The v3 0xbow suite is not configured, so this VEIL note cannot be relayed. No transaction was sent."
+            );
+          }
+          bowPool = TESTNET_BOW_V3_VEIL_POOL;
+          bowEntrypoint = TESTNET_BOW_V3_ENTRYPOINT;
+        } else {
+          const noteScope = BigInt(bowNote.scope);
+          const [v3Scope, oldScope] = await Promise.all([
+            testnetClient
+              .readContract({
+                address: TESTNET_BOW_V3_ETH_POOL,
+                abi: BOW_POOL_SCOPE_ABI,
+                functionName: "SCOPE",
+              })
+              .catch(() => null),
+            testnetClient
+              .readContract({
+                address: TESTNET_0XBOW.pool,
+                abi: BOW_POOL_SCOPE_ABI,
+                functionName: "SCOPE",
+              })
+              .catch(() => null),
+          ]);
+          if (v3Scope !== null && BigInt(v3Scope) === noteScope) {
+            bowPool = TESTNET_BOW_V3_ETH_POOL;
+            bowEntrypoint = TESTNET_BOW_V3_ENTRYPOINT;
+          } else if (oldScope !== null && BigInt(oldScope) === noteScope) {
+            bowPool = TESTNET_0XBOW.pool;
+            bowEntrypoint = TESTNET_0XBOW.entrypointProxy;
+          } else {
+            throw new Error(
+              "No live 0xbow pool matches this note's scope. Withdraw is unavailable for this note. No transaction was sent."
+            );
+          }
+        }
+
         // Explicit relay context: pool, asset and recipient bound up front.
         // The asset is derived from the note itself, never hardcoded, so
         // VEIL notes carry the VEIL token into the relay call.
         const bowRelayContext = buildBowRelayContext({
-          pool: TESTNET_0XBOW.pool,
-          asset: bowNote.asset as Address,
+          pool: bowPool,
+          asset: (isVeilBowNote ? TESTNET_BOW_V3_VEIL_TOKEN : bowNote.asset) as Address,
           recipient: cleanRecipient as Address,
         });
 
-        const testnetClient = createTestnetBowPublicClient();
         const scope = BigInt(bowNote.scope);
         const denomination = BigInt(bowNote.denomination);
         const label = BigInt(bowNote.label);
@@ -2212,7 +1357,7 @@ export default function SwapToShieldPage() {
         }
 
         let onchainAspRoot = await testnetClient.readContract({
-          address: TESTNET_0XBOW.entrypointProxy,
+          address: bowEntrypoint,
           abi: BOW_ENTRYPOINT_RELAY_ABI,
           functionName: "latestRoot",
         });
@@ -2248,7 +1393,7 @@ export default function SwapToShieldPage() {
           stateTree = buildBowStateTree(orderedCommitments);
           aspSet = buildBowAssociationSet(labels);
           onchainAspRoot = await testnetClient.readContract({
-            address: TESTNET_0XBOW.entrypointProxy,
+            address: bowEntrypoint,
             abi: BOW_ENTRYPOINT_RELAY_ABI,
             functionName: "latestRoot",
           });
@@ -2264,7 +1409,7 @@ export default function SwapToShieldPage() {
 
         const sdk = createBowSdk();
         const { withdrawal, context } = createBowWithdrawalContext({
-          entrypoint: TESTNET_0XBOW.entrypointProxy,
+          entrypoint: bowEntrypoint,
           recipient: bowRelayContext.recipient,
           feeRecipient: connectedAddress,
           scope,
@@ -2349,7 +1494,7 @@ export default function SwapToShieldPage() {
 
         await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
         const relayHash = await walletClient.writeContract({
-          address: TESTNET_0XBOW.entrypointProxy,
+          address: bowEntrypoint,
           abi: BOW_ENTRYPOINT_RELAY_ABI,
           functionName: "relay",
           args: [withdrawal, proofStruct as any, scope],
@@ -2548,8 +1693,8 @@ export default function SwapToShieldPage() {
         legacyNote,
         [
           { pool: SHIELDED_POOL_ETH, asset: ETH_ZERO_ADDRESS },
-          { pool: TESTNET_VEIL_POOL_05, asset: TESTNET_VEIL_TOKEN },
-          { pool: TESTNET_VEIL_POOL_2, asset: TESTNET_VEIL_TOKEN },
+          { pool: LEGACY_EXIT_VEIL_POOL_05, asset: TESTNET_BOW_V3_VEIL_TOKEN },
+          { pool: LEGACY_EXIT_VEIL_POOL_2, asset: TESTNET_BOW_V3_VEIL_TOKEN },
         ] as LegacyPoolCandidate[]
       );
       const idx = await publicClient.readContract({
@@ -2677,21 +1822,6 @@ export default function SwapToShieldPage() {
 
   const activeNoteItem = notes.find((n) => n.nullifier === selectedNoteNullifier) || notes[0];
 
-  const isEthActiveNote = !activeNoteItem?.asset || activeNoteItem.asset === ETH_ZERO_ADDRESS;
-  const activeNoteSourcePool = isEthActiveNote
-    ? TESTNET_LEGACY_ETH_POOL
-    : (activeNoteItem?.denomination === TESTNET_VEIL_POOL_05_DENOMINATION
-        ? TESTNET_VEIL_POOL_05
-        : SHIELDED_SWAP_SOURCE_POOL);
-  const shieldedSwapRoute = getShieldedSwapRouteStatus(activeNoteSourcePool);
-  const shieldedSwapDisabled = isShieldedSwapExecuteDisabled({
-    isExecuting: isShieldedSwapping,
-    connected: Boolean(connectedAddress),
-    hasNotes: notes.length > 0,
-    destinationAvailable: shieldedSwapRoute.destination !== null,
-    isProving: isShieldedProving,
-  });
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", width: "100%" }}>
       {/* Editorial Header */}
@@ -2730,7 +1860,7 @@ export default function SwapToShieldPage() {
               fontWeight: 500,
             }}
           >
-            Swap &amp; Shield Terminal
+            Shield Terminal
           </h1>
           <p
             style={{
@@ -2743,8 +1873,8 @@ export default function SwapToShieldPage() {
             }}
           >
             {APP_CHAIN_ID === TESTNET_CHAIN_ID
-              ? "Direct shielded deposits into non-custodial Merkle privacy pools with client-side Groth16 ZK-SNARK proofs and verifiable Association Sets (ASP)."
-              : "Direct shielded deposits into non-custodial Merkle privacy pools with client-side proof payloads and verifiable Association Sets. Provisional verifier for old notes only — Groth16 on 0xbow paths (F4)."}
+              ? "Shielded deposits into audited 0xbow privacy pools with client-side Groth16 ZK-SNARK proofs and verifiable Association Sets (ASP). Legacy pools no longer accept new deposits; old notes can still exit via Withdraw."
+              : "Shielded deposits into audited 0xbow privacy pools with client-side Groth16 ZK-SNARK proofs and verifiable Association Sets. Old notes exit via the legacy path only."}
           </p>
         </div>
 
@@ -2761,9 +1891,9 @@ export default function SwapToShieldPage() {
         >
           <span>Cancun EVM</span>
           <span style={{ opacity: 0.3 }}>/</span>
-          <span>EIP-1153 Transient Storage</span>
+          <span>Groth16 ZK-SNARK</span>
           <span style={{ opacity: 0.3 }}>/</span>
-          <span>LeanIMT 2²⁰</span>
+          <span>0xbow v1.2.1</span>
         </div>
       </div>
 
@@ -2836,7 +1966,7 @@ export default function SwapToShieldPage() {
                   transition: "all var(--duration-fast)",
                 }}
               >
-                <span>Swap-to-Shield</span>
+                <span>Shield</span>
               </button>
               <button
                 type="button"
@@ -3010,44 +2140,25 @@ export default function SwapToShieldPage() {
             </div>
           )}
 
-          {/* TAB 1: SWAP-TO-SHIELD */}
+          {/* TAB 1: SHIELD (0xbow only) */}
           {activeTab === "buy_and_shield" && (
             <BuyAndShieldPanel
-              isTestnetRouterMode={isTestnetRouterMode}
-              isEthRouterInput={isEthRouterInput}
-              routerPaySymbol={routerPaySymbol}
-              onSelectPayToken={selectRouterPayToken}
-              inputToken={inputToken}
-              outputToken={outputToken}
-              inputAmount={inputAmount}
-              veilAmountIn={veilAmountIn}
-              onInputAmount={setInputAmount}
-              onVeilAmountIn={setVeilAmountIn}
-              veilBalance={veilBalance}
-              onOpenInputTokenModal={() => setIsInputTokenModalOpen(true)}
-              onOpenOutputTokenModal={() => setIsOutputTokenModalOpen(true)}
-              onPercentage={handlePercentage}
-              onFlipTokens={handleFlipTokens}
-              liveDenomination={liveDenomination}
-              routerDestDenom={routerDestDenom}
-              routerQuote={routerQuote}
-              routerQuoteNote={routerQuoteNote}
-              isQuoting={isQuoting}
-              slippage={slippage}
-              routerInputValid={parsedVeilIn !== null}
-              routerQuoteBelowDenomination={routerQuoteBelowDenomination}
-              parsedInput={parsedInput}
-              inputMatchesDenomination={inputMatchesDenomination}
-              connectedAddress={connectedAddress}
-              isExecuting={isExecuting}
-              executeDisabled={buyCtaDisabled}
-              onExecute={handleBuyAndShield}
-              forceDirect={forceDirect}
-              onToggleForceDirect={() => {
-                setForceDirect((v) => !v);
+              depositAsset={bowDepositAsset}
+              onSelectDepositAsset={(asset) => {
+                setBowDepositAsset(asset);
                 setFlowError(null);
               }}
-              isTestnetBuild={isTestnetBuild}
+              depositAmount={inputAmount}
+              onDepositAmount={setInputAmount}
+              ethDenomination={TESTNET_BOW_V3_ETH_DENOMINATION}
+              veilMinimum={veilMinimum}
+              veilBalance={veilBalance}
+              ethBalance={inputToken.balance}
+              connectedAddress={connectedAddress}
+              isExecuting={isExecuting}
+              amountValid={parsedBowDeposit !== null}
+              executeDisabled={buyCtaDisabled}
+              onExecute={handleBuyAndShield}
             />
           )}
           {/* Buy & Shield tab body lives in components/trade/BuyAndShieldPanel.tsx */}
@@ -3080,31 +2191,50 @@ export default function SwapToShieldPage() {
               )}
           {/* attest body lives in components/trade/AttestPanel.tsx */}
 
-          {/* TAB 2: SHIELDED SWAP */}
+          {/* TAB 2: SHIELDED SWAP (paused after the full-ZK cutover) */}
           {activeTab === "shielded_swap" && (
-            <ShieldedSwapPanel
-              notes={notes}
-              activeNote={activeNoteItem}
-              isNoteDropdownOpen={isNoteDropdownOpen}
-              onToggleNoteDropdown={() => setIsNoteDropdownOpen(!isNoteDropdownOpen)}
-              onSelectNote={(nullifier) => {
-                setSelectedNoteNullifier(nullifier);
-                setIsNoteDropdownOpen(false);
+            <div
+              role="status"
+              style={{
+                padding: "var(--space-5)",
+                borderRadius: "var(--radius-md)",
+                backgroundColor: "rgba(26, 26, 26, 0.025)",
+                border: "1px solid var(--color-border)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "var(--space-3)",
+                textAlign: "center",
               }}
-              onGoShield={() => switchTab("buy_and_shield")}
-              outputToken={outputToken}
-              onChangePool={() => setIsOutputTokenModalOpen(true)}
-              route={shieldedSwapRoute}
-              ethDenomination={liveDenomination}
-              shieldedSwapTxHash={shieldedSwapTxHash}
-              explorerTxUrl={explorerTxUrl}
-              shieldedSwapDisabled={shieldedSwapDisabled}
-              isSwapping={isShieldedSwapping}
-              connected={Boolean(connectedAddress)}
-              onExecute={handleShieldedSwap}
-            />
+            >
+              <div style={{ color: "var(--color-text)", fontWeight: 600, fontSize: "var(--text-body-sm)" }}>
+                Shielded Swap Is Paused
+              </div>
+              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", lineHeight: 1.6, maxWidth: "420px" }}>
+                The legacy swap route only settles into pools that no longer accept new deposits, so execution stays
+                disabled. To move funds, withdraw a note to a fresh address and re-shield via Shield. No transaction
+                was sent.
+              </p>
+              <button
+                type="button"
+                onClick={() => switchTab("buy_and_shield")}
+                style={{
+                  marginTop: "var(--space-2)",
+                  padding: "6px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "rgba(255, 140, 0, 0.15)",
+                  border: "1px solid rgba(255, 140, 0, 0.35)",
+                  color: "var(--color-accent-ink)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  minHeight: "24px",
+                }}
+              >
+                Go to Shield
+              </button>
+            </div>
           )}
-          {/* Shielded-swap tab body lives in components/trade/ShieldedSwapPanel.tsx */}
 
           {/* TAB 3: WITHDRAW */}
           {activeTab === "withdraw" && (
@@ -3199,8 +2329,8 @@ export default function SwapToShieldPage() {
                   02
                 </span>
                 <span style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
-                  <strong style={{ color: "var(--color-text)", display: "block" }}>Zero-Custody Router Invariant</strong>
-                  VeilShieldRouter balance is verified to be exactly 0 at the end of every swap-to-shield transaction via transient storage (EIP-1153).
+                  <strong style={{ color: "var(--color-text)", display: "block" }}>Onchain Groth16 Settlement</strong>
+                  Every new note is minted by the audited 0xbow entrypoint and every 0xbow exit settles through entrypoint.relay, which verifies the Groth16 proof onchain before releasing funds.
                 </span>
               </div>
 

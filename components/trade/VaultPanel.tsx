@@ -64,7 +64,7 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
             fontSize: "var(--text-body-sm)",
           }}
         >
-          No active shielded notes. Use Swap-to-Shield to create your first encrypted commitment.
+          No active shielded notes. Use Shield to create your first encrypted commitment.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>

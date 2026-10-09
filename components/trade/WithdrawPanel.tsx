@@ -5,7 +5,7 @@ import { isAddress } from "viem";
 import { Check, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { APP_CHAIN_ID } from "../../lib/chains";
 import { TESTNET_CHAIN_ID } from "../../lib/privacy-pools";
-import type { AnyShieldedNote } from "../../lib/note";
+import { isBowNote, type AnyShieldedNote } from "../../lib/note";
 import { formatNoteAmount } from "../../lib/note-format";
 
 export interface WithdrawPanelProps {
@@ -143,7 +143,7 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
                         fontWeight: 500,
                       }}
                     >
-                      Legacy note
+                      {isBowNote(activeNote) ? "0xbow v1.2.1 · Groth16" : "Old note · legacy exit"}
                     </span>
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace", marginTop: "2px" }}>

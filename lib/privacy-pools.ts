@@ -98,3 +98,34 @@ export function getTestnetPoolAddress(): Address {
 export function getTestnetEntrypointAddress(): Address {
   return TESTNET_0XBOW.entrypointProxy;
 }
+
+// 0xbow Privacy Pools TESTNET 46630 fresh suite v3.
+// Sourced from deployments/suite-v3-testnet-latest.json (entrypoint proxy
+// with ETH + VEIL pools, maxRelayFeeBPS 100). Full-ZK cutover: every NEW
+// deposit and every 0xbow relay-withdraw goes through this suite.
+// Same env-override pattern as TESTNET_0XBOW above. TESTNET ONLY.
+export const TESTNET_BOW_V3_ENTRYPOINT =
+  (process.env.NEXT_PUBLIC_BOW_V3_ENTRYPOINT as Address | undefined) ||
+  ("0xb68c3d25e5e9902363e8e10d5c0a471e65be8152" as Address);
+export const TESTNET_BOW_V3_ETH_POOL =
+  (process.env.NEXT_PUBLIC_BOW_V3_ETH_POOL as Address | undefined) ||
+  ("0xea48e6a7ae296ebbd7d58792091b8087032d3aa4" as Address);
+export const TESTNET_BOW_V3_VEIL_POOL =
+  (process.env.NEXT_PUBLIC_BOW_V3_VEIL_POOL as Address | undefined) ||
+  ("0xae2c219e462ca1b80473375bcbcad2b025cae610" as Address);
+export const TESTNET_BOW_V3_VEIL_TOKEN =
+  (process.env.NEXT_PUBLIC_BOW_V3_VEIL_TOKEN as Address | undefined) ||
+  ("0x019086f63407fadf0ccb89516e465baef5031aa9" as Address);
+// 0xbow NATIVE_ASSET sentinel for the ETH pool (NOT address(0)).
+export const TESTNET_BOW_V3_NATIVE_ASSET =
+  (process.env.NEXT_PUBLIC_BOW_V3_NATIVE_ASSET as Address | undefined) ||
+  ("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as Address);
+// ETH-pool registration minimum (parseEther("0.001") at deploy).
+export const TESTNET_BOW_V3_ETH_DENOMINATION = 1000000000000000n;
+
+/** True when every v3 suite address is a valid non-zero hex address. */
+export function isTestnetBowV3Configured(): boolean {
+  return [TESTNET_BOW_V3_ENTRYPOINT, TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL].every(
+    (addr) => isHexAddress(addr) && addr !== "0x0000000000000000000000000000000000000000"
+  );
+}

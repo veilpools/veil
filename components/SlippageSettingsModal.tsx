@@ -181,8 +181,8 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
               }}
             />
             <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>
-              minutes. Applies to attestation signatures; router swaps execute
-              immediately from a fresh live quote instead.
+              minutes. Applies to attestation signatures; shield deposits execute
+              immediately at the fixed live denomination instead.
             </span>
           </div>
         </div>
@@ -202,10 +202,10 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
         >
           <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--color-accent-ink)", fontWeight: 600 }}>
             <Shield className="w-3.5 h-3.5 text-[#FF8C00]" aria-hidden="true" />
-            <span>Router Invariant Protection</span>
+            <span>Settlement Protection</span>
           </div>
           <p style={{ margin: 0, color: "var(--color-muted)", lineHeight: "var(--leading-body-sm)" }}>
-            VeilShieldRouter enforces atomic 0-balance settlement. Amounts below your slippage bound revert; dust refunds to the sender. Direct transfers to the router are unrecoverable — always transact through the app.
+            The 0xbow entrypoint settles deposits only at the exact pool denomination and verifies every withdrawal proof onchain. Amounts below your slippage bound revert on swap paths; dust refunds to the sender. Always transact through the app.
           </p>
         </div>
 
