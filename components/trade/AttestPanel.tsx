@@ -196,7 +196,7 @@ export const AttestPanel: React.FC<AttestPanelProps> = ({
         </button>
       </div>
       {attestNote && (
-        <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
+        <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
           {attestNote}
         </span>
       )}
@@ -289,7 +289,7 @@ export const AttestPanel: React.FC<AttestPanelProps> = ({
           </button>
         </div>
         {gatedSimNote && (
-          <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5 }}>
+          <span role="status" style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", fontSize: "var(--text-caption)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
             {gatedSimNote}
           </span>
         )}

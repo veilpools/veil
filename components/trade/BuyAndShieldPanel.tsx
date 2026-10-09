@@ -384,6 +384,7 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
             gap: "6px",
             fontSize: "var(--text-caption)",
             fontFamily: "monospace",
+            minWidth: 0,
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -403,11 +404,11 @@ export const BuyAndShieldPanel: React.FC<BuyAndShieldPanelProps> = ({
             </span>
           </div>
           {routerQuoteNote && (
-            <span style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
+            <span style={{ color: "var(--color-accent-ink)", fontFamily: "var(--font-body)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
               {routerQuoteNote}
             </span>
           )}
-          <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
+          <span style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)", lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>
             {isEthRouterInput
               ? "Fund testnet ETH at the testnet faucet (https://faucet.testnet.chain.robinhood.com/) — gas plus swap input both need it."
               : `Needs test VEIL already in your wallet — there is no onchain faucet; the proven route ran on a pre-funded operator balance. Test VEIL: ${TESTNET_VEIL_TOKEN}.`}

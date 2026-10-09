@@ -334,7 +334,36 @@ export function mapRouterSwapError(error: unknown, slippagePercent?: number): st
   if (/insufficient balance|ERC20InsufficientBalance/i.test(msg))
     return `Insufficient test VEIL balance. The router route needs test VEIL (${TESTNET_VEIL_TOKEN}) already in your wallet — the proven script ran on a pre-funded operator balance and there is no onchain faucet. Fund test VEIL and try again.`;
   if (/paused|cap/i.test(msg) && /pool/i.test(msg)) return msg;
-  if (error instanceof Error && error.message) return error.message;
+  // viem wallet-balance shortfall ("insufficient funds for gas * price +
+  // value … Raw Call Arguments …"): collapse the multi-KB dump into one
+  // line with the actual numbers, in ETH. No transaction was sent.
+  if (/insufficient funds for gas/i.test(msg)) {
+    const funds = /have (\d+) want (\d+)/i.exec(msg);
+    const toEth = (w: string): string => {
+      try {
+        const v = BigInt(w);
+        const whole = v / 1000000000000000000n;
+        const frac = (v % 1000000000000000000n)
+          .toString()
+          .padStart(18, "0")
+          .slice(0, 6)
+          .replace(/0+$/, "");
+        return frac ? `${whole}.${frac}` : `${whole}`;
+      } catch {
+        return w;
+      }
+    };
+    const amounts =
+      funds && funds.length === 3
+        ? ` Wallet has ${toEth(funds[1])} ETH but ${toEth(funds[2])} ETH + gas is needed.`
+        : "";
+    return `Not enough testnet ETH.${amounts} Fund at the faucet — no transaction was sent.`;
+  }
+  if (error instanceof Error && error.message) {
+    // Last resort: never render a multi-KB raw dump into the card.
+    const m = error.message;
+    return m.length > 320 ? `${m.slice(0, 320).trimEnd()}…` : m;
+  }
   return "Router swap failed before execution. Check your wallet, testnet connection, and VEIL balance, then try again.";
 }
 

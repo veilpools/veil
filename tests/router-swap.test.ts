@@ -229,8 +229,7 @@ describe("router swapToShield builders (testnet e2e task 2)", () => {
     expect(isRouterExecuteDisabled({ ...ready, connected: false })).toBe(false);
   });
 
-  it("I-2: quote failure surfaces the revert reason first, allowance only as hint", () => {
-    const primary = mapRouterSwapError(
+  it("I-2: quote failure surfaces the revert reason first, allowance only as hint", () => {    const primary = mapRouterSwapError(
       new Error("reverted: InsufficientOutputForDenomination")
     );
     expect(primary).toMatch(/InsufficientOutputForDenomination/);
@@ -247,5 +246,23 @@ describe("router swapToShield builders (testnet e2e task 2)", () => {
       new Error("ERC20InsufficientAllowance")
     );
     expect(withAllowanceHint(allowancePrimary, true)).toBe(allowancePrimary);
+  });
+
+  it("collapses the viem insufficient-funds dump into one short line", () => {
+    const raw = new Error(
+      "The total cost (gas * gas fee + value) of executing this transaction exceeds the balance of the account. " +
+        "Raw Call Arguments: from: 0x750b720d1f910729e65d5379c70b3ed253d7d1fc to: 0x7c73 value: 0.001 ETH data: 0xb36b5fa1" +
+        " Contract Call: address: 0x7c73 function: swapToShield Docs: https://viem.sh Details: err: insufficient funds for gas * price + value: " +
+        "address 0x750b720d1f910729e65d5379c70b3ed253d7d1fc have 97933280000000 want 1000000000000000 (supplied gas 600000000) Version: viem@2.57.3"
+    );
+    const short = mapRouterSwapError(raw);
+    expect(short).toMatch(/Not enough testnet ETH/);
+    expect(short).toMatch(/0\.000097/);
+    expect(short).toMatch(/0\.001/);
+    expect(short).not.toMatch(/Raw Call Arguments/);
+    expect(short.length).toBeLessThan(250);
+    // Any other unknown raw dump is truncated, never multi-KB in the card.
+    const huge = mapRouterSwapError(new Error(`boom ${"0xab".repeat(500)}`));
+    expect(huge.length).toBeLessThanOrEqual(321);
   });
 });

@@ -10,6 +10,12 @@ import {
 // Cloudflare Anycast edge IP for Robinhood Chain RPC (bypasses local ISP DNS poisoning & Cloudflare block)
 const ROBINHOOD_RPC_IP = "172.66.147.70";
 
+// Direct upstream for testnet when configured (e.g. QuickNode). Server-only
+// env on purpose: the URL holds a private token and must not leak into the
+// client bundle via a NEXT_PUBLIC_ var. Falls back to the IP bypass below.
+const TESTNET_DIRECT_RPC =
+  process.env.TESTNET_RPC_URL || process.env.NEXT_PUBLIC_TESTNET_RPC_URL || "";
+
 // Root-audit hardening (2026-10-08, deep-audit tuned to 600/min after a
 // same-day 429 incident starved the trade page): this route used to forward ANY JSON-RPC
 // body verbatim (open-proxy abuse: getLogs range bombs, quota drain). Guards
@@ -60,6 +66,32 @@ export async function POST(req: NextRequest) {
         ? (bad as Record<string, unknown>).id ?? null
         : null;
     return rpcError(id, -32601, `Method not allowed: ${blocked.method}`);
+  }
+
+  // Fast path: dedicated testnet endpoint (QuickNode) skips the IP bypass.
+  // Guards above (chain/method/body/rate-limit) still apply.
+  if (chainId === 46630 && TESTNET_DIRECT_RPC) {
+    try {
+      const upstream = await fetch(TESTNET_DIRECT_RPC, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+        body,
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await upstream.text();
+      return new NextResponse(data, {
+        status: upstream.status || 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch {
+      return NextResponse.json({ jsonrpc: "2.0", id: 1, error: { message: "upstream unavailable" } }, { status: 502 });
+    }
   }
 
   return new Promise<NextResponse>((resolve) => {
