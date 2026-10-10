@@ -41,6 +41,15 @@ describe("0xbow artifact pins (v1.2.1)", () => {
       expect(size).toBeGreaterThan(0);
     }
   });
+
+  it("pinned hashes match the vendored files (browser verify depends on it)", async () => {
+    const { createHash } = await import("node:crypto");
+    for (const [name, pinned] of Object.entries(BOW_ARTIFACT_HASHES)) {
+      const filePath = join(process.cwd(), "public/shield-artifacts/v1.2.1", name);
+      const actual = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+      expect(actual, `pin mismatch for ${name}: fetchPinnedBowArtifact would reject the real file`).toBe(pinned);
+    }
+  });
 });
 
 describe("0xbow testnet sentinel association set", () => {
