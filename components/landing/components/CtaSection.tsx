@@ -69,7 +69,7 @@ export const CtaSection: React.FC = () => {
             <DecodeText
               segments={[
                 { text: "Ready to trade with " },
-                { text: "zero public trace?", style: { fontFamily: "var(--font-body)" } },
+                { text: "true zero-knowledge privacy?", style: { fontFamily: "var(--font-body)" } },
               ]}
             />
           </h2>
@@ -82,7 +82,7 @@ export const CtaSection: React.FC = () => {
               margin: "var(--space-5) 0 0",
             }}
           >
-            Proven on-chain. Hidden from the crowd. Experience atomic Swap-to-Shield and private Uniswap v4 execution on Robinhood Chain.
+            Proven on-chain. Non-custodial by design. Experience atomic Swap-to-Shield and private Uniswap v4 execution on Robinhood Chain.
           </p>
           <div
             style={{

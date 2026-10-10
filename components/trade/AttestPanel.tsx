@@ -12,6 +12,7 @@ import {
   type AttestationStatus,
   type GatingConfig,
 } from "../../lib/gated-attest";
+import { appChain, APP_CHAIN_ID } from "../../lib/chains";
 
 export interface AttestPanelProps {
   connectedAddress: string | null;
@@ -83,18 +84,18 @@ export const AttestPanel: React.FC<AttestPanelProps> = ({
           Self-Attestation &amp; Gated Pool
         </span>
         <span style={{ fontSize: "11px", color: "var(--color-accent-ink)", fontFamily: "monospace", fontWeight: 600 }}>
-          Testnet 46630
+          {appChain.name} {APP_CHAIN_ID}
         </span>
       </div>
       <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "var(--text-caption)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
         Self-attestation is permissionless: anyone can attest, with no eligibility
         conditions (
         <a href="/docs/decisions" style={{ color: "var(--color-accent-ink)" }}>
-          docs/DECISIONS.md
+          Owner Decisions
         </a>
         ; association-set policy:{" "}
         <a href="/docs/asp-policy" style={{ color: "var(--color-accent-ink)" }}>
-          docs/ASP-POLICY.md
+          Association Set Policy
         </a>
         ).
         Pool gating is an anti-bot speedbump plus launch windows only — nothing

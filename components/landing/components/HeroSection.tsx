@@ -131,7 +131,7 @@ export const HeroSection: React.FC = () => {
               letterSpacing: "0.04em",
             }}
           >
-            The trade is atomic. The trader is invisible.
+            Atomic swaps. Non-custodial privacy. Zero held custody.
           </div>
 
           <div

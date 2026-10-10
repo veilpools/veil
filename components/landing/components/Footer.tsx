@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { VeilLogo } from "../../VeilLogo";
 
 export const Footer: React.FC = () => {
@@ -32,19 +33,19 @@ export const Footer: React.FC = () => {
           <nav className="landing-footer__column landing-footer__solutions" aria-label="Protocol">
             <h2>Protocol</h2>
             <ul>
-              <li><a href="/trade">Swap-to-Shield</a></li>
-              <li><a href="/trade">Shielded Swaps</a></li>
-              <li><a href="/trade">ZK-Gated Pools</a></li>
-              <li><a href="#flywheel">Buyback &amp; Burn Ledger</a></li>
+              <li><Link href="/trade">Swap-to-Shield</Link></li>
+              <li><Link href="/trade">Shielded Swaps</Link></li>
+              <li><Link href="/trade">ZK-Gated Pools</Link></li>
+              <li><Link href="/burn">Buyback &amp; Burn Ledger</Link></li>
             </ul>
           </nav>
 
           <nav className="landing-footer__column landing-footer__resources" aria-label="Developers">
             <h2>Developers</h2>
             <ul>
-              <li><a href="#security">Smart Contracts</a></li>
-              <li><a href="#how">Architecture</a></li>
-              <li><a href="#security">CREATE2 Deployer</a></li>
+              <li><Link href="/contracts">Smart Contracts</Link></li>
+              <li><Link href="/docs/asp-policy">Association Set Policy</Link></li>
+              <li><Link href="/docs/decisions">Owner Decisions</Link></li>
               <li>
                 <a href="https://github.com/veilpools/veil" target="_blank" rel="noopener noreferrer">
                   GitHub
@@ -56,13 +57,15 @@ export const Footer: React.FC = () => {
           <nav className="landing-footer__column landing-footer__company" aria-label="Security">
             <h2>Security</h2>
             <ul>
+              <li><Link href="/status">Chain &amp; Pool Health</Link></li>
+              <li><Link href="/contracts">Contract Deployments</Link></li>
               <li>
                 <a
                   href="https://explorer.mainnet.chain.robinhood.com"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Blockscout Mainnet
+                  Mainnet Explorer
                 </a>
               </li>
               <li>
@@ -74,16 +77,15 @@ export const Footer: React.FC = () => {
                   Testnet Explorer
                 </a>
               </li>
-              <li><a href="#security">Security & Verification</a></li>
-              <li><a href="#faq">Security FAQ</a></li>
             </ul>
           </nav>
 
           <nav className="landing-footer__column landing-footer__legal" aria-label="Legal">
             <h2>Legal</h2>
             <ul>
-              <li><a href="/privacy">Privacy Architecture</a></li>
-              <li><a href="/terms">Terms of Service</a></li>
+              <li><Link href="/privacy">Privacy Architecture</Link></li>
+              <li><Link href="/terms">Terms of Service</Link></li>
+              <li><Link href="/docs/asp-policy">ASP Compliance</Link></li>
             </ul>
           </nav>
         </div>

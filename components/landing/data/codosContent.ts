@@ -41,29 +41,29 @@ export const codosContent = {
   steps: [
     {
       number: "Step 1",
-      title: "Deposit once and disappear into the pool",
-      badge: "Shield your assets shielding deposit",
-      sessionId: "Note #4611 2.5 ETH 00:04",
-      sampleQuote: "Commitment generated. Your 2.5 ETH is now one of 4,812 notes in the pool, indistinguishable from the rest.",
-      controls: ["Note encrypted", "Anonymity set 4,812", "Robinhood Chain", "Back up note", "Shield"]
+      title: "Deposit once and shield into the pool",
+      badge: "Non-custodial shielded deposit",
+      sessionId: "Note #4611 · 0.001 ETH",
+      sampleQuote: "Commitment generated. Your note is cryptographically committed into the 0xbow pool, verified against published Association Sets.",
+      controls: ["Note encrypted", "Association Set (ASP)", "Robinhood Chain", "Encrypted vault backup", "Shield"]
     },
     {
       number: "Step 2",
       title: "Zero-knowledge proofs route your trade through Uniswap v4",
-      badge: "Swap in the dark",
-      desc: "Your browser proves you own a note without revealing which one. The Veil hook verifies the proof, swaps on Uniswap v4, and re-shields the output."
+      badge: "Atomic private execution",
+      desc: "Your browser proves note ownership via client-side Groth16 zk-SNARKs. The Veil hook and router verify proof context on-chain, swap on Uniswap v4, and re-shield the output."
     },
     {
       number: "Step 3",
-      title: "Exit to a fresh address with no link back to you",
-      badge: "Withdraw anywhere",
-      desc: "Withdraw through a relayer to any address. On-chain, nothing connects it to your deposit."
+      title: "Exit to a fresh address with unlinked settlement",
+      badge: "Self-relay or broadcast",
+      desc: "Withdraw via browser self-relay or relayer to any fresh address. On-chain, Groth16 proves validity with zero link back to your depositor wallet."
     },
     {
       number: "Step 4",
-      title: "Monitor shielded balances and MEV savings in real time",
-      badge: "Private portfolio & MEV shield",
-      desc: "Track your encrypted notes, verified Merkle paths, and total alpha preserved from sandwich attacks and front-running bots."
+      title: "Monitor shielded balances and protocol burn in real time",
+      badge: "Zero-custody vault & burn engine",
+      desc: "Track your encrypted notes, verified Association Set Merkle roots, and autonomous fee buybacks with real-time on-chain transparency."
     }
   ],
   whoItIsFor: {
@@ -190,7 +190,7 @@ export const codosContent = {
       },
       {
         q: "What chains are supported?",
-        a: "Veil is natively deployed on Robinhood Chain (Testnet 46630 and Mainnet 4663) leveraging Uniswap v4's custom hook architecture for high-throughput, low-fee execution."
+        a: "Veil is natively deployed on Robinhood Chain (Testnet 46630 fresh suite live and Mainnet 4663 deployment ready) leveraging Uniswap v4's custom hook architecture for high-throughput, low-fee execution."
       },
       {
         q: "Can anyone freeze my funds or block withdrawals?",
@@ -199,7 +199,7 @@ export const codosContent = {
     ]
   },
   closing: {
-    title: "Ready to trade with zero public trace?",
+    title: "Ready to trade with true zero-knowledge privacy?",
     sub: "Experience atomic Swap-to-Shield and private Uniswap v4 execution on Robinhood Chain.",
     ctaPrimary: "Launch App",
     ctaSecondary: "View Contracts"

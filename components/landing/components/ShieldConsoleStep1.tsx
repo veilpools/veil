@@ -14,7 +14,7 @@ interface CycleData {
 
 const CYCLES: CycleData[] = [
   {
-    amount: "2.5 ETH",
+    amount: "0.001 ETH",
     token: "ETH",
     leafIndex: 4813,
     secretEntropy: "0x7f4a8b9e...9b12",
@@ -22,15 +22,15 @@ const CYCLES: CycleData[] = [
     notesInPool: "4,813",
   },
   {
-    amount: "5,000 USDC",
-    token: "USDC",
+    amount: "0.001 VEIL",
+    token: "VEIL",
     leafIndex: 4814,
     secretEntropy: "0x3e18c290...47d0",
     poseidonHash: "0x41f90ab8...99bc",
     notesInPool: "4,814",
   },
   {
-    amount: "1.0 ETH",
+    amount: "0.003 ETH (Batch)",
     token: "ETH",
     leafIndex: 4815,
     secretEntropy: "0x91d0442a...e391",
@@ -38,8 +38,8 @@ const CYCLES: CycleData[] = [
     notesInPool: "4,815",
   },
   {
-    amount: "25,000 PONS",
-    token: "PONS",
+    amount: "1.000 VEIL",
+    token: "VEIL",
     leafIndex: 4816,
     secretEntropy: "0x5ac7e189...72ef",
     poseidonHash: "0x99e2bc10...12aa",
@@ -325,7 +325,7 @@ export const ShieldConsoleStep1: React.FC = () => {
               color: stage >= 3 ? "var(--color-accent)" : "var(--color-muted)",
             }}
           >
-            {stage >= 3 ? "0.000 ETH [VERIFIED]" : "Balance == 0 Check"}
+            {stage >= 3 ? "0.0000 Balance [VERIFIED]" : "Balance == 0 Check"}
           </div>
         </div>
       </div>
@@ -354,8 +354,8 @@ export const ShieldConsoleStep1: React.FC = () => {
         >
           {stage === 1 && "Synthesizing CSPRNG note entropy locally via WebAssembly..."}
           {stage === 2 && "Computing Poseidon Merkle leaf commitment & zkSNARK proof..."}
-          {stage === 3 && "Uniswap v4 beforeSwap hook verified · Router custody holds 0 ETH"}
-          {stage === 4 && `Settled! Note #${current.leafIndex} inscribed in Depth-20 LeanIMT · Anon set: ${current.notesInPool} notes`}
+          {stage === 3 && "Uniswap v4 beforeSwap hook verified · Router custody holds 0 balance"}
+          {stage === 4 && `Settled! Note #${current.leafIndex} inscribed in Depth-20 LeanIMT · Association pool: ${current.notesInPool} notes`}
         </span>
 
         <span

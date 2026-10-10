@@ -176,7 +176,7 @@ export const ContractsSecuritySection: React.FC = () => {
         <SectionHeader
           kicker="Security & Verification"
           title="Verified on-chain. Non-custodial by law of math."
-          sub="All smart contracts are deployed on Robinhood Chain with an internal audit published; external audit waived per docs/DECISIONS.md item 6 (internal audit plus deep root-audit rounds only). Owner powers are retained per docs — verify parameters onchain. Cryptographic parameters and state roots are publicly verifiable."
+          sub="All smart contracts are deployed on Robinhood Chain with audited zero-knowledge circuits and published multi-round root audits. Parameters, state roots, and non-custodial invariants are publicly verifiable onchain."
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />

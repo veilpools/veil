@@ -20,7 +20,7 @@ export interface ZkShieldedSwapPanelProps {
   multiRouterAddress: string;
   quotedOut: string | null;
   minSwapOut: string | null;
-  flowKind: "single" | "multi" | null;
+  flowKind: "single" | "multi" | "direct" | null;
   isQuoting: boolean;
   isExecuting: boolean;
   quoteDisabled: boolean;
@@ -168,7 +168,7 @@ export const ZkShieldedSwapPanel: React.FC<ZkShieldedSwapPanelProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-muted)" }}>Flow:</span>
           <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
-            {flowKind === "multi" ? "Batched (multi-note)" : flowKind === "single" ? "Single note" : "—"}
+            {flowKind === "multi" ? "Batched (multi-note)" : flowKind === "single" ? "Single note" : flowKind === "direct" ? "Direct payout (visible onchain)" : "—"}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>

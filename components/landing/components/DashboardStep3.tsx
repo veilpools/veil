@@ -19,19 +19,19 @@ interface ReplyItem {
 const feedItems: FeedItem[] = [
   {
     id: "s1",
-    text: "Bot 0x7a3f tried to sandwich your ETH → USDC swap. The order never touched the public mempool.",
+    text: "Swap-to-Shield confirmed: 0.001 ETH note minted in 0xbow pool via Uniswap v4 (Hook 0x20c4).",
     action: "View proof",
     time: "09:14",
   },
   {
     id: "s2",
-    text: "Note #4611 is ready to withdraw. 412 deposits have joined the pool since yours.",
-    action: "Withdraw to fresh address",
+    text: "Shielded note #4611 verified on-chain. Association Set Merkle root published and active.",
+    action: "Withdraw via self-relay",
     time: "11:47",
   },
   {
     id: "s3",
-    text: "Private swap settled: 2.5 ETH → 8,940 USDC through Uniswap v4. Output re-shielded as a new note.",
+    text: "Private swap settled: 0.001 ETH → 0.001 VEIL. Output note generated with 0-custody invariant.",
     action: "Swap again",
     time: "13:02",
   },
@@ -481,7 +481,7 @@ export const DashboardStep3: React.FC = () => {
                 color: "var(--color-text)",
               }}
             >
-              Anonymity set
+              Association set (ASP)
             </span>
             <div
               style={{

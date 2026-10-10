@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS, TREASURY_DEPLOYMENT_BLOCK } from "@/lib/contracts";
-import { appChain } from "@/lib/chains";
+import { appChain, APP_CHAIN_ID } from "@/lib/chains";
 
 const TREASURY_ADDRESS = (CONTRACT_ADDRESSES.treasury ||
   "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34") as Address;
@@ -123,128 +123,306 @@ export default function BurnPage() {
   }, []);
 
   return (
-    <main style={{ padding: "var(--space-12) var(--page-gutter)", maxWidth: "960px", margin: "0 auto" }}>
-      <h1
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", width: "100%" }}>
+      {/* Editorial Header */}
+      <div
         style={{
-          margin: "0 0 var(--space-2) 0",
-          fontFamily: "var(--font-headline)",
-          fontSize: "var(--text-h2)",
-          color: "var(--color-text)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+          paddingBottom: "var(--space-5)",
+          borderBottom: "1px solid var(--color-border)",
         }}
       >
-        Protocol Burn Ledger
-      </h1>
-      <p
-        style={{
-          margin: "0 0 var(--space-8) 0",
-          fontFamily: "var(--font-body)",
-          fontSize: "var(--text-body)",
-          color: "var(--color-muted)",
-        }}
-      >
-        Every figure below is read live from the Veil Treasury on Robinhood Mainnet 4663.
-      </p>
+        <div>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--color-muted)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            Robinhood {appChain.name} {APP_CHAIN_ID} // Veil Treasury
+          </div>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-headline)",
+              fontSize: "clamp(2rem, 3vw, 2.5rem)",
+              lineHeight: 1.15,
+              color: "var(--color-text)",
+              letterSpacing: "-0.02em",
+              fontWeight: 500,
+            }}
+          >
+            Protocol Burn Ledger
+          </h1>
+          <p
+            style={{
+              margin: "var(--space-2) 0 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: "var(--text-body-sm)",
+              color: "var(--color-muted)",
+              maxWidth: "680px",
+              lineHeight: "1.6",
+            }}
+          >
+            Live protocol fee captures and deflationary token burns from the Veil Treasury contract.
+            70% of all swap hook fees are directed to automated VEIL buybacks and permanent burns.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "var(--space-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "12px",
+            color: "var(--color-muted)",
+          }}
+        >
+          <span>30 BPS Hook Fee</span>
+          <span style={{ opacity: 0.3 }}>/</span>
+          <span>70% Buyback Share</span>
+          <span style={{ opacity: 0.3 }}>/</span>
+          <span>ERC20 Deflation</span>
+        </div>
+      </div>
 
       {loading && (
-        <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
-          Loading live state…
-        </p>
+        <div style={{ padding: "var(--space-8)", textAlign: "center", color: "var(--color-muted)", fontFamily: "monospace", fontSize: "var(--text-body-sm)" }}>
+          Loading live state from Treasury contract…
+        </div>
       )}
       {rpcError && (
-        <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "#b45309" }}>
-          RPC unreachable, retrying…
-        </p>
+        <div style={{ padding: "var(--space-4)", borderRadius: "var(--radius-md)", backgroundColor: "rgba(180, 83, 9, 0.08)", border: "1px solid rgba(180, 83, 9, 0.2)", color: "#b45309", fontFamily: "monospace", fontSize: "var(--text-body-sm)" }}>
+          RPC connection error, retrying…
+        </div>
       )}
 
       {!loading && !rpcError && (
         <>
+          {/* Key Metric Cards */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "var(--space-3)",
-              marginBottom: "var(--space-8)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "var(--space-4)",
             }}
           >
-            <div style={{ padding: "var(--space-5)", borderRadius: "var(--radius-md)", backgroundColor: "#ffffff", border: "1px solid var(--color-border)" }}>
+            <div
+              className="veil-card-white"
+              style={{
+                padding: "var(--space-6)",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-border-strong)",
+                boxShadow: "0 4px 20px rgba(26, 26, 26, 0.04)",
+              }}
+            >
               <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Total Burned
+                Total VEIL Burned
               </div>
-              <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.4rem", fontWeight: 700, color: "var(--color-text)", marginTop: "4px" }}>
+              <div style={{ fontFamily: "var(--font-headline)", fontSize: "clamp(1.75rem, 2.5vw, 2.25rem)", fontWeight: 700, color: "var(--color-text)", marginTop: "8px" }}>
                 {totalBurned === null ? "—" : formatVeil(totalBurned)}
               </div>
+              <div style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "6px", fontFamily: "var(--font-body)" }}>
+                Permanently removed from circulating supply
+              </div>
             </div>
-            <div style={{ padding: "var(--space-5)", borderRadius: "var(--radius-md)", backgroundColor: "#ffffff", border: "1px solid var(--color-border)" }}>
+
+            <div
+              className="veil-card-white"
+              style={{
+                padding: "var(--space-6)",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-border-strong)",
+                boxShadow: "0 4px 20px rgba(26, 26, 26, 0.04)",
+              }}
+            >
               <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Total Fees Received
               </div>
-              <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.4rem", fontWeight: 700, color: "var(--color-text)", marginTop: "4px" }}>
+              <div style={{ fontFamily: "var(--font-headline)", fontSize: "clamp(1.75rem, 2.5vw, 2.25rem)", fontWeight: 700, color: "var(--color-text)", marginTop: "8px" }}>
                 {totalFees === null ? "—" : formatEth(totalFees)}
               </div>
+              <div style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "6px", fontFamily: "var(--font-body)" }}>
+                Cumulative fees routed through Veil Hook
+              </div>
             </div>
-            <div style={{ padding: "var(--space-5)", borderRadius: "var(--radius-md)", backgroundColor: "#ffffff", border: "1px solid var(--color-border)" }}>
+
+            <div
+              className="veil-card-white"
+              style={{
+                padding: "var(--space-6)",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-border-strong)",
+                boxShadow: "0 4px 20px rgba(26, 26, 26, 0.04)",
+              }}
+            >
               <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Buyback Share
               </div>
-              <div style={{ fontFamily: "var(--font-headline)", fontSize: "1.4rem", fontWeight: 700, color: "var(--color-text)", marginTop: "4px" }}>
+              <div style={{ fontFamily: "var(--font-headline)", fontSize: "clamp(1.75rem, 2.5vw, 2.25rem)", fontWeight: 700, color: "var(--color-text)", marginTop: "8px" }}>
                 {buybackBps === null ? "—" : `${Number(buybackBps) / 100}%`}
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "6px", fontFamily: "var(--font-body)" }}>
+                Binding protocol governance parameter (70% Buyback)
               </div>
             </div>
           </div>
 
-          <div style={{ marginBottom: "var(--space-8)", fontFamily: "monospace", fontSize: "12px", color: "var(--color-muted)" }}>
-            Veil token:{" "}
-            {veilToken === null ? (
-              "—"
-            ) : veilToken.toLowerCase() === ZERO_ADDRESS ? (
-              "Veil token not set"
-            ) : (
-              <a href={`${EXPLORER}/address/${veilToken}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent)" }}>
-                {veilToken}
+          {/* Treasury Details Card */}
+          <div
+            className="veil-card-white"
+            style={{
+              padding: "var(--space-5) var(--space-6)",
+              borderRadius: "var(--radius-lg)",
+              border: "1px solid var(--color-border)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "var(--space-3)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Treasury Contract &amp; Token
+              </div>
+              <div style={{ fontFamily: "monospace", fontSize: "13px", color: "var(--color-text)", marginTop: "4px" }}>
+                Treasury: {TREASURY_ADDRESS}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
+              <a
+                href={`${EXPLORER}/address/${TREASURY_ADDRESS}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "6px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "rgba(26, 26, 26, 0.04)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                  fontSize: "12px",
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                View Treasury on Explorer →
               </a>
-            )}
-          </div>
-
-          <h2 style={{ margin: "0 0 var(--space-3) 0", fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", color: "var(--color-text)" }}>
-            Burn history
-          </h2>
-          {history.length === 0 ? (
-            <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
-              No burns yet — 0
-            </p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-              {history.map((row) => (
-                <div
-                  key={`${row.txHash}-${row.blockNumber.toString()}-${row.source}`}
+              {veilToken && veilToken.toLowerCase() !== ZERO_ADDRESS && (
+                <a
+                  href={`${EXPLORER}/address/${veilToken}`}
+                  target="_blank"
+                  rel="noreferrer"
                   style={{
-                    padding: "var(--space-3) var(--space-4)",
-                    borderRadius: "var(--radius-md)",
-                    backgroundColor: "#ffffff",
-                    border: "1px solid var(--color-border)",
-                    display: "flex",
-                    justifyContent: "space-between",
+                    display: "inline-flex",
                     alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "var(--space-2)",
-                    fontFamily: "monospace",
+                    padding: "6px 14px",
+                    borderRadius: "var(--radius-sm)",
+                    backgroundColor: "rgba(255, 140, 0, 0.1)",
+                    border: "1px solid rgba(255, 140, 0, 0.3)",
+                    color: "var(--color-accent)",
                     fontSize: "12px",
+                    fontFamily: "var(--font-body)",
+                    fontWeight: 600,
+                    textDecoration: "none",
                   }}
                 >
-                  <span style={{ color: "var(--color-text)" }}>
-                    {row.amount} · {row.source} · block {row.blockNumber.toString()}
-                  </span>
-                  {row.txHash && (
-                    <a href={`${EXPLORER}/tx/${row.txHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent)", fontWeight: 600 }}>
-                      {row.txHash.slice(0, 10)}...{row.txHash.slice(-8)}
-                    </a>
-                  )}
-                </div>
-              ))}
+                  View VEIL Token →
+                </a>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Burn History Section */}
+          <div
+            className="veil-card-white"
+            style={{
+              padding: "var(--space-6)",
+              borderRadius: "var(--radius-lg)",
+              border: "1px solid var(--color-border)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", color: "var(--color-text)" }}>
+                  Onchain Burn History
+                </h2>
+                <p style={{ margin: "4px 0 0 0", fontSize: "var(--text-body-sm)", color: "var(--color-muted)", fontFamily: "var(--font-body)" }}>
+                  Verified onchain events emitted by the Veil Treasury contract.
+                </p>
+              </div>
+              <span style={{ fontFamily: "monospace", fontSize: "11px", color: "var(--color-muted)", padding: "2px 8px", borderRadius: "var(--radius-sm)", backgroundColor: "rgba(26, 26, 26, 0.04)" }}>
+                {history.length} Event{history.length === 1 ? "" : "s"}
+              </span>
+            </div>
+
+            {history.length === 0 ? (
+              <div style={{ padding: "var(--space-8)", textAlign: "center", color: "var(--color-muted)", fontFamily: "monospace", fontSize: "var(--text-body-sm)", backgroundColor: "rgba(26, 26, 26, 0.02)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)" }}>
+                No burns yet recorded on this chain. Burns trigger automatically when protocol fees accumulate.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                {history.map((row) => (
+                  <div
+                    key={`${row.txHash}-${row.blockNumber.toString()}-${row.source}`}
+                    style={{
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "rgba(26, 26, 26, 0.02)",
+                      border: "1px solid var(--color-border)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "var(--space-3)",
+                      fontFamily: "monospace",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                      <span style={{ fontWeight: 600, color: "var(--color-text)" }}>
+                        {row.amount}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "var(--color-muted)", padding: "2px 6px", borderRadius: "var(--radius-sm)", backgroundColor: "rgba(26, 26, 26, 0.05)" }}>
+                        {row.source}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "var(--color-muted)" }}>
+                        Block #{row.blockNumber.toString()}
+                      </span>
+                    </div>
+                    {row.txHash && (
+                      <a
+                        href={`${EXPLORER}/tx/${row.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "var(--color-accent)", fontWeight: 600, textDecoration: "none" }}
+                      >
+                        {row.txHash.slice(0, 10)}...{row.txHash.slice(-8)} ↗
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
-    </main>
+    </div>
   );
 }

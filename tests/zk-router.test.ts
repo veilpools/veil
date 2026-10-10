@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { keccak256, encodeAbiParameters } from "viem";
 import { VEIL_ZK_ROUTER_ABI } from "../lib/veil-artifact.mjs";
 
 const source: string = readFileSync("contracts/VeilZkRouter.sol", "utf8");
@@ -16,8 +17,7 @@ const fnNames = abi.filter((e) => e.type === "function").map((e) => e.name);
 const errNames = abi.filter((e) => e.type === "error").map((e) => e.name);
 
 describe("zk router context binding", () => {
-  it("binds pool, minOut, commitment and fee into one context hash", async () => {
-    const { keccak256, encodeAbiParameters } = await import("viem");
+  it("binds pool, minOut, commitment and fee into one context hash", () => {
     const ctx = keccak256(
       encodeAbiParameters(
         [{ type: "address" }, { type: "uint256" }, { type: "bytes32" }, { type: "uint256" }],

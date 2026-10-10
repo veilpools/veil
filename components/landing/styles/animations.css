@@ -396,6 +396,10 @@ html.lp-on body {
   will-change: transform;
 }
 
+.tech-marquee-track:hover {
+  animation-play-state: paused;
+}
+
 /* Modal In/Out Animations */
 @keyframes modalBackdropIn {
   from {

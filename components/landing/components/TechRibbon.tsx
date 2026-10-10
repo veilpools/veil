@@ -3,16 +3,16 @@
 import React from "react";
 
 const SPEC_ITEMS = [
-  "ROBINHOOD CHAIN 4663",
-  "UNISWAP v4 HOOK GATEWAY",
-  "GROTH16 ZK-SNARK",
-  "LEANIMT DEPTH 20 (1,048,576 LEAVES)",
+  "ROBINHOOD CHAIN 4663 / 46630",
+  "UNISWAP v4 HOOK GATEWAY (0x20C4)",
+  "GROTH16 ZK-SNARK (0xBOW v1.2.1)",
+  "LEANIMT MERKLE TREES (DEPTH 20)",
   "0-HELD BALANCE INVARIANT",
   "ATOMIC SWAP-TO-SHIELD",
-  "PERMIT2 SIGNATURE TRANSFERS",
   "AUTONOMOUS BUYBACK & BURN",
-  "SANCTIONS CONTAGION: ZERO",
-  "GASLESS RELAYER BROADCAST",
+  "ASSOCIATION SET PROOFS (ASP)",
+  "BROWSER CLIENT-SIDE PROVING",
+  "NON-CUSTODIAL SELF-RELAY",
 ];
 
 export const TechRibbon: React.FC = () => {
@@ -24,10 +24,10 @@ export const TechRibbon: React.FC = () => {
         zIndex: 2,
         width: "100%",
         overflow: "hidden",
-        borderTop: "var(--border-thin) solid var(--color-border-strong)",
-        borderBottom: "var(--border-thin) solid var(--color-border-strong)",
-        background: "var(--color-panel-warm)",
-        padding: "var(--space-3) 0",
+        borderTop: "1px solid var(--color-border)",
+        borderBottom: "1px solid var(--color-border)",
+        background: "transparent",
+        padding: "10px 0",
         display: "flex",
         alignItems: "center",
       }}
@@ -37,31 +37,47 @@ export const TechRibbon: React.FC = () => {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "var(--space-2)",
-          padding: "0 var(--space-5)",
-          background: "var(--color-panel-warm)",
+          padding: "0 var(--space-4)",
+          background: "transparent",
           zIndex: 3,
           flexShrink: 0,
-          borderRight: "1px solid var(--color-hairline)",
-          fontFamily: "monospace",
-          fontSize: "var(--text-caption)",
-          fontWeight: 700,
-          color: "var(--color-accent)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
+          borderRight: "1px solid var(--color-border)",
         }}
       >
-        <span
+        <div
           style={{
-            width: "6px",
-            height: "6px",
-            borderRadius: "50%",
-            backgroundColor: "var(--color-accent)",
-            display: "inline-block",
-            animation: "pulse 1.5s infinite",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "7px",
+            padding: "3px 10px",
+            borderRadius: "var(--radius-full)",
+            backgroundColor: "rgba(26, 26, 26, 0.04)",
+            border: "1px solid var(--color-border)",
           }}
-        />
-        <span>Primitives</span>
+        >
+          <span
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              backgroundColor: "var(--color-brand)",
+              display: "inline-block",
+              boxShadow: "0 0 6px rgba(255, 140, 0, 0.5)",
+            }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--font-mono, monospace)",
+              fontSize: "11px",
+              fontWeight: 700,
+              color: "var(--color-text)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Primitives
+          </span>
+        </div>
       </div>
 
       {/* Overflow mask & Marquee track */}
@@ -70,28 +86,41 @@ export const TechRibbon: React.FC = () => {
           flex: 1,
           overflow: "hidden",
           position: "relative",
-          maskImage: "linear-gradient(to right, transparent, black 4%, black 96%, transparent)",
-          WebkitMaskImage: "linear-gradient(to right, transparent, black 4%, black 96%, transparent)",
+          maskImage: "linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent)",
+          WebkitMaskImage: "linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent)",
         }}
       >
         <div className="tech-marquee-track">
           {[...SPEC_ITEMS, ...SPEC_ITEMS].map((item, idx) => (
             <div
               key={idx}
+              className="group cursor-default transition-colors duration-150"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "var(--space-4)",
-                paddingRight: "var(--space-5)",
+                paddingRight: "var(--space-6)",
                 whiteSpace: "nowrap",
-                fontFamily: "monospace",
-                fontSize: "var(--text-caption)",
-                color: "var(--color-text)",
-                letterSpacing: "0.06em",
+                fontFamily: "var(--font-mono, monospace)",
+                fontSize: "12px",
+                color: "var(--color-muted)",
+                letterSpacing: "0.04em",
+                fontWeight: 500,
               }}
             >
-              <span>{item}</span>
-              <span style={{ color: "var(--color-accent)", opacity: 0.85 }}>◈</span>
+              <span className="group-hover:text-[var(--color-text)] transition-colors">
+                {item}
+              </span>
+              <span
+                style={{
+                  color: "var(--color-brand)",
+                  opacity: 0.85,
+                  fontSize: "9px",
+                  userSelect: "none",
+                }}
+              >
+                ◈
+              </span>
             </div>
           ))}
         </div>

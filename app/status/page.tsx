@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatEther, parseAbiItem, type Address } from "viem";
 import { publicClient } from "@/lib/balances";
 import { CONTRACT_ADDRESSES, CONTRACT_ABIS, POOL_DEPLOYMENT_BLOCK } from "@/lib/contracts";
+import { appChain, APP_CHAIN_ID } from "@/lib/chains";
 
 const POOL_ADDRESS = (CONTRACT_ADDRESSES.poolEth ||
   "0xdd0fb7fc7f1398fd1398a594f7a0ce934caa7ea0") as Address;
@@ -159,108 +160,265 @@ export default function StatusPage() {
   const card = (label: string, value: string) => (
     <div
       key={label}
-      style={{ padding: "var(--space-4)", borderRadius: "var(--radius-md)", backgroundColor: "#ffffff", border: "1px solid var(--color-border)" }}
+      className="veil-card-white"
+      style={{
+        padding: "var(--space-5)",
+        borderRadius: "var(--radius-lg)",
+        border: "1px solid var(--color-border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "6px",
+      }}
     >
       <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
         {label}
       </div>
-      <div style={{ fontFamily: "monospace", fontSize: "13px", color: "var(--color-text)", marginTop: "6px", overflowWrap: "anywhere" }}>
+      <div style={{ fontFamily: "monospace", fontSize: "14px", fontWeight: 600, color: "var(--color-text)", overflowWrap: "anywhere" }}>
         {value}
       </div>
     </div>
   );
 
   return (
-    <main style={{ padding: "var(--space-12) var(--page-gutter)", maxWidth: "960px", margin: "0 auto" }}>
-      <h1
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", width: "100%" }}>
+      {/* Editorial Header */}
+      <div
         style={{
-          margin: "0 0 var(--space-2) 0",
-          fontFamily: "var(--font-headline)",
-          fontSize: "var(--text-h2)",
-          color: "var(--color-text)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+          paddingBottom: "var(--space-5)",
+          borderBottom: "1px solid var(--color-border)",
         }}
       >
-        Chain Health
-      </h1>
-      <p
-        style={{
-          margin: "0 0 var(--space-8) 0",
-          fontFamily: "var(--font-body)",
-          fontSize: "var(--text-body)",
-          color: "var(--color-muted)",
-        }}
-      >
-        Live Shielded Pool state on Robinhood Mainnet 4663.
-      </p>
+        <div>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--color-muted)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            Robinhood {appChain.name} {APP_CHAIN_ID} // Health Monitor
+          </div>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-headline)",
+              fontSize: "clamp(2rem, 3vw, 2.5rem)",
+              lineHeight: 1.15,
+              color: "var(--color-text)",
+              letterSpacing: "-0.02em",
+              fontWeight: 500,
+            }}
+          >
+            Chain &amp; Pool Health
+          </h1>
+          <p
+            style={{
+              margin: "var(--space-2) 0 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: "var(--text-body-sm)",
+              color: "var(--color-muted)",
+              maxWidth: "680px",
+              lineHeight: "1.6",
+            }}
+          >
+            Live cryptographic state, Merkle tree history, and operational parameters of the Shielded Pool on Robinhood {appChain.name} ({APP_CHAIN_ID}).
+            Telemetry updates automatically every 15 seconds.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "var(--space-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "12px",
+            color: "var(--color-muted)",
+          }}
+        >
+          <span>LeanIMT Merkle</span>
+          <span style={{ opacity: 0.3 }}>/</span>
+          <span>15s Auto-Sync</span>
+          <span style={{ opacity: 0.3 }}>/</span>
+          <span>Client Verifiable</span>
+        </div>
+      </div>
 
       {loading && (
-        <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
-          Loading live state…
-        </p>
+        <div style={{ padding: "var(--space-8)", textAlign: "center", color: "var(--color-muted)", fontFamily: "monospace", fontSize: "var(--text-body-sm)" }}>
+          Loading live pool metrics from RPC…
+        </div>
       )}
       {rpcError && (
-        <p style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", color: "#b45309" }}>
-          RPC unreachable, retrying…
-        </p>
+        <div style={{ padding: "var(--space-4)", borderRadius: "var(--radius-md)", backgroundColor: "rgba(180, 83, 9, 0.08)", border: "1px solid rgba(180, 83, 9, 0.2)", color: "#b45309", fontFamily: "monospace", fontSize: "var(--text-body-sm)" }}>
+          RPC connection error, retrying…
+        </div>
       )}
 
       {!loading && !rpcError && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "var(--space-3)" }}>
-            {card("Next index", nextIndex === null ? "—" : String(nextIndex))}
-            {card("Total deposits", totalDeposits === null ? "—" : `${totalDeposits} ETH`)}
-            {card("Denomination", denomination === null ? "—" : `${denomination} ETH`)}
-            {card("Pool cap", poolCap === null ? "—" : `${poolCap} ETH`)}
-            {card("Guardian", guardian ?? "—")}
-            {card("Deposits paused", depositsPaused === null ? "—" : String(depositsPaused))}
-            {card("Latest root", latestRoot ?? "Empty pool — no deposits yet")}
-            {card("Latest root known", rootKnown === null ? "—" : String(rootKnown))}
+          {/* Key Invariant Grid */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: "var(--space-3)",
+            }}
+          >
+            {card("Next Leaf Index", nextIndex === null ? "—" : String(nextIndex))}
+            {card("Total Deposits", totalDeposits === null ? "—" : `${totalDeposits} ETH`)}
+            {card("Fixed Denomination", denomination === null ? "—" : `${denomination} ETH`)}
+            {card("Pool Lifetime Cap", poolCap === null ? "—" : `${poolCap} ETH`)}
+            {card("Guardian Address", guardian ?? "—")}
+            {card("Deposits Paused", depositsPaused === null ? "—" : String(depositsPaused))}
+            {card("Latest Merkle Root", latestRoot ?? "Empty pool — no deposits yet")}
+            {card("Root Known Onchain", rootKnown === null ? "—" : String(rootKnown))}
           </div>
 
-          <h2 style={{ margin: "var(--space-10) 0 var(--space-2) 0", fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", color: "var(--color-text)" }}>
-            Vault rebuild from logs
-          </h2>
-          <p style={{ margin: "0 0 var(--space-4) 0", fontFamily: "var(--font-body)", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
-            Replays client-side Deposit and Withdraw events so you can verify local notes against the onchain Merkle root. No server involved.
-          </p>
-
-          <h3 style={{ margin: "0 0 var(--space-2) 0", fontFamily: "monospace", fontSize: "13px", color: "var(--color-text)" }}>
-            Deposits ({deposits.length})
-          </h3>
-          {deposits.length === 0 ? (
-            <p style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--color-muted)" }}>No deposits yet — 0</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", marginBottom: "var(--space-6)" }}>
-              {deposits.map((d, i) => (
-                <div
-                  key={`${d.txHash}-${i}`}
-                  style={{ padding: "var(--space-3) var(--space-4)", borderRadius: "var(--radius-md)", backgroundColor: "#ffffff", border: "1px solid var(--color-border)", fontFamily: "monospace", fontSize: "12px", color: "var(--color-text)", overflowWrap: "anywhere" }}
-                >
-                  #{d.index} · commitment {d.commitment} · block {d.blockNumber.toString()}
+          {/* Log Event Inspection Section */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(480px, 100%), 1fr))",
+              gap: "var(--space-6)",
+              alignItems: "start",
+            }}
+          >
+            {/* Column 1: Deposits */}
+            <div
+              className="veil-card-white"
+              style={{
+                padding: "var(--space-6)",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-4)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", color: "var(--color-text)" }}>
+                    Onchain Deposits
+                  </h2>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "var(--text-body-sm)", color: "var(--color-muted)", fontFamily: "var(--font-body)" }}>
+                    Commitments verified in LeanIMT leaves.
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
+                <span style={{ fontFamily: "monospace", fontSize: "11px", color: "var(--color-muted)", padding: "2px 8px", borderRadius: "var(--radius-sm)", backgroundColor: "rgba(26, 26, 26, 0.04)" }}>
+                  {deposits.length} Recorded
+                </span>
+              </div>
 
-          <h3 style={{ margin: "0 0 var(--space-2) 0", fontFamily: "monospace", fontSize: "13px", color: "var(--color-text)" }}>
-            Withdrawals ({withdrawals.length})
-          </h3>
-          {withdrawals.length === 0 ? (
-            <p style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--color-muted)" }}>No withdrawals yet — 0</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-              {withdrawals.map((w, i) => (
-                <div
-                  key={`${w.txHash}-${i}`}
-                  style={{ padding: "var(--space-3) var(--space-4)", borderRadius: "var(--radius-md)", backgroundColor: "#ffffff", border: "1px solid var(--color-border)", fontFamily: "monospace", fontSize: "12px", color: "var(--color-text)", overflowWrap: "anywhere" }}
-                >
-                  nullifier {w.nullifierHash} · recipient {w.recipient} · block {w.blockNumber.toString()}
+              {deposits.length === 0 ? (
+                <div style={{ padding: "var(--space-6)", textAlign: "center", color: "var(--color-muted)", fontFamily: "monospace", fontSize: "12px", backgroundColor: "rgba(26, 26, 26, 0.02)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)" }}>
+                  No deposits yet recorded on this pool.
                 </div>
-              ))}
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", maxHeight: "420px", overflowY: "auto" }}>
+                  {deposits.map((d, i) => (
+                    <div
+                      key={`${d.txHash}-${i}`}
+                      style={{
+                        padding: "var(--space-3) var(--space-4)",
+                        borderRadius: "var(--radius-md)",
+                        backgroundColor: "rgba(26, 26, 26, 0.02)",
+                        border: "1px solid var(--color-border)",
+                        fontFamily: "monospace",
+                        fontSize: "12px",
+                        color: "var(--color-text)",
+                        overflowWrap: "anywhere",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "var(--color-muted)", fontSize: "11px" }}>
+                        <span>Leaf #{d.index}</span>
+                        <span>Block #{d.blockNumber.toString()}</span>
+                      </div>
+                      <div style={{ color: "var(--color-text)", fontWeight: 500 }}>
+                        {d.commitment}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Column 2: Withdrawals */}
+            <div
+              className="veil-card-white"
+              style={{
+                padding: "var(--space-6)",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-4)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", color: "var(--color-text)" }}>
+                    Unlinked Withdrawals
+                  </h2>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "var(--text-body-sm)", color: "var(--color-muted)", fontFamily: "var(--font-body)" }}>
+                    Nullifier hashes spent with ZK proofs.
+                  </p>
+                </div>
+                <span style={{ fontFamily: "monospace", fontSize: "11px", color: "var(--color-muted)", padding: "2px 8px", borderRadius: "var(--radius-sm)", backgroundColor: "rgba(26, 26, 26, 0.04)" }}>
+                  {withdrawals.length} Recorded
+                </span>
+              </div>
+
+              {withdrawals.length === 0 ? (
+                <div style={{ padding: "var(--space-6)", textAlign: "center", color: "var(--color-muted)", fontFamily: "monospace", fontSize: "12px", backgroundColor: "rgba(26, 26, 26, 0.02)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)" }}>
+                  No withdrawals yet recorded on this pool.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", maxHeight: "420px", overflowY: "auto" }}>
+                  {withdrawals.map((w, i) => (
+                    <div
+                      key={`${w.txHash}-${i}`}
+                      style={{
+                        padding: "var(--space-3) var(--space-4)",
+                        borderRadius: "var(--radius-md)",
+                        backgroundColor: "rgba(26, 26, 26, 0.02)",
+                        border: "1px solid var(--color-border)",
+                        fontFamily: "monospace",
+                        fontSize: "12px",
+                        color: "var(--color-text)",
+                        overflowWrap: "anywhere",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "var(--color-muted)", fontSize: "11px" }}>
+                        <span>To: {w.recipient.slice(0, 8)}...{w.recipient.slice(-6)}</span>
+                        <span>Block #{w.blockNumber.toString()}</span>
+                      </div>
+                      <div style={{ color: "var(--color-text)", fontWeight: 500 }}>
+                        Nullifier: {w.nullifierHash}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
-    </main>
+    </div>
   );
 }

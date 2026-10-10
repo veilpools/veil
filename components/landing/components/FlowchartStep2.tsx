@@ -23,28 +23,28 @@ const H = 760;
 
 const TRADE_CYCLES = [
   {
-    inputAsset: "Note #4611 (2.50 ETH)",
-    outputAsset: "New Note (8,940 USDC)",
-    poolFee: "Pool: ETH/USDC · 0.05%",
+    inputAsset: "Shielded Note (0.001 ETH)",
+    outputAsset: "New Shielded Note (0.001 VEIL)",
+    poolFee: "Pool: ETH/VEIL · 0.30% (Hook 0x20c4)",
     executionTime: "8.2ms",
   },
   {
-    inputAsset: "Note #4612 (5,000 USDC)",
-    outputAsset: "New Note (1.85 ETH)",
-    poolFee: "Pool: USDC/ETH · 0.05%",
-    executionTime: "7.9ms",
+    inputAsset: "3× Notes (0.003 ETH)",
+    outputAsset: "New Note (0.001 VEIL) + Dust",
+    poolFee: "VeilZkRouter Multi-Batch · Uniswap v4",
+    executionTime: "9.4ms",
   },
   {
-    inputAsset: "Note #4613 (1.00 ETH)",
-    outputAsset: "New Note (25,000 PONS)",
-    poolFee: "Pool: ETH/PONS · 0.30%",
-    executionTime: "9.1ms",
+    inputAsset: "Shielded Note (0.001 VEIL)",
+    outputAsset: "New Shielded Note (0.001 ETH)",
+    poolFee: "Pool: VEIL/ETH · 0.30% (Hook 0x20c4)",
+    executionTime: "8.1ms",
   },
   {
-    inputAsset: "Note #4614 (25,000 PONS)",
-    outputAsset: "New Note (1.02 ETH)",
-    poolFee: "Pool: PONS/ETH · 0.30%",
-    executionTime: "8.4ms",
+    inputAsset: "Swap-to-Shield (ETH)",
+    outputAsset: "Shielded Note (0.001 ETH)",
+    poolFee: "Atomic Invariant 0 · PoolManager",
+    executionTime: "7.8ms",
   },
 ];
 

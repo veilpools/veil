@@ -36,9 +36,9 @@ const rows: ComparisonRow[] = [
     veil: "0 held balance (LeanIMT invariant)",
   },
   {
-    metric: "Sanctions contagion",
-    publicPool: "Exposed to tainted counterparties",
-    veil: "0% (Attested clean ASP roots)",
+    metric: "Association sets (ASP)",
+    publicPool: "Commingled counterparty exposure",
+    veil: "Attested membership in published ASP roots",
   },
 ];
 
