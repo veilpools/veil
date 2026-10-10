@@ -64,3 +64,6 @@
 
 - VEIL 0xbow full cycle LIVE (2026-10-10, fresh suite): deposit 0.001 VEIL  x8de91630c649… + ASP + Groth16 relay  x32ff754834406a1b0ac9a155b0b8aa40c7fbbc17aa0785ec677a945f531b4d19 to fresh burner (+0.001 VEIL exact).
 
+
+- Multi-note full-ZK flow LIVE x2 (2026-10-10): 3x relay + swap + 0.001 VEIL deposit in one atomic tx, router  xc009…, tx  x1561ed45a7435a1db55556780ebd98c94c819ae7af5105d984af7bca89af44e1 (first:  xe14f…). Sim-gated, local-verify true, invariant holds.
+
