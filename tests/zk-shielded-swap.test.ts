@@ -300,35 +300,175 @@ describe("zk shielded swap tab (full-ZK router)", () => {
     expect(src).not.toMatch(/forceDirect|POOL_DEPOSIT_ABI/i);
   });
 
-  it("wires the shielded-swap tab: quote-first sim, derived min, revalidate, pre-send sim, receipt asserts", async () => {
+  it("enforces shielded-swap pre-send ordering behaviorally: revalidate -> simulate -> write (shipped path, no live txs)", async () => {
+    const mod = await import("../lib/zk-router");
+    const run = (
+      mod as unknown as {
+        runShieldedSwapPreSendSequence: (params: {
+          flowKind: "single" | "multi";
+          account: string;
+          publicClient: unknown;
+          walletClient: unknown;
+          revalidate: () => Promise<unknown>;
+          singleArgs?: unknown;
+          multiArgs?: unknown;
+        }) => Promise<string>;
+      }
+    ).runShieldedSwapPreSendSequence;
+    expect(typeof run).toBe("function");
+    const buildSingle = (
+      mod as unknown as {
+        buildFullZkFlowArgs: (input: Record<string, unknown>) => Record<string, unknown>;
+      }
+    ).buildFullZkFlowArgs;
+    const buildMulti = (
+      mod as unknown as {
+        buildMultiFullZkFlowArgs: (input: Record<string, unknown>) => Record<string, unknown>;
+      }
+    ).buildMultiFullZkFlowArgs;
+    const singleArgs = buildSingle({
+      withdrawal: WITHDRAWAL,
+      proof: PROOF,
+      scope: 11n,
+      withdrawAsset: ETH_ZERO,
+      depositAsset: VEIL,
+      depositValue: parseEther("0.5"),
+      precommitment: 999n,
+      zeroForOne: true,
+      quotedSwapOut: parseEther("1.35"),
+      slippagePercent: 0.5,
+    });
+    const multiArgs = buildMulti({
+      withdrawals: [WITHDRAWAL],
+      proofs: [PROOF],
+      scopes: [11n],
+      withdrawAsset: ETH_ZERO,
+      depositAsset: VEIL,
+      depositValue: parseEther("0.5"),
+      precommitment: 999n,
+      zeroForOne: true,
+      quotedSwapOut: parseEther("1.35"),
+      slippagePercent: 0.5,
+    });
+
+    const makeMocks = (order: string[]) => ({
+      publicClient: {
+        async simulateContract() {
+          order.push("simulate");
+          return { result: 777n };
+        },
+      },
+      walletClient: {
+        async writeContract() {
+          order.push("write");
+          return "0xdeadbeef";
+        },
+      },
+    });
+
+    // Single-note shipped path: revalidate -> simulate -> write.
+    {
+      const order: string[] = [];
+      const { publicClient, walletClient } = makeMocks(order);
+      const hash = await run({
+        flowKind: "single",
+        account: ACCOUNT,
+        publicClient: publicClient as never,
+        walletClient: walletClient as never,
+        revalidate: async () => {
+          order.push("revalidate");
+        },
+        singleArgs,
+      });
+      expect(hash).toBe("0xdeadbeef");
+      expect(order).toEqual(["revalidate", "simulate", "write"]);
+    }
+
+    // Multi-note shipped path: same ordering via the multi pre-send sim.
+    {
+      const order: string[] = [];
+      const { publicClient, walletClient } = makeMocks(order);
+      const hash = await run({
+        flowKind: "multi",
+        account: ACCOUNT,
+        publicClient: publicClient as never,
+        walletClient: walletClient as never,
+        revalidate: async () => {
+          order.push("revalidate");
+        },
+        multiArgs,
+      });
+      expect(hash).toBe("0xdeadbeef");
+      expect(order).toEqual(["revalidate", "simulate", "write"]);
+    }
+
+    // Fail closed: a pre-send sim revert sends nothing.
+    {
+      const order: string[] = [];
+      const publicClient = {
+        async simulateContract() {
+          order.push("simulate");
+          throw new Error("reverted: SlippageExceeded");
+        },
+      };
+      const walletClient = {
+        async writeContract() {
+          order.push("write");
+          return "0xdeadbeef";
+        },
+      };
+      await expect(
+        run({
+          flowKind: "single",
+          account: ACCOUNT,
+          publicClient: publicClient as never,
+          walletClient: walletClient as never,
+          revalidate: async () => {
+            order.push("revalidate");
+          },
+          singleArgs,
+        }),
+      ).rejects.toThrow();
+      expect(order).toEqual(["revalidate", "simulate"]);
+      expect(order).not.toContain("write");
+    }
+
+    // Fail closed: a revalidate failure simulates and sends nothing.
+    {
+      const order: string[] = [];
+      const { publicClient, walletClient } = makeMocks(order);
+      await expect(
+        run({
+          flowKind: "single",
+          account: ACCOUNT,
+          publicClient: publicClient as never,
+          walletClient: walletClient as never,
+          revalidate: async () => {
+            order.push("revalidate");
+            throw new Error("Wallet account changed mid-flow.");
+          },
+          singleArgs,
+        }),
+      ).rejects.toThrow(/Wallet account changed/);
+      expect(order).toEqual(["revalidate"]);
+    }
+
+    // The shipped execute handler delegates to this sequence (call-site pin,
+    // not comment matching): import + call inside handleZkShieldedSwapExecute.
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const src = readFileSync(join(process.cwd(), "app/trade/page.tsx"), "utf8");
-    expect(src).toContain("ZkShieldedSwapPanel");
-    // Both flow entry points stay wired: single + multi.
-    expect(src).toContain("executeFullZkFlow");
-    expect(src).toContain("executeMultiFullZkFlow");
-    expect(src).toContain("quoteAndBuildFullZkFlow");
-    expect(src).toContain("quoteAndBuildMultiFullZkFlow");
-    expect(src).toContain("simulateFullZkFlow");
-    expect(src).toContain("simulateMultiFullZkFlow");
-    // Quote-first ordering in the shielded-swap handler: sim before send.
-    const idx = src.indexOf("handleZkShieldedSwap");
-    expect(idx).toBeGreaterThan(-1);
-    const section = src.slice(idx, idx + 80000);
-    expect(section).toContain("quoteAndBuild");
-    expect(section).toContain("revalidateWallet");
-    expect(section).toContain("simulate");
-    expect(section).toContain("writeContract");
-    expect(section.indexOf("revalidateWallet")).toBeLessThan(section.indexOf("writeContract"));
-    expect(section.indexOf("simulate")).toBeLessThan(section.indexOf("writeContract"));
-    // Receipt asserts: relay + swap + deposit events, fail closed.
-    expect(section).toMatch(/FullZkFlowExecuted/);
-    expect(section).toMatch(/Deposited/);
-    expect(section).toMatch(/nullifierHashes/);
-    expect(src).toContain("mapZkRouterError");
-    // Multi-note fallback when one note cannot fund the destination.
-    expect(section).toMatch(/InsufficientOutputForDenomination|multi|batch/i);
+    expect(src).toContain("runShieldedSwapPreSendSequence");
+    const execIdx = src.indexOf("handleZkShieldedSwapExecute");
+    expect(execIdx).toBeGreaterThan(-1);
+    const execSection = src.slice(execIdx, execIdx + 80000);
+    expect(execSection).toContain("runShieldedSwapPreSendSequence");
+    // Receipt asserts stay on the shipped execute path (both branches).
+    expect(execSection).toMatch(/FullZkFlowExecuted/);
+    expect(execSection).toMatch(/Deposited/);
+    expect(execSection).toMatch(/nullifierHashes/);
+    expect(execSection).toContain("mapZkRouterError");
+    expect(execSection).toMatch(/InsufficientOutputForDenomination|multi|batch/i);
   });
 
   it("touches no legacy/Mock paths for the new shielded-swap flow (old exits unchanged)", async () => {

@@ -881,11 +881,77 @@ export async function quoteAndBuildMultiFullZkFlow(
 }
 
 /**
+ * Shipped Shielded Swap pre-send sequence (single source of truth for the
+ * page's execute handler): revalidateWallet -> pre-send simulate of the
+ * EXACT calldata -> wallet writeContract. Simulation only until the final
+ * write; any sim/revalidate failure throws before any transaction is sent.
+ * Test-friendly: callers inject the real testnet public client, the real
+ * wallet client, and a revalidate callback (the page passes
+ * `() => revalidateWallet(...)`; tests pass recording doubles).
+ */
+export async function runShieldedSwapPreSendSequence(params: {
+  flowKind: "single" | "multi";
+  account: Address;
+  publicClient: PublicClient;
+  walletClient: { writeContract: (req: never) => Promise<Hash> };
+  revalidate: () => Promise<unknown>;
+  singleArgs?: FullZkFlowArgs;
+  multiArgs?: MultiFullZkFlowArgs;
+}): Promise<Hash> {
+  await params.revalidate();
+  if (params.flowKind === "multi") {
+    if (!params.multiArgs) throw new Error("Refresh the live quote first. No transaction was sent.");
+    await simulateMultiFullZkFlow(params.publicClient, {
+      account: params.account,
+      args: params.multiArgs,
+    });
+    return params.walletClient.writeContract({
+      address: TESTNET_ZK_ROUTER_MULTI_ADDRESS,
+      abi: VEIL_ZK_ROUTER_ABI,
+      functionName: "executeMultiFullZkFlow",
+      args: [
+        params.multiArgs.withdrawals,
+        params.multiArgs.proofs,
+        params.multiArgs.scopes,
+        params.multiArgs.recipient,
+        params.multiArgs.withdrawAsset,
+        params.multiArgs.depositAsset,
+        params.multiArgs.depositValue,
+        params.multiArgs.precommitment,
+        params.multiArgs.swapLeg,
+        params.multiArgs.minSwapOut,
+      ],
+    } as never);
+  }
+  if (!params.singleArgs) throw new Error("Refresh the live quote first. No transaction was sent.");
+  await simulateFullZkFlow(params.publicClient, {
+    account: params.account,
+    args: params.singleArgs,
+  });
+  return params.walletClient.writeContract({
+    address: TESTNET_ZK_ROUTER_ADDRESS,
+    abi: VEIL_ZK_ROUTER_ABI,
+    functionName: "executeFullZkFlow",
+    args: [
+      params.singleArgs.withdrawal,
+      params.singleArgs.proof,
+      params.singleArgs.scope,
+      params.singleArgs.recipient,
+      params.singleArgs.withdrawAsset,
+      params.singleArgs.depositAsset,
+      params.singleArgs.depositValue,
+      params.singleArgs.precommitment,
+      params.singleArgs.swapLeg,
+      params.singleArgs.minSwapOut,
+    ],
+  } as never);
+}
+
+/**
  * Single source of truth for whether the ZK Execute button stays disabled.
  * Disabled until a fresh live quote exists; when disconnected it stays
  * enabled so it can open the wallet modal.
- */
-export function isZkExecuteDisabled(args: {
+ */export function isZkExecuteDisabled(args: {
   isExecuting: boolean;
   connected: boolean;
   noteValid: boolean;

@@ -135,6 +135,7 @@ import {
   quoteAndBuildMultiFullZkFlow,
   resolveZkShieldedSwapAssets,
   resolveZkShieldedSwapDeposit,
+  runShieldedSwapPreSendSequence,
   simulateFullZkFlow,
   simulateMultiFullZkFlow,
 } from "../../lib/zk-router";
@@ -655,15 +656,6 @@ export default function SwapToShieldPage() {
     : TESTNET_BOW_V3_ETH_DENOMINATION;
   const zkNoteValid =
     zkNote !== null && zkDepositValue !== null && zkDepositValue > 0n;
-  const zkHasQuote =
-    zkBundle !== null && zkQuoteOut !== null && zkMinOut !== null;
-  const zkExecuteDisabled = isZkExecuteDisabled({
-    isExecuting,
-    connected: Boolean(connectedAddress),
-    noteValid: zkNoteValid,
-    isQuoting: isZkQuoting,
-    hasQuote: zkHasQuote,
-  });
   const zkQuoteDisabled =
     isExecuting || isZkQuoting || !connectedAddress || !zkNoteValid;
 
@@ -2005,11 +1997,13 @@ export default function SwapToShieldPage() {
         chain: appChain,
         transport: custom(activeProvider),
       });
-      await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
 
       if (zkFlowKind === "multi" && zkMultiBundle) {
         // Batched path: pre-send simulation of the exact multi calldata,
         // then executeMultiFullZkFlow in one atomic transaction.
+        // Ordering (revalidate -> simulate -> write) lives in the shipped
+        // runShieldedSwapPreSendSequence helper so the ordering test pins
+        // runtime call order via mocks, not source comments.
         const rebuilt = buildMultiFullZkFlowArgs({
           withdrawals: zkMultiBundle.withdrawals,
           proofs: zkMultiBundle.proofs,
@@ -2022,31 +2016,20 @@ export default function SwapToShieldPage() {
           quotedSwapOut: zkMultiBundle.quotedSwapOut,
           slippagePercent: slip,
         });
+        let multiHash: `0x${string}`;
         try {
-          await simulateMultiFullZkFlow(testnetClient, {
+          multiHash = await runShieldedSwapPreSendSequence({
+            flowKind: "multi",
             account: connectedAddress,
-            args: rebuilt,
+            publicClient: testnetClient as never,
+            walletClient: walletClient as never,
+            revalidate: () =>
+              revalidateWallet(activeProvider, connectedAddress as string, connectedChainId),
+            multiArgs: rebuilt,
           });
         } catch (e: unknown) {
           throw new Error(mapZkRouterError(e, slip));
         }
-        const multiHash = await walletClient.writeContract({
-          address: TESTNET_ZK_ROUTER_MULTI_ADDRESS,
-          abi: VEIL_ZK_ROUTER_ABI,
-          functionName: "executeMultiFullZkFlow",
-          args: [
-            rebuilt.withdrawals,
-            rebuilt.proofs as never,
-            rebuilt.scopes,
-            rebuilt.recipient,
-            rebuilt.withdrawAsset,
-            rebuilt.depositAsset,
-            rebuilt.depositValue,
-            rebuilt.precommitment,
-            rebuilt.swapLeg as never,
-            rebuilt.minSwapOut,
-          ],
-        });
         setProverTxHash(multiHash);
         setZkTxHash(multiHash);
         const receipt = await waitForTransactionReceipt(testnetClient, { hash: multiHash });
@@ -2160,6 +2143,7 @@ export default function SwapToShieldPage() {
       }
       // Single-note path: rebuild with the live slippage, pre-send simulate,
       // then executeFullZkFlow atomically (relay -> swap -> deposit).
+      // Ordering lives in runShieldedSwapPreSendSequence (see multi branch).
       const rebuilt = buildFullZkFlowArgs({
         withdrawal: zkBundle.withdrawal,
         proof: zkBundle.proof,
@@ -2172,31 +2156,20 @@ export default function SwapToShieldPage() {
         quotedSwapOut: zkBundle.quotedSwapOut,
         slippagePercent: slip,
       });
+      let fullHash: `0x${string}`;
       try {
-        await simulateFullZkFlow(testnetClient, {
+        fullHash = await runShieldedSwapPreSendSequence({
+          flowKind: "single",
           account: connectedAddress,
-          args: rebuilt,
+          publicClient: testnetClient as never,
+          walletClient: walletClient as never,
+          revalidate: () =>
+            revalidateWallet(activeProvider, connectedAddress as string, connectedChainId),
+          singleArgs: rebuilt,
         });
       } catch (e: unknown) {
         throw new Error(mapZkRouterError(e, slip));
       }
-      const fullHash = await walletClient.writeContract({
-        address: TESTNET_ZK_ROUTER_ADDRESS,
-        abi: VEIL_ZK_ROUTER_ABI,
-        functionName: "executeFullZkFlow",
-        args: [
-          rebuilt.withdrawal,
-          rebuilt.proof as never,
-          rebuilt.scope,
-          rebuilt.recipient,
-          rebuilt.withdrawAsset,
-          rebuilt.depositAsset,
-          rebuilt.depositValue,
-          rebuilt.precommitment,
-          rebuilt.swapLeg as never,
-          rebuilt.minSwapOut,
-        ],
-      });
       setProverTxHash(fullHash);
       setZkTxHash(fullHash);
       const receipt = await waitForTransactionReceipt(testnetClient, { hash: fullHash });
