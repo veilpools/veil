@@ -651,6 +651,11 @@ export default function SwapToShieldPage() {
   // Acquire inside the main try of each send handler; every finally decrements.
   const txInFlight = useRef(0);
 
+  // User cancel for long ZK quote runs (batch proving grinds N notes with no
+  // wallet popup by design). Set on prover-modal close; loops check it between
+  // notes so closing the modal actually stops the work. Reset at each run.
+  const zkCancelRef = useRef(false);
+
   // User-facing expiry for signatures the wallet signs (root-audit F2): the
   // Execution Settings "Transaction Deadline" actually drives these instead
   // of hardcoded TTLs. Clamped to [5 minutes, 24 hours].
@@ -1658,6 +1663,7 @@ export default function SwapToShieldPage() {
     if (txInFlight.current > 0) return;
     setIsExecuting(true);
     setIsZkQuoting(true);
+    zkCancelRef.current = false;
     setProverTitle("Shielded Swap Quote (Testnet)");
     setProverTxHash(null);
     setZkTxHash(null);
@@ -1911,7 +1917,27 @@ export default function SwapToShieldPage() {
           "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
         );
       }
-      for (const batchNote of batch) {
+      for (let batchIdx = 0; batchIdx < batch.length; batchIdx += 1) {
+        const batchNote = batch[batchIdx];
+        // User cancel lands here: closing the prover modal stops the batch
+        // between notes instead of grinding to the end in the background.
+        if (zkCancelRef.current) {
+          throw new Error("Shielded Swap quote cancelled by user. No transaction was sent.");
+        }
+        // Visible progress: N sequential browser proofs with no wallet popup
+        // by design looked exactly like a hang (30+ min silent).
+        setProverSteps((prev) =>
+          prev.map((s, i) =>
+            i === 1
+              ? {
+                  ...s,
+                  detail: `Batch proving note ${batchIdx + 1} of ${batch.length} (Groth16 in browser, minutes per note — leave this tab open)`,
+                }
+              : s
+          )
+        );
+        console.log(`[zk-batch] proving note ${batchIdx + 1}/${batch.length}...`);
+        const batchT0 = Date.now();
         if (!isBowNote(batchNote)) continue;
         // Fail fast on corrupted vault notes before minutes of proving (F-03).
         await assertBowNoteIntegrity(testnetClient, sourcePool, batchNote);
@@ -1983,6 +2009,7 @@ export default function SwapToShieldPage() {
         multiScopes.push(bScope);
         multiSpent.push(BigInt(bProof.publicSignals[1]));
         multiNullifiers.push(bNull);
+        console.log(`[zk-batch] note ${batchIdx + 1}/${batch.length} proven in ${Math.round((Date.now() - batchT0) / 1000)}s`);
       }
       if (multiWithdrawals.length < 2) {
         throw new Error(
@@ -2923,13 +2950,16 @@ export default function SwapToShieldPage() {
 
         // Sync ASP root first if needed (label included so the server can
         // tell genuine inclusion need apart from redundant publishes).
-        try {
-          await fetch("/api/asp/sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: label.toString() }),
-          });
-        } catch {}
+      try {
+        await fetch("/api/asp/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: BigInt(bowNote.label).toString() }),
+          // Bounded: never hang the quote on a stalled sync call (failure
+          // falls through to the same path as a network error below).
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch {}
 
         setProverSteps((prev) => [
           prev[0],
@@ -4096,7 +4126,11 @@ export default function SwapToShieldPage() {
 
       <ZkProverModal
         isOpen={isProverOpen}
-        onClose={() => setIsProverOpen(false)}
+        onClose={() => {
+          // Signal long ZK runs (batch proving) to stop between notes.
+          zkCancelRef.current = true;
+          setIsProverOpen(false);
+        }}
         title={proverTitle}
         steps={proverSteps}
         txHash={proverTxHash}
