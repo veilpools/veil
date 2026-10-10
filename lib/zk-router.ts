@@ -35,11 +35,12 @@ import {
 
 export const TESTNET_ZK_ROUTER_CHAIN_ID = 46630;
 
-// Live router from deployments/zkrouter-46630.json (deployed, unwired until
-// this task). Same env-override pattern as lib/router-swap.ts.
+// Unified live router from deployments/zkrouter-direct-46630.json: single +
+// multi + direct flows in one contract, direct proven live on it twice.
+// Same env-override pattern as lib/router-swap.ts.
 export const TESTNET_ZK_ROUTER_ADDRESS =
   (process.env.NEXT_PUBLIC_TESTNET_VEIL_ZK_ROUTER as Address | undefined) ||
-  ("0x80b18d51fb6087b65cf8511b78b264d90fee585c" as Address);
+  ("0x9ccf3800cb6aa5754ec9ec5815e06f432df10635" as Address);
 
 // Fresh suite entrypoint (deployments/suite-v3-testnet-latest.json).
 export const TESTNET_ZK_ROUTER_ENTRYPOINT = TESTNET_BOW_V3_ENTRYPOINT;

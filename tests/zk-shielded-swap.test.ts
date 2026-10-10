@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseEther } from "viem";
 
-const SINGLE_ROUTER = "0x80b18d51fb6087b65cf8511b78b264d90fee585c";
+const SINGLE_ROUTER = "0x9ccf3800cb6aa5754ec9ec5815e06f432df10635";
 const MULTI_ROUTER = "0xc009197da4c4e7134ab8d8969d9442a5c8afb220";
 const ENTRYPOINT = "0xb68c3d25e5e9902363e8e10d5c0a471e65be8152";
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;

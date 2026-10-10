@@ -33,7 +33,7 @@ describe("direct flow builders (dust payout)", () => {
       quotedSwapOut: 100n,
       slippagePercent: 0.5,
     });
-    expect(args.recipient).toBe("0x80b18d51fb6087b65cf8511b78b264d90fee585c");
+    expect(args.recipient).toBe("0x9ccf3800cb6aa5754ec9ec5815e06f432df10635");
     expect(args.outputRecipient).toBe(USER);
     expect(args.minSwapOut).toBeGreaterThan(0n);
     expect(args.minSwapOut).toBeLessThanOrEqual(100n);

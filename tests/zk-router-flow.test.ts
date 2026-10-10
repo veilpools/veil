@@ -4,7 +4,7 @@ import { parseEther } from "viem";
 // TDD RED: lib/zk-router does not exist yet. These pins cover the brief:
 // quote-then-execute ordering, minSwapOut derivation, fail-closed mapping.
 
-const ZK_ROUTER = "0x80b18d51fb6087b65cf8511b78b264d90fee585c";
+const ZK_ROUTER = "0x9ccf3800cb6aa5754ec9ec5815e06f432df10635";
 const ENTRYPOINT = "0xb68c3d25e5e9902363e8e10d5c0a471e65be8152";
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;
 const ETH_ZERO = "0x0000000000000000000000000000000000000000" as const;
