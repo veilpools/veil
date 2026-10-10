@@ -16,10 +16,9 @@ export interface VaultPanelProps {
 /** Vault tab: local encrypted-note list with copy + withdraw shortcuts. */
 export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBackupNote, onWithdrawNote, onRemoveNote }) => {
   const [copiedCommitment, setCopiedCommitment] = useState<string | null>(null);
-  // Two-step remove: first click arms, second click removes. Guards against
-  // fat-finger loss (the encrypted backup lives separately, but re-adding
-  // needs a manual restore).
-  const [armedRemove, setArmedRemove] = useState<string | null>(null);
+  // Confirm-remove modal target. Removing only drops the LOCAL entry
+  // (onchain funds are untouched) — used for spent/duplicate notes.
+  const [confirmRemove, setConfirmRemove] = useState<AnyShieldedNote | null>(null);
 
   function handleCopyCommitment(text: string) {
     navigator.clipboard.writeText(text);
@@ -232,14 +231,7 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (armedRemove === note.nullifier) {
-                        setArmedRemove(null);
-                        onRemoveNote(note.nullifier);
-                      } else {
-                        setArmedRemove(note.nullifier);
-                      }
-                    }}
+                    onClick={() => setConfirmRemove(note)}
                     title="Remove a spent or duplicate note from this vault (back up first)"
                     aria-label={`Remove note ${index + 1} from vault`}
                     style={{
@@ -249,21 +241,105 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
                       padding: "5px 12px",
                       minHeight: "24px",
                       borderRadius: "var(--radius-sm)",
-                      backgroundColor: armedRemove === note.nullifier ? "rgba(180, 35, 24, 0.08)" : "transparent",
+                      backgroundColor: "transparent",
                       border: "1px solid var(--color-border)",
-                      color: armedRemove === note.nullifier ? "#b42318" : "var(--color-muted)",
+                      color: "var(--color-muted)",
                       fontSize: "12px",
                       fontWeight: 600,
                       cursor: "pointer",
                       transition: "all var(--duration-fast)",
                     }}
                   >
-                    <span>{armedRemove === note.nullifier ? "Confirm remove" : "Remove"}</span>
+                    <span>Remove</span>
                   </button>
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmRemove !== null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm note removal"
+          onClick={() => setConfirmRemove(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            backgroundColor: "rgba(26, 26, 26, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              backgroundColor: "#ffffff",
+              borderRadius: "var(--radius-lg)",
+              border: "1px solid var(--color-border-strong)",
+              boxShadow: "0 24px 64px -12px rgba(26, 26, 26, 0.25)",
+              padding: "var(--space-6)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div style={{ fontWeight: 700, color: "var(--color-text)", fontSize: "var(--text-body)" }}>
+              Remove this note from the vault?
+            </div>
+            <div style={{ fontSize: "var(--text-body-sm)", color: "var(--color-text)", fontFamily: "monospace" }}>
+              {formatNoteAmount(confirmRemove.denomination, confirmRemove.asset)} · {getNoteAssetSymbol(confirmRemove.asset)}
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--color-muted)", fontFamily: "monospace", lineHeight: 1.5 }}>
+              Only removes the LOCAL entry. Onchain funds are untouched. Only remove spent or duplicate notes — back up anything unspent first, or it can never be recovered.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(null)}
+                style={{
+                  padding: "8px 16px",
+                  minHeight: "36px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "transparent",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemoveNote(confirmRemove.nullifier);
+                  setConfirmRemove(null);
+                }}
+                style={{
+                  padding: "8px 16px",
+                  minHeight: "36px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "#b42318",
+                  border: "1px solid #b42318",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Remove note
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
