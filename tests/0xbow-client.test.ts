@@ -94,3 +94,39 @@ describe("bow VEIL relay params", () => {
     expect(ctx.pool.toLowerCase()).toBe(VEIL_BOW_POOL.toLowerCase());
   });
 });
+
+describe("bow ASP labels span all pools (entrypoint-global set)", () => {
+  it("unions + dedups labels across pools so multi-pool state never mismatches", async () => {
+    const { encodeAbiParameters, keccak256, toHex } = await import("viem");
+    const { fetchBowAspLabelsAllPools } = await import("../lib/0xbow-client");
+    const { buildBowAssociationSet } = await import("../lib/0xbow-association");
+    const sig = keccak256(toHex("Deposited(address,uint256,uint256,uint256,uint256)"));
+    const padAddr = (a: string) => `0x${a.slice(2).padStart(64, "0")}`;
+    // Decoded-log shape (viem auto-decodes when `event` is passed to getLogs).
+    const mkLog = (pool: string, label: bigint, i: number) => ({
+      address: pool,
+      args: { _commitment: 1000n + label, _label: label },
+      blockNumber: 100n,
+      transactionIndex: 0,
+      logIndex: i,
+    });
+    const poolA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const poolB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const logsByPool: Record<string, object[]> = {
+      [poolA.toLowerCase()]: [mkLog(poolA, 7n, 0)],
+      [poolB.toLowerCase()]: [mkLog(poolB, 7n, 0), mkLog(poolB, 9n, 1)],
+    };
+    const mockClient = {
+      // Must exceed fetchBowPoolEvents' default fromBlock (deployment block).
+      getBlockNumber: async () => 200000000n,
+      getLogs: async (args: { address: string }) =>
+        logsByPool[(args.address as string).toLowerCase()] ?? [],
+    };
+    const labels = await fetchBowAspLabelsAllPools(mockClient as never, [poolA as `0x${string}`, poolB as `0x${string}`]);
+    expect(labels.map(String).sort()).toEqual(["7", "9"]);
+    // single-pool subset must NOT equal the union root (the exact bug this prevents)
+    const subset = buildBowAssociationSet([7n]);
+    const full = buildBowAssociationSet(labels);
+    expect(full.root).not.toBe(subset.root);
+  });
+});

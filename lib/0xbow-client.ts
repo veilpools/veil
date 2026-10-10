@@ -400,6 +400,25 @@ export async function fetchBowPoolEvents(
   };
 }
 
+/**
+ * Union of deposit labels across ALL 0xbow pools. The entrypoint keeps ONE
+ * global association set (latestRoot covers every pool), so an ASP set built
+ * from a single pool permanently mismatches once a second pool holds
+ * deposits. State trees stay per-pool; only the ASP label set is global.
+ */
+export async function fetchBowAspLabelsAllPools(
+  client: PublicClient,
+  poolAddresses: readonly Address[],
+  fromBlock?: bigint
+): Promise<bigint[]> {
+  const seen = new Set<string>();
+  for (const pool of poolAddresses) {
+    const { labels } = await fetchBowPoolEvents(client, pool, fromBlock);
+    for (const lbl of labels) seen.add(lbl.toString());
+  }
+  return [...seen].map(BigInt);
+}
+
 export async function fetchBowAspSet(
   client: PublicClient,
   entrypointAddress: Address = TESTNET_0XBOW.entrypointProxy,

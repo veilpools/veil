@@ -111,6 +111,7 @@ import {
   createTestnetBowPublicClient,
   buildBowRelayContext,
   buildBowStateTree,
+  fetchBowAspLabelsAllPools,
   fetchBowPoolEvents,
   fetchBowAspSet,
   proveBowWithdrawal,
@@ -1056,6 +1057,9 @@ export default function SwapToShieldPage() {
         );
       }
       let stateTree = buildBowStateTree(orderedCommitments);
+      // ASP is entrypoint-global: union labels across BOTH pools, or the set
+      // permanently mismatches once a second pool holds deposits.
+      labels = await fetchBowAspLabelsAllPools(testnetClient, [TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL]);
       let aspSet = buildBowAssociationSet(labels);
       if (!aspSet.labels.includes(label)) {
         throw new Error("Deposit label not found in Association Set. Try syncing ASP.");
@@ -1084,7 +1088,7 @@ export default function SwapToShieldPage() {
         }
         const refreshed = await fetchBowPoolEvents(testnetClient, sourcePool);
         orderedCommitments = refreshed.orderedCommitments;
-        labels = refreshed.labels;
+        labels = await fetchBowAspLabelsAllPools(testnetClient, [TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL]);
         if (!orderedCommitments.includes(commitmentHash)) {
           throw new Error("Deposit commitment not found in onchain state tree after ASP re-sync.");
         }
@@ -1958,11 +1962,13 @@ export default function SwapToShieldPage() {
           prev[3],
         ]);
 
-        // Fetch pool events to build State Tree and Association Set
-        let { orderedCommitments, labels } = await fetchBowPoolEvents(
+        // Fetch pool events to build State Tree and Association Set.
+        // State stays per-pool; ASP is entrypoint-global (union both pools).
+        let { orderedCommitments } = await fetchBowPoolEvents(
           testnetClient,
           bowRelayContext.pool
         );
+        let labels = await fetchBowAspLabelsAllPools(testnetClient, [TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL]);
 
         if (!orderedCommitments.includes(commitmentHash)) {
           throw new Error(
@@ -2005,7 +2011,7 @@ export default function SwapToShieldPage() {
           }
           const refreshed = await fetchBowPoolEvents(testnetClient, bowRelayContext.pool);
           orderedCommitments = refreshed.orderedCommitments;
-          labels = refreshed.labels;
+          labels = await fetchBowAspLabelsAllPools(testnetClient, [TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL]);
           if (!orderedCommitments.includes(commitmentHash)) {
             throw new Error(
               "Deposit commitment not found in onchain state tree after ASP re-sync."
