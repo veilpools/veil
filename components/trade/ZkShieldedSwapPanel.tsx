@@ -29,6 +29,8 @@ export interface ZkShieldedSwapPanelProps {
   txHash: string | null;
   onQuote: () => void;
   onExecute: () => void;
+  payoutAddress: string;
+  onPayoutAddressChange: (value: string) => void;
 }
 
 /** Shielded Swap tab: atomic relay -> swap -> deposit via the ZK routers. */
@@ -53,6 +55,8 @@ export const ZkShieldedSwapPanel: React.FC<ZkShieldedSwapPanelProps> = ({
   txHash,
   onQuote,
   onExecute,
+  payoutAddress,
+  onPayoutAddressChange,
 }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
@@ -187,6 +191,50 @@ export const ZkShieldedSwapPanel: React.FC<ZkShieldedSwapPanelProps> = ({
           </span>
         )}
       </div>
+      {flowKind === "direct" && (
+        <div
+          style={{
+            padding: "var(--space-3) var(--space-4)",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(26, 26, 26, 0.025)",
+            border: "1px solid var(--color-border)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+          }}
+        >
+          <label
+            htmlFor="direct-payout-address"
+            style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}
+          >
+            Payout address (receives the swap output directly)
+          </label>
+          <input
+            id="direct-payout-address"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="0x... (your clean wallet address)"
+            value={payoutAddress}
+            onChange={(e) => onPayoutAddressChange(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "11px 14px",
+              borderRadius: "var(--radius-md)",
+              backgroundColor: "#ffffff",
+              border: "1px solid var(--color-border-strong)",
+              color: "var(--color-text)",
+              fontSize: "16px",
+              fontFamily: "monospace",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          <span style={{ fontSize: "11px", color: "var(--color-muted)" }}>
+            Below-denomination output cannot become a note — it lands here visibly onchain. Use a fresh address.
+          </span>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: "var(--space-2)" }}>
         <button

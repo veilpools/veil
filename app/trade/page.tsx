@@ -4202,6 +4202,8 @@ export default function SwapToShieldPage() {
                 onExecute={() => {
                   void handleZkShieldedSwapExecute();
                 }}
+                payoutAddress={cleanRecipient}
+                onPayoutAddressChange={setCleanRecipient}
               />
             ) : (
               <div
