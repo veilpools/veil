@@ -135,6 +135,7 @@ import {
 import { ZkSwapToShieldPanel } from "../../components/trade/ZkSwapToShieldPanel";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
 import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
+import { hashPrecommitment as bowHashPrecommitment } from "@0xbow/privacy-pools-core-sdk";
 import { generateMnemonic, english } from "viem/accounts";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
@@ -1920,6 +1921,37 @@ export default function SwapToShieldPage() {
         const nullifier = BigInt(bowNote.nullifier);
         const secret = BigInt(bowNote.secret);
         const commitmentHash = BigInt(bowNote.commitmentHash);
+
+        // Note integrity check (fail fast, before minutes of proving):
+        // the saved secrets must reproduce the onchain deposit
+        // precommitment. A mismatch means the vault note is corrupted
+        // (mixed-up backup/restore) and no proof can ever verify — funds
+        // stay locked, but no time/gas is wasted discovering it.
+        const depositLogs = await testnetClient.getContractEvents({
+          address: bowRelayContext.pool,
+          abi: parseAbi([
+            "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
+          ]),
+          eventName: "Deposited",
+          fromBlock: BigInt(bowNote.blockNumber),
+          toBlock: BigInt(bowNote.blockNumber),
+        });
+        const ownDeposit = depositLogs.find(
+          (l) => l.transactionHash.toLowerCase() === (bowNote.txHash as string).toLowerCase()
+        );
+        if (!ownDeposit) {
+          throw new Error(
+            "Deposit event not found for this note's transaction. The note may belong to a different pool. No transaction was sent."
+          );
+        }
+        const localPrecommitment = BigInt(
+          bowHashPrecommitment(nullifier as never, secret as never) as bigint | number | string
+        );
+        if (localPrecommitment !== BigInt((ownDeposit.args as { _precommitmentHash: bigint })._precommitmentHash)) {
+          throw new Error(
+            "Saved note secrets do not match the onchain deposit (precommitment mismatch). This note is corrupted and can never produce a valid proof — do not retry proving. Deposit fresh and back it up. No transaction was sent."
+          );
+        }
 
         // Scope live re-check (deep-audit S10): the note's scope must still
         // match the pool's, or minutes of proving + gas burn on a stale proof.
