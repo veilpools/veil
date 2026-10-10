@@ -70,7 +70,14 @@ export async function POST(req: NextRequest) {
 
   // Fast path: dedicated testnet endpoint (QuickNode) skips the IP bypass.
   // Guards above (chain/method/body/rate-limit) still apply.
-  if (chainId === 46630 && TESTNET_DIRECT_RPC) {
+  // Exception: eth_getLogs stays on the IP bypass — metered upstreams cap
+  // log ranges (discover-tier allows only a tiny window) while the bypass
+  // serves the 40k-block chunks the client uses.
+  const calls = Array.isArray(payload) ? payload : [payload];
+  const wantsLogs = calls.some(
+    (c) => typeof c === "object" && c !== null && (c as Record<string, unknown>).method === "eth_getLogs"
+  );
+  if (chainId === 46630 && TESTNET_DIRECT_RPC && !wantsLogs) {
     try {
       const upstream = await fetch(TESTNET_DIRECT_RPC, {
         method: "POST",
