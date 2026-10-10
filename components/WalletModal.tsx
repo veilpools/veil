@@ -135,6 +135,18 @@ export function WalletModal({
           Select an installed web3 wallet extension or mobile connector to interact with Robinhood privacy pools.
         </p>
 
+        <p
+          style={{
+            fontSize: "11px",
+            fontFamily: "monospace",
+            color: "var(--color-faint)",
+            margin: "0 0 var(--space-4)",
+            lineHeight: "1.5",
+          }}
+        >
+          Connection failing? Keep only one wallet extension enabled (disable the rest in chrome://extensions), then try again.
+        </p>
+
         {/* Wallet list */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {EVM_WALLETS.map((w) => {
