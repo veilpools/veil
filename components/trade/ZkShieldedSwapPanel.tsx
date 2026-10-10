@@ -191,10 +191,9 @@ export const ZkShieldedSwapPanel: React.FC<ZkShieldedSwapPanelProps> = ({
           </span>
         )}
       </div>
-      {flowKind === "direct" && (
-        <div
-          style={{
-            padding: "var(--space-3) var(--space-4)",
+      <div
+        style={{
+          padding: "var(--space-3) var(--space-4)",
             borderRadius: "var(--radius-sm)",
             backgroundColor: "rgba(26, 26, 26, 0.025)",
             border: "1px solid var(--color-border)",
@@ -231,10 +230,9 @@ export const ZkShieldedSwapPanel: React.FC<ZkShieldedSwapPanelProps> = ({
             }}
           />
           <span style={{ fontSize: "11px", color: "var(--color-muted)" }}>
-            Below-denomination output cannot become a note — it lands here visibly onchain. Use a fresh address.
+            Only used when the output is too small for a note (direct payout) — ignored otherwise. Use a fresh address.
           </span>
         </div>
-      )}
 
       <div style={{ display: "flex", gap: "var(--space-2)" }}>
         <button
