@@ -11,9 +11,10 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onRestoreNote?: (note: AnyShieldedNote) => void;
+  onExported?: (nullifier: string) => void;
 }
 
-export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: Props) {
+export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote, onExported }: Props) {
   const [mode, setMode] = useState<"export" | "import">("export");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -66,6 +67,8 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote }: 
     navigator.clipboard.writeText(encryptedPayload);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    // The user demonstrably took the payload — record the backup.
+    if (note && onExported) onExported(note.nullifier);
   }
 
   return (

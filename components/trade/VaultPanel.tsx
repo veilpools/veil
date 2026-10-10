@@ -142,7 +142,7 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
                   const commitmentStr = isBowNote(note) ? note.commitmentHash : note.commitment;
                   return (
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "var(--color-muted)" }}>Commitment:</span>
+                      <span style={{ color: "var(--color-muted)" }}>Commitment (sealed deposit):</span>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
                           {commitmentStr.slice(0, 12)}...{commitmentStr.slice(-8)}
@@ -175,7 +175,7 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
                 })()}
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "var(--color-muted)" }}>Nullifier:</span>
+                  <span style={{ color: "var(--color-muted)" }}>Nullifier (spend key):</span>
                   <span style={{ color: "var(--color-text)", fontWeight: 600 }}>
                     {note.nullifier.slice(0, 12)}...{note.nullifier.slice(-8)}
                   </span>
@@ -184,7 +184,7 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
                 <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>
-                  Storage: Encrypted Local CSPRNG
+                  Storage: Encrypted on this device
                 </span>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button

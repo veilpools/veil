@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { isAddress } from "viem";
 import { Check, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { APP_CHAIN_ID } from "../../lib/chains";
@@ -18,6 +18,8 @@ export interface WithdrawPanelProps {
   onRecipientChange: (value: string) => void;
   isExecuting: boolean;
   onWithdraw: () => void;
+  noteBackedUp: boolean;
+  onBackupNow: () => void;
 }
 
 /** Withdraw tab: note picker, clean recipient, unlinkable-withdraw CTA. */
@@ -31,10 +33,21 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
   onRecipientChange,
   isExecuting,
   onWithdraw,
+  noteBackedUp,
+  onBackupNow,
 }) => {
   const recipientInvalid = cleanRecipient.length > 0 && !isAddress(cleanRecipient);
+  // Explicit ack when the note has no recorded backup: withdrawing without
+  // one risks permanent loss if anything goes wrong downstream.
+  const [ackNoBackup, setAckNoBackup] = useState(false);
+  const activeKey = activeNote ? activeNote.nullifier : "none";
+  useEffect(() => {
+    setAckNoBackup(false);
+  }, [activeKey]);
+  const needsBackupAck = !noteBackedUp;
   const ctaDisabled =
-    isExecuting || !cleanRecipient || !isAddress(cleanRecipient) || notes.length === 0;
+    isExecuting || !cleanRecipient || !isAddress(cleanRecipient) || notes.length === 0 ||
+    (needsBackupAck && !ackNoBackup);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
@@ -291,10 +304,55 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
         </span>
       </div>
 
+      {needsBackupAck && notes.length > 0 && (
+        <div
+          role="alert"
+          style={{
+            padding: "10px 12px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(180, 35, 24, 0.06)",
+            border: "1px solid rgba(180, 35, 24, 0.3)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <span style={{ fontSize: "12px", color: "#b42318", fontWeight: 600, lineHeight: 1.5 }}>
+            This note has no recorded backup. Withdrawing without one risks permanent loss.
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={onBackupNow}
+              style={{
+                padding: "6px 12px",
+                minHeight: "28px",
+                borderRadius: "var(--radius-sm)",
+                backgroundColor: "transparent",
+                border: "1px solid var(--color-border-strong)",
+                color: "var(--color-text)",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Back up now
+            </button>
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text)", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={ackNoBackup}
+                onChange={(e) => setAckNoBackup(e.target.checked)}
+              />
+              I backed it up elsewhere, proceed
+            </label>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={onWithdraw}
-        disabled={ctaDisabled}
-        className="group active:scale-[0.99] transition-all"
+        disabled={ctaDisabled}        className="group active:scale-[0.99] transition-all"
         style={{
           width: "100%",
           display: "inline-flex",

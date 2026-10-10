@@ -149,6 +149,10 @@ import {
 import { ZkSwapToShieldPanel } from "../../components/trade/ZkSwapToShieldPanel";
 import { ZkShieldedSwapPanel } from "../../components/trade/ZkShieldedSwapPanel";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
+import {
+  loadBackedUpNullifiers,
+  markNullifierBackedUp,
+} from "../../lib/backup-track";
 import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
 import { hashPrecommitment as bowHashPrecommitment, getCommitment as bowGetCommitment } from "@0xbow/privacy-pools-core-sdk";
 import { generateMnemonic, english } from "viem/accounts";
@@ -298,6 +302,18 @@ export default function SwapToShieldPage() {
   const [activeTab, setActiveTab] = useState<"buy_and_shield" | "shielded_swap" | "withdraw" | "vault">("buy_and_shield");
   const [notes, setNotes] = useState<AnyShieldedNote[]>([]);
   const [selectedNote, setSelectedNote] = useState<AnyShieldedNote | null>(null);
+  // Backup tracking (withdraw gate): nullifiers the user demonstrably backed
+  // up (export copy) or restored from file. Fresh deposits start unmarked.
+  const [backedUpNullifiers, setBackedUpNullifiers] = useState<Set<string>>(() =>
+    loadBackedUpNullifiers(typeof window !== "undefined" ? window.localStorage : undefined)
+  );
+  function markBackedUp(nullifier: string) {
+    const next = markNullifierBackedUp(
+      typeof window !== "undefined" ? window.localStorage : undefined,
+      nullifier
+    );
+    setBackedUpNullifiers(new Set(next));
+  }
   // Root-audit F3: the backup modal must encrypt the note the user asked
   // about (vault row or prover download), never a stale last-deposited note.
   const [backupNote, setBackupNote] = useState<AnyShieldedNote | null>(null);
@@ -1061,12 +1077,13 @@ export default function SwapToShieldPage() {
     return [
       {
         title: "1. Client-Side Groth16 ZK-SNARK Proving",
-        detail: "Executing snarkjs Groth16 prover in browser against onchain State & ASP Merkle trees",
+        detail:
+          "Executing snarkjs Groth16 prover in browser against onchain State & ASP Merkle trees — proving you own the note without revealing which one (takes minutes, leave this tab open)",
         status: "running",
       },
       {
         title: "2. Atomic Relay Leg (relay-in-tx)",
-        detail: "Relay exit lands in the ZK router inside executeFullZkFlow",
+        detail: "Relay exit lands in the ZK router inside executeFullZkFlow — your funds move straight into the swap, no stop in between",
         status: "pending",
       },
       {
@@ -2836,8 +2853,9 @@ export default function SwapToShieldPage() {
           status: "pending",
         },
         {
-          title: "3. Client-Side Groth16 ZK-SNARK Proving",
-          detail: "Executing snarkjs Groth16 prover in browser against onchain State & ASP Merkle trees",
+        title: "3. Client-Side Groth16 ZK-SNARK Proving",
+        detail:
+          "Executing snarkjs Groth16 prover in browser against onchain State & ASP Merkle trees — proving you own the note without revealing which one (takes minutes, leave this tab open)",
           status: "pending",
         },
         {
@@ -4050,6 +4068,13 @@ export default function SwapToShieldPage() {
               onRecipientChange={setCleanRecipient}
               isExecuting={isExecuting}
               onWithdraw={handleWithdraw}
+              noteBackedUp={activeNoteItem ? backedUpNullifiers.has(activeNoteItem.nullifier) : true}
+              onBackupNow={() => {
+                if (activeNoteItem) {
+                  setBackupNote(activeNoteItem);
+                  setIsBackupOpen(true);
+                }
+              }}
             />
           )}
           {/* Withdraw tab lives in components/trade/WithdrawPanel.tsx */}
@@ -4245,7 +4270,12 @@ export default function SwapToShieldPage() {
         note={backupNote}
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
-        onRestoreNote={(restored) => saveNoteLocally(restored)}
+        onRestoreNote={(restored) => {
+          // A restored note arrives WITH its backup file by definition.
+          markBackedUp(restored.nullifier);
+          saveNoteLocally(restored);
+        }}
+        onExported={(nullifier) => markBackedUp(nullifier)}
       />
 
       <WalletModal
