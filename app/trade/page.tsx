@@ -1671,6 +1671,10 @@ export default function SwapToShieldPage() {
     setProverCommitted(false);
     setProverSteps(zkProverSteps());
     setIsProverOpen(true);
+    // Stage telemetry (no secrets): pinpoints hangs between quote phases.
+    const zkT0 = Date.now();
+    const zkStage = (s: string) => console.log(`[zk-quote] ${s} (+${Math.round((Date.now() - zkT0) / 1000)}s)`);
+    zkStage("modal-open");
 
     try {
       txInFlight.current += 1;
@@ -1707,6 +1711,8 @@ export default function SwapToShieldPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chainId: TESTNET_CHAIN_ID, label: BigInt(bowNote.label).toString() }),
+          // Bounded: never hang the quote on a stalled sync call.
+          signal: AbortSignal.timeout(30000),
         });
       } catch {}
 
@@ -1785,6 +1791,7 @@ export default function SwapToShieldPage() {
         txHash: bowNote.txHash as `0x${string}`,
       };
       const secretPair = accountService.createWithdrawalSecrets(commitmentObj);
+      zkStage("inputs-ready: proving starts (minutes, leave tab open)");
       const withdrawalProof = await sdk.proveWithdrawal(commitmentObj, {
         withdrawalAmount: denomination,
         stateMerkleProof,
@@ -1797,8 +1804,10 @@ export default function SwapToShieldPage() {
         newNullifier: secretPair.nullifier,
         newSecret: secretPair.secret,
       });
+      zkStage("proving-done: verifying locally");
       const isValid = await sdk.verifyWithdrawal(withdrawalProof);
       if (!isValid) throw new Error("Local verification of Groth16 withdrawal proof failed.");
+      zkStage("verify-ok: bracketing swap output");
 
       setProverSteps((prev) => [
         { ...prev[0], status: "completed" },
@@ -1845,11 +1854,13 @@ export default function SwapToShieldPage() {
       // flow is tried first; only InsufficientOutputForDenomination falls
       // through to the batched multi-note flow.
       try {
+        zkStage("bracketing: probing live swap output (free sims)");
         const quoted = await quoteAndBuildFullZkFlow(testnetClient, {
           account: connectedAddress,
           base: singleBase,
           slippagePercent: slip,
         });
+        zkStage(`quoted: ${quoted.quotedSwapOut.toString()} (${quoted.probes} probes)`);
         const spentNullifier = BigInt(withdrawalProof.publicSignals[1]);
         setZkBundle({
           ...singleBase,
