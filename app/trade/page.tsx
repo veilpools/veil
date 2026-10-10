@@ -563,8 +563,11 @@ export default function SwapToShieldPage() {
   // Live VEIL minimum for honest 0xbow deposits: read from
   // Entrypoint.assetConfig every time the tab, wallet or asset changes.
   // Fail closed (null minimum disables VEIL execution, never a guess).
+  // Runs on both tabs that need the VEIL minimum (buy_and_shield deposits
+  // AND shielded_swap destinations) — gating it to one tab left the other
+  // stuck on "loading live minimum" forever with Execute disabled.
   useEffect(() => {
-    if (activeTab !== "buy_and_shield" || bowDepositAsset !== "VEIL") return;
+    if ((activeTab !== "buy_and_shield" && activeTab !== "shielded_swap") || (activeTab === "buy_and_shield" && bowDepositAsset !== "VEIL")) return;
     let cancelled = false;
     (async () => {
       try {
