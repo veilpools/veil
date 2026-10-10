@@ -1709,8 +1709,9 @@ export default function SwapToShieldPage() {
     const { withdrawAsset, depositAsset, zeroForOne } = bound;
 
     // Viability pre-check (seconds, before minutes of proving): estimate the
-    // swap output from live slot0. When even the optimistic estimate cannot
-    // fund the fixed note, proving would only end in InsufficientOutput.
+    // swap output from live slot0. Only a ZERO estimate fails fast (dead or
+    // drained pool) — below-note outputs fall through to multi, then to the
+    // direct-payout mode, instead of reverting.
     try {
       const viabilityClient = createTestnetBowPublicClient();
       const slot0 = await viabilityClient.readContract({
@@ -1724,11 +1725,9 @@ export default function SwapToShieldPage() {
         amountIn: BigInt(bowNote.denomination),
         zeroForOne,
       });
-      if (estimated < depositValue) {
+      if (estimated <= 0n) {
         setFlowError(
-          zeroForOne
-            ? "Live price cannot fund a 0.001 VEIL note from 0.001 ETH right now — the pool is short on VEIL. Try again after liquidity returns. Nothing was simulated."
-            : "A 0.001 VEIL note cannot fund a 0.001 ETH note at live prices (fixed denominations both sides) — no batch size clears it. Swap ETH notes instead, or withdraw this note. Nothing was simulated."
+          "Live price shows zero swap output — the pool has no liquidity on this side right now. Try again after liquidity returns. Nothing was simulated."
         );
         return;
       }
