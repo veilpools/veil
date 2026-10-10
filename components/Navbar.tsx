@@ -150,9 +150,9 @@ export function Navbar() {
             <div
               style={{
                 width: "1px",
-                height: "18px",
+                height: "24px",
                 backgroundColor: "var(--color-border)",
-                margin: "0 4px",
+                margin: "0 6px",
               }}
             />
 
