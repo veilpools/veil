@@ -73,10 +73,10 @@ export const ContractsSecuritySection: React.FC = () => {
     },
     {
       name: "VeilTreasury",
-      role: "Autonomous Burn Engine",
+      role: "Protocol Treasury & Burn Engine",
       address: "0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34",
       category: "core",
-      description: "Protocol treasury collecting VeilHook fees and Pons creator fees; executes autonomous on-chain buybacks and burns.",
+      description: "Protocol treasury collecting VeilHook fees and creator fees; accumulates funds and executes on-chain token burns.",
       source: "contracts/VeilTreasury.sol",
       explorerUrl: "https://explorer.mainnet.chain.robinhood.com/address/0x8cd39f9195bd00b193a164f0790f3fc0dc4f3b34",
     },
@@ -94,7 +94,7 @@ export const ContractsSecuritySection: React.FC = () => {
       role: "Legacy Mock Verifier (old notes only)",
       address: "0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
       category: "core",
-      description: "Provisional ZK proof verifier for old notes only, validating withdrawal knowledge and clean association set membership. Groth16 serves the live 0xbow paths.",
+      description: "Provisional ZK proof verifier for old notes only, validating withdrawal knowledge and association set membership. Groth16 serves the live 0xbow paths.",
       source: "contracts/ShieldedVerifierMock.sol",
       explorerUrl: "https://explorer.mainnet.chain.robinhood.com/address/0x797e2aa1f3225ab38bfc6441a3f4b44e95158cda",
     },
@@ -160,7 +160,7 @@ export const ContractsSecuritySection: React.FC = () => {
     { id: 3, scenario: "Double withdrawal of same note", detail: "Rejected automatically with NullifierAlreadySpent" },
     { id: 4, scenario: "Relayer tampers minOut / recipient / fee", detail: "Groth16 proof fails on the 0xbow path; legacy router path relies on invariant + event asserts (provisional verifier, old notes only)" },
     { id: 5, scenario: "Shielded swap A -> B", detail: "Shielded B balance increases, zero public wallet linkage" },
-    { id: 6, scenario: "Relayer offline / unavailable", detail: "Permissionless self-relay fallback functions seamlessly" },
+    { id: 6, scenario: "Browser wallet submission", detail: "Permissionless client-side self-relay executes directly without hosted intermediaries" },
     { id: 7, scenario: "Unregistered address in gated pool", detail: "Swap rejected with GatingActiveUserNotAttested" },
     { id: 8, scenario: "Deposit exceeds 10 ETH pool cap", detail: "Rejected by contract with PoolCapExceeded" },
     { id: 9, scenario: "Guardian pauses deposits", detail: "Deposits halt at the contract; withdraw path has no pause switch (live drill pending)" },
@@ -176,7 +176,7 @@ export const ContractsSecuritySection: React.FC = () => {
         <SectionHeader
           kicker="Security & Verification"
           title="Verified on-chain. Non-custodial by law of math."
-          sub="All smart contracts are deployed on Robinhood Chain with audited zero-knowledge circuits and published multi-round root audits. Parameters, state roots, and non-custodial invariants are publicly verifiable onchain."
+          sub="Smart contracts are deployed on Robinhood Chain built on verified 0xbow Groth16 zero-knowledge circuits and rigorous internal invariant verification. Parameters, state roots, and non-custodial invariants are publicly verifiable onchain."
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />
@@ -395,7 +395,7 @@ export const ContractsSecuritySection: React.FC = () => {
                   lineHeight: 1.2,
                 }}
               >
-                Clean Association Proof
+                Association Set Membership (ASP)
               </span>
             </div>
             <p
@@ -407,7 +407,7 @@ export const ContractsSecuritySection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Every withdrawal requires a zero-knowledge membership proof verifying that the deposit originates from a compliant, non-illicit association set verified on IPFS. Sanctions contagion: zero.
+              Every withdrawal provides a zero-knowledge membership proof verifying note inclusion in the published association set on IPFS, decoupling depositor address from recipient.
             </p>
           </div>
         </RevealBox>
@@ -466,7 +466,7 @@ export const ContractsSecuritySection: React.FC = () => {
                   fontWeight: 600,
                 }}
               >
-                Association Set &amp; Compliance Proofs
+                Association Set Architecture (ASP)
               </h3>
               <p
                 style={{
@@ -478,7 +478,7 @@ export const ContractsSecuritySection: React.FC = () => {
                   maxWidth: "68ch",
                 }}
               >
-                Veil decouples execution privacy from legacy mixers. Unlike mixers that pool tainted and honest capital together, Veil enforces clean Association Set Provider (ASP) proofs. Sanctions contagion is mathematically eliminated at the boundary.
+                Veil implements Association Set Provider (ASP) proofs where depositors self-attest into the Merkle tree published to IPFS. This enables verifiable set membership while preserving decoupled execution privacy.
               </p>
             </div>
 
@@ -517,9 +517,9 @@ export const ContractsSecuritySection: React.FC = () => {
               </div>
 
               <div style={{ padding: "var(--space-3) var(--space-4)", background: "var(--color-surface)", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-hairline)" }}>
-                <span style={{ fontFamily: "monospace", fontSize: "11px", color: "var(--color-muted)", textTransform: "uppercase" }}>Sanctions Contagion</span>
+                <span style={{ fontFamily: "monospace", fontSize: "11px", color: "var(--color-muted)", textTransform: "uppercase" }}>Attestation Policy</span>
                 <div style={{ fontFamily: "var(--font-headline)", fontSize: "var(--text-h4)", color: "var(--color-accent)", marginTop: "2px", fontWeight: 600 }}>
-                  <CountUp value="0%" /> Contagion
+                  Open Self-Attest
                 </div>
               </div>
             </div>

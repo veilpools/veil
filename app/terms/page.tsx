@@ -116,7 +116,7 @@ export default function TermsPage() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ color: "var(--color-accent)", fontWeight: 700 }}>§3</span>
-                <span>Clean Association Sets</span>
+                <span>Association Set Proofs (ASP)</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ color: "var(--color-accent)", fontWeight: 700 }}>§4</span>
@@ -187,10 +187,10 @@ export default function TermsPage() {
 
           <section>
             <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", marginBottom: "var(--space-2)", color: "var(--color-text)" }}>
-              3. Regulatory Compliance &amp; Clean Association Sets
+              3. Association Set Provider (ASP) Architecture &amp; User Attestation
             </h2>
             <p style={{ color: "var(--color-muted)", lineHeight: 1.6, fontSize: "var(--text-body)" }}>
-              Veil incorporates cryptographic association sets to verify that assets originating from known exploit or sanctioned vectors are partitioned out of clean withdrawal sets. Users are responsible for complying with applicable local laws and regulations governing digital asset transactions.
+              Veil incorporates zero-knowledge Association Set Provider (ASP) proofs allowing depositors to prove membership in published deposit sets. Under the protocol&apos;s open self-attestation architecture, attestations are generated permissionlessly on the client side without centralized surveillance or custodial screening. Users remain solely responsible for complying with applicable local laws and regulations governing digital asset transactions.
             </p>
           </section>
 

@@ -14,8 +14,8 @@ const faqItems: FaqItem[] = [
       a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is provisional for old notes only; Groth16 serves the live 0xbow paths.",
   },
   {
-    q: "Can MEV bots or sandwich searchers front-run my swap?",
-    a: "No. With Swap-to-Shield and Shielded Swaps, your order details and commitment never enter the public mempool as an unshielded trade. Swaps are settled atomically via our non-custodial Uniswap v4 hook, eliminating sandwich opportunities completely.",
+    q: "How does Veil protect swaps from MEV and front-running?",
+    a: "With Swap-to-Shield, swaps settle atomically through the Uniswap v4 hook directly into shielded notes with strict client-side minOut slippage bounds, protecting traders from typical mempool front-running.",
   },
   {
     q: "What chains are supported?",

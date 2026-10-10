@@ -260,10 +260,10 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
             htmlFor="clean-recipient"
             style={{ fontSize: "var(--text-caption)", fontWeight: 600, color: "var(--color-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}
           >
-            Clean Recipient Address (0 Linkage)
+            Destination Recipient Address (Decoupled)
           </label>
           <span style={{ fontSize: "10px", color: "var(--color-muted)", fontFamily: "monospace", fontWeight: 500 }}>
-            Relayer Dispatched
+            Client Self-Relay
           </span>
         </div>
         <input
@@ -373,7 +373,7 @@ export const WithdrawPanel: React.FC<WithdrawPanelProps> = ({
           transition: "all var(--duration-fast)",
         }}
       >
-        <span>{isExecuting ? "Synthesizing Proof & Dispatched..." : "Prove & Withdraw Unlinkable"}</span>
+        <span>{isExecuting ? "Synthesizing Proof & Broadcasting..." : "Prove & Withdraw via Self-Relay"}</span>
       </button>
     </div>
   );

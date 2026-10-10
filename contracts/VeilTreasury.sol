@@ -10,7 +10,7 @@ interface IBurnableToken {
 
 /// @title VeilTreasury
 /// @notice Dedicated protocol treasury collecting fees from VeilHook and Pons creator fees.
-/// Executes autonomous buybacks and burns of the Veil token to reduce circulating supply.
+/// Holds protocol fee reserves and executes burns of Veil tokens to reduce circulating supply.
 contract VeilTreasury {
     using SafeERC20 for IERC20;
 

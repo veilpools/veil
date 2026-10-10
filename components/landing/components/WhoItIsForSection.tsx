@@ -98,7 +98,7 @@ export const WhoItIsForSection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Prevent MEV bots, sandwich searchers, and copy-traders from front-running your entries and draining your alpha before execution.
+              Mitigate predatory sandwich attacks and copy-trading surveillance through shielded pool execution and atomic hook slippage limits.
             </div>
           </div>
         </div>

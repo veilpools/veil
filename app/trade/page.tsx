@@ -4368,7 +4368,7 @@ export default function SwapToShieldPage() {
                 </span>
                 <span style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
                   <strong style={{ color: "var(--color-text)", display: "block" }}>Association Set Provider (ASP) Attestation</strong>
-                  Poseidon zero-knowledge proofs prove clean origin against sanction sets without revealing depositor address or transaction details.
+                  Poseidon zero-knowledge proofs prove inclusion in the published association set without revealing depositor address or transaction details.
                 </span>
               </div>
             </div>

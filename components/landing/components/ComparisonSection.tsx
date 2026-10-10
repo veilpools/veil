@@ -18,7 +18,7 @@ const rows: ComparisonRow[] = [
   {
     metric: "MEV vulnerability",
     publicPool: "Guaranteed sandwich on size trades",
-    veil: "Eliminated by design",
+    veil: "Protected via slippage bounds",
   },
   {
     metric: "Liquidity depth",
@@ -28,7 +28,7 @@ const rows: ComparisonRow[] = [
   {
     metric: "Wallet linkability",
     publicPool: "Permanent on public explorer",
-    veil: "Zero link via relayers",
+    veil: "Decoupled via client self-relay",
   },
   {
     metric: "Asset custody",
@@ -391,7 +391,7 @@ export const ComparisonSection: React.FC = () => {
                     color: "var(--color-text)",
                   }}
                 >
-                  Veil Zero-Trace Execution
+                  Veil Decoupled Execution
                 </h3>
                 <p
                   style={{
@@ -402,7 +402,7 @@ export const ComparisonSection: React.FC = () => {
                     lineHeight: "var(--leading-body-sm)",
                   }}
                 >
-                  Orders settle atomically inside Uniswap v4 pools via beforeSwap hooks with zero protocol custody and zero link to deposit.
+                  Orders settle atomically inside Uniswap v4 pools via beforeSwap hooks with zero protocol custody and decoupled pool balances.
                 </p>
               </div>
 
@@ -464,7 +464,7 @@ export const ComparisonSection: React.FC = () => {
                       fontWeight: 600,
                     }}
                   >
-                    beforeSwap ZK Hook Gate (0 MEV Vulnerability)
+                    beforeSwap ZK Hook Gate (Protected Slippage)
                   </span>
                 </div>
 
@@ -513,7 +513,7 @@ export const ComparisonSection: React.FC = () => {
                       fontWeight: 600,
                     }}
                   >
-                    Gasless Unlinked Relayer Dispatch
+                    Client-Side Self-Relay Dispatch
                   </span>
                 </div>
 
@@ -543,7 +543,7 @@ export const ComparisonSection: React.FC = () => {
                       Fresh Recipient (0x9b42...120f)
                     </div>
                     <div style={{ fontFamily: "var(--font-body)", fontSize: "11px", color: "var(--color-muted)" }}>
-                      Zero On-Chain Link to Origin Deposit
+                      Decoupled From Origin Deposit Note
                     </div>
                   </div>
                 </div>
@@ -565,7 +565,7 @@ export const ComparisonSection: React.FC = () => {
               }}
             >
               <span style={{ fontSize: "13px" }}>●</span>
-              <span>The trade executes on-chain. The trader remains invisible.</span>
+              <span>The trade executes on-chain. Balances remain shielded in zero-knowledge pools.</span>
             </div>
           </div>
         </div>

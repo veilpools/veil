@@ -67,17 +67,17 @@ export const ZkProverModal: React.FC<ZkProverModalProps> = ({
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="460px"
+      maxWidth="580px"
       ariaLabel={title}
       closeOnBackdropClick={isAllCompleted}
       closeOnEsc={isAllCompleted}
       contentStyle={{
-        maxHeight: "92vh",
+        maxHeight: "90vh",
         overflowY: "auto",
-        padding: "var(--space-4) var(--space-5)",
+        padding: "18px 22px",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-3)",
+        gap: "12px",
       }}
     >
       {/* Header */}

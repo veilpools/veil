@@ -325,7 +325,7 @@ export const ZkShieldRadar: React.FC = () => {
             {burnShareLabel}
           </div>
           <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-faint)", marginTop: "4px" }}>
-            VeilTreasury Engine · Autonomous
+            VeilTreasury Engine · On-Chain
           </div>
         </div>
       </div>

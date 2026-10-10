@@ -149,7 +149,7 @@ export const RouteInspector: React.FC<RouteInspectorProps> = ({
               <span style={{ color: "var(--color-text)", fontWeight: 600 }}>{slippage}%</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--color-muted)" }}>Protocol Fee (Buyback &amp; Burn):</span>
+              <span style={{ color: "var(--color-muted)" }}>Protocol Fee (VeilTreasury):</span>
               <span style={{ color: "var(--color-accent-ink)", fontWeight: 600 }}>30 bps</span>
             </div>
           </div>

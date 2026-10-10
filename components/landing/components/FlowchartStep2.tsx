@@ -104,8 +104,8 @@ export const FlowchartStep2: React.FC = () => {
       h: 115,
       kicker: "MEV DEFENSE SHROUD",
       label: "Blinded Mempool Shroud",
-      chips: ["Sandwich: 0%", "Searchers: Blinded", "Private Orderflow"],
-      badge: "0 FRONT-RUNNING",
+      chips: ["Slippage Bounded", "Commitment Minting", "Protected Orderflow"],
+      badge: "MEV PROTECTED",
       shrouded: true,
     },
     v4Hook: {
@@ -138,7 +138,7 @@ export const FlowchartStep2: React.FC = () => {
       kicker: "RE-SHIELDED OUTPUT",
       label: trade.outputAsset,
       chips: ["Auto-Inscribed", "Fresh Commitment", "Zero Delta Balance"],
-      badge: "ANON POOL",
+      badge: "SHIELDED POOL",
       accentGlow: true,
     },
     publicChain: {
@@ -148,8 +148,8 @@ export const FlowchartStep2: React.FC = () => {
       h: 160,
       kicker: "PUBLIC OBSERVERS",
       label: "Blockscout & Mempool",
-      chips: ["Trader: 0x00... (Hidden)", "Slippage: Protected", "Zero Footprint"],
-      badge: "BLINDED OBSERVER",
+      chips: ["Contract: VeilZkRouter", "Slippage: Protected", "Shielded Note Minted"],
+      badge: "ON-CHAIN ROUTING",
       shrouded: true,
     },
   };

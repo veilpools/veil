@@ -263,14 +263,14 @@ export const HeroSection: React.FC = () => {
                   color: "var(--color-faint)",
                 }}
               >
-                Backed by
+                Built on
               </span>
               <img
                 className="lp-logo"
-                src="/assets/logo/paradigm.svg"
-                alt="Paradigm"
+                src="/assets/logo/0xbow.svg"
+                alt="0xbow"
                 style={{
-                  height: "calc(1.6 * clamp(20px, 2vw, 30px))",
+                  height: "calc(1.5 * clamp(20px, 2vw, 30px))",
                   width: "auto",
                   display: "block",
                   opacity: 0.85,

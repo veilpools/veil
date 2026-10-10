@@ -116,7 +116,7 @@ export default function PrivacyPage() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ color: "var(--color-accent)", fontWeight: 700 }}>#3</span>
-                <span>Context-Bound Relayers</span>
+                <span>Client-Side Self-Relay</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ color: "var(--color-accent)", fontWeight: 700 }}>#4</span>
@@ -187,10 +187,10 @@ export default function PrivacyPage() {
 
           <section>
             <h2 style={{ fontFamily: "var(--font-headline)", fontSize: "var(--text-h3)", marginBottom: "var(--space-2)", color: "var(--color-text)" }}>
-              3. Unlinked Relayer Settlements
+              3. Client-Side Self-Relay &amp; Decoupled Settlement
             </h2>
             <p style={{ color: "var(--color-muted)", lineHeight: 1.6, fontSize: "var(--text-body)" }}>
-              Withdrawals are broadcast via an open relayer network or self-relayed. All transaction parameters (pool, minimum amount out, recipient address, and relayer fee) are cryptographically bound to the public input context hash of the ZK proof. Relayers cannot tamper with or redirect destination funds. On-chain observers see zero link between the initial depositor and the final receiving address.
+              Withdrawals are broadcast directly via client-side self-relay from your browser wallet to the VeilZkRouter contract. All transaction parameters (pool, minimum amount out, recipient address, and fees) are cryptographically bound to the public input context hash of the ZK proof. Destination balances are decoupled from the origin deposit note inside the zero-knowledge pool. Users are advised to submit self-relayed withdrawals using distinct operational wallets to prevent linkability at the caller layer.
             </p>
           </section>
 
@@ -205,7 +205,7 @@ export default function PrivacyPage() {
 
           <div style={{ marginTop: "var(--space-4)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
             <span style={{ fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
-              Ready to execute unlinkable zero-knowledge swaps?
+              Ready to execute decoupled zero-knowledge swaps?
             </span>
             <Link
               href="/trade"

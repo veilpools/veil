@@ -4,7 +4,7 @@
 // Usage: node scripts/tmp-direct-drill.mjs [--execute] (dry-run default: deploy only? No:
 // deploys + deposits + proves; sends ONLY the final exec with --execute after sim passes).
 // Refuses non-46630 and --mainnet. Never prints keys.
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
   createPublicClient, createWalletClient, custom, encodeAbiParameters, parseEther,
@@ -229,6 +229,11 @@ async function runDirect(pool, asset, zeroForOne, outRecipient, preNote, fixed) 
     } catch {}
   }
   if (!found) throw new Error("no direct payout event");
+  // Burn the snapshot: a spent note must never be reused (its proofs verify
+  // offchain but always revert onchain). The result file records completion.
+  try {
+    unlinkSync(join(root, `deployments/tmp-direct-note-${asset === ZERO ? "eth" : "veil"}.json`));
+  } catch {}
   return { hash: h, block: rc.blockNumber.toString() };
 }
 
@@ -245,8 +250,13 @@ function loadNote(kind) {
 }
 let noteEth = loadNote("eth");
 let noteVeil = loadNote("veil");
-if (!noteEth || !noteVeil) {
-  throw new Error("Missing note snapshots from Phase A; re-run deposit phase first.");
+if (!noteEth) {
+  console.log("no ETH snapshot: depositing fresh");
+  noteEth = await freshDeposit(ETH_POOL, ZERO, DENOM);
+}
+if (!noteVeil) {
+  console.log("no VEIL snapshot: depositing fresh");
+  noteVeil = await freshDeposit(VEIL_POOL, VEIL, DENOM);
 }
 writeFileSync(join(root, "deployments", "zkrouter-direct-46630.json"), JSON.stringify({ chainId: CID, router: ROUTER, entrypoint: ENTRYPOINT, deployer: account.address }, null, 2));
 console.log("manifest saved");

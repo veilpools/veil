@@ -27,13 +27,13 @@ export const SlippageSettingsModal: React.FC<SlippageSettingsModalProps> = ({
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="420px"
+      maxWidth="540px"
       ariaLabel="Execution settings"
       contentStyle={{
-        padding: "var(--space-6)",
+        padding: "20px 24px",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-5)",
+        gap: "16px",
       }}
     >
         <div

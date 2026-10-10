@@ -36,7 +36,7 @@ export const Footer: React.FC = () => {
               <li><Link href="/trade">Swap-to-Shield</Link></li>
               <li><Link href="/trade">Shielded Swaps</Link></li>
               <li><Link href="/trade">ZK-Gated Pools</Link></li>
-              <li><Link href="/burn">Buyback &amp; Burn Ledger</Link></li>
+              <li><Link href="/burn">Treasury &amp; Burn Ledger</Link></li>
             </ul>
           </nav>
 

@@ -35,7 +35,7 @@
      ▼                   ▼             ▼                   ▼
 ┌─────────────┐   ┌─────────────┐ ┌─────────────┐   ┌─────────────┐
 │ VeilRegistry│   │ VeilTreasury│ │PrivacyPool A│   │PrivacyPool B│
-│  (ZK-Gate)  │   │  (Buyback)  │ │ (LeanIMT)   │   │ (LeanIMT)   │
+│  (ZK-Gate)  │   │ (Treasury)  │ │ (LeanIMT)   │   │ (LeanIMT)   │
 └─────────────┘   └─────────────┘ └─────────────┘   └─────────────┘
 ```
 
@@ -48,7 +48,7 @@
 | **VeilShieldRouter** | `contracts/VeilShieldRouter.sol` | Periphery swapper executing 1-Tx Swap-to-Shield and Shielded Swap via PoolManager unlock |
 | **VeilHook** | `contracts/VeilHook.sol` | Uniswap v4 Hook mined with permission bits `0x20C4` (`beforeInitialize \| beforeSwap \| afterSwap \| afterSwapReturnDelta`) |
 | **ShieldedPool** | `contracts/ShieldedPool.sol` | Non-custodial fixed-denomination shielded pool with non-blocking withdrawals |
-| **VeilTreasury** | `contracts/VeilTreasury.sol` | Protocol fee accumulator & buyback burn engine |
+| **VeilTreasury** | `contracts/VeilTreasury.sol` | Protocol fee accumulator & token burn engine |
 | **VeilAttestationRegistry** | `contracts/VeilAttestationRegistry.sol` | ZK attestation validator for gated pools |
 | **VeilCreate2Deployer** | `contracts/VeilCreate2Deployer.sol` | Deterministic CREATE2 deployer for mining hook addresses |
 
@@ -239,6 +239,6 @@ pnpm build
 
 ## ⚖️ Legal & Compliance Pillars (§8)
 
-* **Association Sets Mandatory:** Every withdrawal proves membership in an attested clean association set.
+* **Association Sets Mandatory:** Every withdrawal proves membership in a published association set (ASP).
 * **Terminology Guardrails:** Explicitly avoid terms such as *mixer*, *tumbler*, *untraceable*, *anonymous*, or *launder*.
 * **Open Transparency:** Full contract verification on Blockscout and live on-chain `/burn` ledger.

@@ -43,7 +43,7 @@ const feedItems: FeedItem[] = [
   },
   {
     id: "s5",
-    text: "Protocol fee collected: 30 BPS routed to VeilTreasury for autonomous token buyback & burn.",
+    text: "Protocol fee collected: 30 BPS routed to VeilTreasury for protocol reserves and token burn engine.",
     action: "View burn ledger",
     time: "15:30",
   },
@@ -51,7 +51,7 @@ const feedItems: FeedItem[] = [
 
 const simulatedReplies = [
   "Proof generated locally. Nothing left your browser.",
-  "Relayer submitted transaction. Your public address remains completely unlinked.",
+  "Self-relay submitted transaction. Groth16 proof verified onchain.",
   "Output re-shielded and commitment appended to LeanIMT.",
   "Withdrawal queued to fresh recipient address.",
 ];

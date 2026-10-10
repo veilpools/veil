@@ -28,21 +28,21 @@ const WITHDRAWAL_CYCLES: WithdrawalCycleData[] = [
   {
     noteId: "0xbow VEIL Note",
     grossAmount: "0.0010 VEIL",
-    relayerFee: "0.00001 VEIL (100 BPS)",
-    netDelivered: "0.00099 VEIL",
+    relayerFee: "Self-Relay (0.00)",
+    netDelivered: "0.0010 VEIL",
     token: "VEIL",
     recipient: "0x71b2...d94c",
-    relayer: "0x14f0 (Relayer)",
+    relayer: "Self (Browser)",
     nullifierHash: "0x81b04e...127f",
   },
   {
     noteId: "0xbow ETH Note",
     grossAmount: "0.0010 ETH",
-    relayerFee: "0.00001 ETH (100 BPS)",
-    netDelivered: "0.00099 ETH",
+    relayerFee: "Self-Relay (0.00)",
+    netDelivered: "0.0010 ETH",
     token: "ETH",
     recipient: "0x3a88...8e21",
-    relayer: "0x9c31 (Relayer)",
+    relayer: "Self (Browser)",
     nullifierHash: "0xd9271a...9910",
   },
   {
@@ -147,7 +147,7 @@ export const WithdrawalStep3: React.FC = () => {
               color: "var(--color-text)",
             }}
           >
-            ZK Relayer Terminal // Disconnect Tx
+            ZK Withdrawal Terminal // Decoupled Exit
           </span>
         </div>
 
@@ -209,7 +209,7 @@ export const WithdrawalStep3: React.FC = () => {
         {[
           { num: "01", title: "Membership", sub: "WASM Tree Proof" },
           { num: "02", title: "Nullifier", sub: "Poseidon Hash" },
-          { num: "03", title: "Relayer", sub: "Gasless Dispatch" },
+          { num: "03", title: "Execution", sub: "Client Self-Relay" },
           { num: "04", title: "Settled", sub: "Unlinked Exit" },
         ].map((st, i) => {
           const isPassed = stage > i + 1;
@@ -385,7 +385,7 @@ export const WithdrawalStep3: React.FC = () => {
             }}
           >
             <span style={{ color: "var(--color-accent)", fontWeight: 700 }}>●</span>
-            Attested Clean (<CountUp value="100%" />)
+            ASP Self-Attested · Active
           </div>
         </div>
       </div>
@@ -428,7 +428,7 @@ export const WithdrawalStep3: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              Relayer: {current.relayer}
+              Execution: {current.relayer}
             </span>
           </div>
 
@@ -488,15 +488,15 @@ export const WithdrawalStep3: React.FC = () => {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>Relayer Fee (0.1%)</div>
+            <div style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>Protocol Route</div>
             <div style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", fontWeight: 600 }}>
-              <CountUp value={current.relayerFee} />
+              Client Self-Relay
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>Gas Sponsoring</div>
+            <div style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)" }}>Intermediary Markup</div>
             <div style={{ fontFamily: "monospace", fontSize: "var(--text-body-sm)", fontWeight: 600, color: "var(--color-text)" }}>
-              Covered (<CountUp value="0 ETH" />)
+              0 BPS (Direct)
             </div>
           </div>
           <div>
@@ -532,8 +532,8 @@ export const WithdrawalStep3: React.FC = () => {
         >
           {stage === 1 && `Proving Merkle membership locally in WASM for ${current.noteId}...`}
           {stage === 2 && `Deriving Poseidon nullifier hash (${current.nullifierHash}) to prevent double-spending...`}
-          {stage === 3 && `Relayer ${current.relayer} broadcasting gasless transaction to Robinhood Chain...`}
-          {stage === 4 && `Settled! ${current.netDelivered} delivered to ${current.recipient} with zero link to deposit.`}
+          {stage === 3 && `Self-relay broadcasting transaction via browser wallet to Robinhood Chain...`}
+          {stage === 4 && `Settled! ${current.netDelivered} delivered to ${current.recipient} via client-side Groth16 proof.`}
         </span>
 
         <span
@@ -543,7 +543,7 @@ export const WithdrawalStep3: React.FC = () => {
             color: "var(--color-faint)",
           }}
         >
-          Gasless Relayer
+          Client Self-Relay
         </span>
       </div>
 
@@ -560,7 +560,7 @@ export const WithdrawalStep3: React.FC = () => {
         }}
       >
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-          {["Gasless Exit", "16 Active Relayers", "Zero On-chain Link"].map((t) => (
+          {["Non-Custodial", "Client Self-Relay", "Decoupled Pool State"].map((t) => (
             <span
               key={t}
               style={{
@@ -573,13 +573,7 @@ export const WithdrawalStep3: React.FC = () => {
                 border: "1px solid var(--color-hairline)",
               }}
             >
-              {t === "16 Active Relayers" ? (
-                <>
-                  <CountUp value="16" /> Active Relayers
-                </>
-              ) : (
-                t
-              )}
+              {t}
             </span>
           ))}
         </div>

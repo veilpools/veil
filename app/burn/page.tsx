@@ -172,8 +172,8 @@ export default function BurnPage() {
               lineHeight: "1.6",
             }}
           >
-            Live protocol fee captures and deflationary token burns from the Veil Treasury contract.
-            70% of all swap hook fees are directed to automated VEIL buybacks and permanent burns.
+            Live protocol fee accruals and token burns from the Veil Treasury contract.
+            Protocol swap hook fees accumulate in VeilTreasury to fund on-chain VEIL burns and reserves.
           </p>
         </div>
 
@@ -190,9 +190,9 @@ export default function BurnPage() {
         >
           <span>30 BPS Hook Fee</span>
           <span style={{ opacity: 0.3 }}>/</span>
-          <span>70% Buyback Share</span>
+          <span>70% Target Share</span>
           <span style={{ opacity: 0.3 }}>/</span>
-          <span>ERC20 Deflation</span>
+          <span>On-Chain Token Burn</span>
         </div>
       </div>
 
@@ -267,13 +267,13 @@ export default function BurnPage() {
               }}
             >
               <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Buyback Share
+                Treasury Allocation Share
               </div>
               <div style={{ fontFamily: "var(--font-headline)", fontSize: "clamp(1.75rem, 2.5vw, 2.25rem)", fontWeight: 700, color: "var(--color-text)", marginTop: "8px" }}>
                 {buybackBps === null ? "—" : `${Number(buybackBps) / 100}%`}
               </div>
               <div style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "6px", fontFamily: "var(--font-body)" }}>
-                Binding protocol governance parameter (70% Buyback)
+                Protocol parameter target (7000 BPS / 70%)
               </div>
             </div>
           </div>

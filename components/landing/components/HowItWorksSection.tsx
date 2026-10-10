@@ -105,7 +105,7 @@ export const HowItWorksSection: React.FC = () => {
                 maxWidth: "40ch",
               }}
             >
-              Uniswap v4 beforeSwap hook enforcing open self-attestation gating and protocol fee buyback/burn engine.
+              Uniswap v4 beforeSwap hook enforcing open self-attestation gating and protocol fee accrual/burn engine.
             </p>
           </div>
         </div>
@@ -135,7 +135,7 @@ export const HowItWorksSection: React.FC = () => {
               <span style={{ fontFamily: "var(--font-body)", color: "#FF6A7B" }}>
                 Phase 3:{" "}
               </span>
-              <span>Shielded Swaps & Relayers</span>
+              <span>Shielded Swaps &amp; Self-Relay</span>
             </div>
             <p
               style={{

@@ -138,6 +138,7 @@ export const ModalWrapper: React.FC<ModalWrapperProps> = ({
           boxSizing: "border-box",
           position: "relative",
           overflow: "hidden",
+          maxHeight: "min(92vh, 800px)",
           ...contentStyle,
         }}
       >

@@ -195,10 +195,12 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
   // The VEIL entry reuses the treasury address, so no balance is trusted for
   // it. The row shows no balance until the owner supplies the real token
   // address, and callers disable it as a shield target via disabledSymbols.
-  const filtered = SUPPORTED_TOKENS.map((t) => ({
+  const tokensWithBalances = SUPPORTED_TOKENS.map((t) => ({
     ...t,
     balance: t.symbol === "VEIL" ? "—" : balances[t.symbol] ?? "0.00",
-  })).filter(
+  }));
+
+  const filtered = tokensWithBalances.filter(
     (t) =>
       t.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -209,10 +211,10 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="460px"
+      maxWidth="580px"
       ariaLabel={ariaLabel}
       contentStyle={{
-        maxHeight: "85vh",
+        maxHeight: "90vh",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -221,15 +223,15 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
         {/* Header */}
         <div
           style={{
-            padding: "var(--space-4) var(--space-5)",
+            padding: "14px 18px",
             borderBottom: "1px solid var(--color-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-            <span style={{ fontFamily: "var(--font-headline)", fontSize: "var(--text-h4)", color: "var(--color-text)", fontWeight: 600 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontFamily: "var(--font-headline)", fontSize: "1.15rem", color: "var(--color-text)", fontWeight: 600 }}>
               Select a Token
             </span>
             <span
@@ -255,39 +257,40 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
               border: "1px solid var(--color-border)",
               borderRadius: "var(--radius-sm)",
               cursor: "pointer",
-              padding: "6px",
+              padding: "5px",
               color: "var(--color-muted)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               transition: "all var(--duration-fast)",
             }}
+            className="hover:bg-neutral-100"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Search */}
-        <div style={{ padding: "var(--space-4) var(--space-5)", borderBottom: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+        {/* Search & Quick Chips */}
+        <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "10px" }}>
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <Search className="w-4 h-4" style={{ position: "absolute", left: "14px", color: "var(--color-faint)", pointerEvents: "none" }} />
             <input
               type="text"
               data-autofocus
-              placeholder="Search by name, symbol, or paste address..."
+              placeholder="Search by name, symbol, or address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Search tokens"
               style={{
                 width: "100%",
-                paddingLeft: "42px",
-                paddingRight: "16px",
-                paddingTop: "11px",
-                paddingBottom: "11px",
+                paddingLeft: "38px",
+                paddingRight: "14px",
+                paddingTop: "9px",
+                paddingBottom: "9px",
                 backgroundColor: "rgba(26, 26, 26, 0.04)",
                 borderRadius: "var(--radius-md)",
                 border: "1px solid var(--color-border-strong)",
-                fontSize: "16px",
+                fontSize: "14px",
                 color: "var(--color-text)",
                 outline: "none",
                 boxSizing: "border-box",
@@ -296,106 +299,128 @@ export const TokenSelectModal: React.FC<TokenSelectModalProps> = ({
               }}
             />
           </div>
-        </div>
 
-        {/* Token List */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "var(--space-2)" }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: "var(--space-8) 0", textAlign: "center", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
-              No matching tokens found on Robinhood Chain.
-            </div>
-          ) : (
-            filtered.map((token) => {
-              const isSelected = selectedSymbol === token.symbol;
-              const isDisabled = disabledSymbols.includes(token.symbol);
+          {/* Popular quick chips */}
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "11px", color: "var(--color-muted)", fontFamily: "monospace" }}>Popular:</span>
+            {["ETH", "WETH", "USDC", "VEIL"].map((sym) => {
+              const tok = tokensWithBalances.find((t) => t.symbol === sym);
+              if (!tok) return null;
               return (
                 <button
-                  key={token.symbol}
-                  disabled={isDisabled}
-                  title={isDisabled ? "Unavailable until the real token address is supplied" : undefined}
+                  key={sym}
+                  type="button"
                   onClick={() => {
-                    onSelectToken(token);
+                    onSelectToken(tok);
                     onClose();
                   }}
                   style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: "var(--radius-md)",
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    textAlign: "left",
-                    backgroundColor: isSelected ? "rgba(255, 140, 0, 0.12)" : "transparent",
-                    border: "none",
-                    cursor: isDisabled ? "not-allowed" : "pointer",
-                    opacity: isDisabled ? 0.45 : 1,
-                    transition: "background var(--duration-fast)",
-                    boxSizing: "border-box",
+                    gap: "5px",
+                    padding: "2px 8px",
+                    borderRadius: "var(--radius-full)",
+                    backgroundColor: "rgba(26, 26, 26, 0.04)",
+                    border: "1px solid var(--color-border)",
+                    fontSize: "11px",
+                    fontFamily: "monospace",
+                    fontWeight: 600,
+                    color: "var(--color-text)",
+                    cursor: "pointer",
                   }}
+                  className="hover:border-[#FF8C00] hover:bg-orange-50/50"
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                    <div
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "var(--radius-full)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                        backgroundColor: "#ffffff",
-                        border: "1px solid var(--color-border)",
-                        boxShadow: "0 2px 5px rgba(26, 26, 26, 0.05)",
-                        padding: "6px",
-                        boxSizing: "border-box",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {token.iconSvg}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontWeight: 600, color: "var(--color-text)", fontSize: "var(--text-body-sm)" }}>{token.symbol}</span>
-                        {token.verified && (
-                          <ShieldCheck className="w-3.5 h-3.5 text-[#FF8C00]" />
-                        )}
-                        {token.badge && (
-                          <span
-                            style={{
-                              fontSize: "10px",
-                              fontFamily: "monospace",
-                              padding: "1px 6px",
-                              borderRadius: "var(--radius-sm)",
-                              backgroundColor: "rgba(26, 26, 26, 0.06)",
-                              color: "var(--color-muted)",
-                            }}
-                          >
-                            {token.badge}
-                          </span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: "var(--text-caption)", color: "var(--color-muted)", display: "block" }}>{token.name}</span>
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                    <div>
-                      <div style={{ fontSize: "var(--text-body-sm)", fontFamily: "monospace", fontWeight: 600, color: "var(--color-text)" }}>
-                        {token.balance}
-                      </div>
-                      <div style={{ fontSize: "var(--text-caption)", color: "var(--color-faint)", fontFamily: "monospace" }}>
-                        {token.priceUsd > 0
-                          ? `$${((parseFloat(token.balance.replace(/,/g, "")) || 0) * token.priceUsd).toFixed(2)}`
-                          : "—"}
-                      </div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-[#FF8C00]" />}
-                  </div>
+                  <span>{sym}</span>
                 </button>
               );
-            })
+            })}
+          </div>
+        </div>
+
+        {/* Token List Grid */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "12px 18px" }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "var(--space-6) 0", textAlign: "center", fontSize: "var(--text-body-sm)", color: "var(--color-muted)" }}>
+              No matching tokens found on Robinhood Chain.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "8px" }}>
+              {filtered.map((token) => {
+                const isSelected = selectedSymbol === token.symbol;
+                const isDisabled = disabledSymbols.includes(token.symbol);
+                return (
+                  <button
+                    key={token.symbol}
+                    disabled={isDisabled}
+                    title={isDisabled ? "Unavailable until the real token address is supplied" : undefined}
+                    onClick={() => {
+                      onSelectToken(token);
+                      onClose();
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      borderRadius: "var(--radius-md)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      textAlign: "left",
+                      backgroundColor: isSelected ? "rgba(255, 140, 0, 0.12)" : "rgba(26, 26, 26, 0.025)",
+                      border: isSelected ? "1px solid rgba(255, 140, 0, 0.35)" : "1px solid var(--color-border)",
+                      cursor: isDisabled ? "not-allowed" : "pointer",
+                      opacity: isDisabled ? 0.45 : 1,
+                      transition: "all var(--duration-fast)",
+                      boxSizing: "border-box",
+                    }}
+                    className={!isSelected && !isDisabled ? "hover:border-[#FF8C00] hover:bg-orange-50/30" : ""}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "var(--radius-full)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          backgroundColor: "#ffffff",
+                          border: "1px solid var(--color-border)",
+                          boxShadow: "0 1px 4px rgba(26, 26, 26, 0.05)",
+                          padding: "4px",
+                          boxSizing: "border-box",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div style={{ width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {token.iconSvg}
+                        </div>
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <span style={{ fontWeight: 600, color: "var(--color-text)", fontSize: "13px" }}>{token.symbol}</span>
+                          {token.verified && (
+                            <ShieldCheck className="w-3 h-3 text-[#FF8C00] shrink-0" />
+                          )}
+                        </div>
+                        <span style={{ fontSize: "11px", color: "var(--color-muted)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {token.name}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                      <div>
+                        <div style={{ fontSize: "12.5px", fontFamily: "monospace", fontWeight: 600, color: "var(--color-text)" }}>
+                          {token.balance}
+                        </div>
+                      </div>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-[#FF8C00]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 

@@ -51,7 +51,7 @@ const feedItems: FeedItem[] = [
 
 const simulatedReplies = [
   "Proof generated locally. Nothing left your browser.",
-  "Relayer submitted the transaction. Your address stays unlinked.",
+  "Self-relay submitted transaction. Groth16 proof verified onchain.",
   "Output re-shielded and added to the pool.",
   "Withdrawal queued to a fresh address.",
 ];

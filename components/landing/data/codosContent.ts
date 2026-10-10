@@ -10,9 +10,9 @@ export const codosContent = {
     ctaPrimary: "Launch App",
     ctaSecondary: "View Contracts",
     socialProof: {
-      backedBy: {
-        label: "Backed by",
-        logos: ["paradigm"]
+      builtOn: {
+        label: "Built on",
+        logos: ["0xbow"]
       },
       buildersFrom: {
         label: "Builders from",
@@ -56,14 +56,14 @@ export const codosContent = {
     {
       number: "Step 3",
       title: "Exit to a fresh address with unlinked settlement",
-      badge: "Self-relay or broadcast",
-      desc: "Withdraw via browser self-relay or relayer to any fresh address. On-chain, Groth16 proves validity with zero link back to your depositor wallet."
+      badge: "Client-side self-relay",
+      desc: "Withdraw via browser self-relay to any fresh address. On-chain, Groth16 proves validity while decoupling recipient from depositor wallet."
     },
     {
       number: "Step 4",
       title: "Monitor shielded balances and protocol burn in real time",
       badge: "Zero-custody vault & burn engine",
-      desc: "Track your encrypted notes, verified Association Set Merkle roots, and autonomous fee buybacks with real-time on-chain transparency."
+      desc: "Track your encrypted notes, verified Association Set Merkle roots, and protocol fee burn engine with real-time on-chain transparency."
     }
   ],
   whoItIsFor: {
@@ -100,7 +100,7 @@ export const codosContent = {
       {
         metric: "MEV vulnerability",
         diy: "Guaranteed on size",
-        veil: "Eliminated by design"
+        veil: "Protected via hook slippage bounds"
       },
       {
         metric: "Liquidity depth",
@@ -110,7 +110,7 @@ export const codosContent = {
       {
         metric: "Wallet linkability",
         diy: "Permanent on explorer",
-        veil: "Zero link via relayers"
+        veil: "Decoupled via client self-relay"
       },
       {
         metric: "Asset custody",
@@ -133,7 +133,7 @@ export const codosContent = {
       {
         time: "Phase 2",
         name: "ZK-Gated Hooks",
-        body: "Uniswap v4 beforeSwap hook enforcing open self-attestation gating and protocol fee buyback/burn engine.",
+        body: "Uniswap v4 beforeSwap hook enforcing open self-attestation gating and protocol fee accrual/burn engine.",
         barW: "38%",
         indent: "24%"
       },
@@ -185,8 +185,8 @@ export const codosContent = {
         a: "Veil shields assets in fixed-denomination Merkle pools. When you deposit, only a commitment enters the onchain tree while the secret stays in your browser; the withdraw call carries no depositor address. The onchain verifier is provisional for old notes only; Groth16 serves the live 0xbow paths."
       },
       {
-        q: "Can MEV bots or sandwich searchers front-run my swap?",
-        a: "No. With Swap-to-Shield and Shielded Swaps, your order details and commitment never enter the public mempool as an unshielded trade. Swaps are settled atomically via our non-custodial Uniswap v4 hook, eliminating sandwich opportunities completely."
+        q: "How does Veil protect swaps from MEV and front-running?",
+        a: "With Swap-to-Shield, swaps settle atomically through the Uniswap v4 hook directly into shielded notes with strict client-side minOut slippage bounds, protecting traders from typical mempool front-running."
       },
       {
         q: "What chains are supported?",
@@ -210,7 +210,7 @@ export const codosContent = {
     columns: [
       {
         title: "Protocol",
-        links: ["Swap-to-Shield", "Shielded Swaps", "ZK-Gated Pools", "Buyback & Burn"]
+        links: ["Swap-to-Shield", "Shielded Swaps", "ZK-Gated Pools", "Treasury & Burn"]
       },
       {
         title: "Developers",

@@ -143,8 +143,8 @@ export const FlywheelBurnSection: React.FC = () => {
         {/* Section Header */}
         <SectionHeader
           kicker="Protocol Flywheel"
-          title="Autonomous burn ledger. Deflationary by code."
-          sub="All burns execute on-chain via the native burn() call, permanently reducing total supply. Programmatically funded by Uniswap v4 hook swap fees and creator royalties. No mainnet burns yet — the ledger below reads live."
+          title="Protocol Fee Treasury & Token Burn Engine."
+          sub="VeilTreasury accumulates swap fees from the Uniswap v4 hook. Burns execute on-chain via ERC20 burn() reducing VEIL supply. No mainnet burns yet — the ledger below reads live."
           titleMaxW="26ch"
           kickerColor="#FF8C00"
         />
@@ -278,7 +278,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 color: "var(--color-faint)",
               }}
             >
-              Treasury Pending Buyback
+              Treasury Fee Accrual (ETH)
             </span>
             <div
               style={{
@@ -298,7 +298,7 @@ export const FlywheelBurnSection: React.FC = () => {
                 color: "var(--color-muted)",
               }}
             >
-              {buybackBps === null ? "Accumulating for Next Epoch" : `${Number(buybackBps) / 100}% buyback share · Accumulating for Next Epoch`}
+              {buybackBps === null ? "Protocol fee reserve" : `${Number(buybackBps) / 100}% allocation target · Accumulated in Treasury`}
             </span>
           </div>
         </RevealBox>
@@ -369,7 +369,7 @@ export const FlywheelBurnSection: React.FC = () => {
                   maxWidth: "68ch",
                 }}
               >
-                Unlike inflationary reward systems, Veil extracts real yield directly from DEX volume and creator activity, feeding programmatic market purchases and permanent token removal.
+                Unlike inflationary reward systems, Veil extracts real yield directly from DEX volume and creator activity, accumulating protocol fees in VeilTreasury to support token burns and treasury operations.
               </p>
             </div>
 
@@ -411,7 +411,7 @@ export const FlywheelBurnSection: React.FC = () => {
                   </span>
                 </div>
                 <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "var(--text-body-sm)", color: "var(--color-muted)", lineHeight: "var(--leading-body-sm)" }}>
-                  Collected on all swaps passing through ZK-gated hooks and Swap-to-Shield router. Accumulates autonomously in VeilTreasury for automated execution.
+                  Collected on all swaps passing through ZK-gated hooks and Swap-to-Shield router. Accumulates directly in VeilTreasury via the Uniswap v4 beforeSwap hook fee capture.
                 </p>
               </div>
 
@@ -445,7 +445,7 @@ export const FlywheelBurnSection: React.FC = () => {
                   </span>
                 </div>
                 <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "var(--text-body-sm)", color: "var(--color-muted)", lineHeight: "var(--leading-body-sm)" }}>
-                  Creator royalties from the official Pons token launch programmatically routed to VeilTreasury for systematic market buybacks and burns.
+                  Creator fees routed to VeilTreasury for protocol reserves and on-chain token burns.
                 </p>
               </div>
             </div>

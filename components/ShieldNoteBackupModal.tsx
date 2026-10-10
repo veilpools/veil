@@ -75,13 +75,13 @@ export function ShieldNoteBackupModal({ note, isOpen, onClose, onRestoreNote, on
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="480px"
+      maxWidth="580px"
       ariaLabel="Encrypted note backup"
       contentStyle={{
-        padding: "var(--space-6)",
+        padding: "20px 24px",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--space-5)",
+        gap: "16px",
         maxHeight: "90vh",
         overflowY: "auto",
       }}
