@@ -9,7 +9,11 @@ import {
   TESTNET_ROUTER_SQRT_PRICE_LIMIT_ETH_IN,
   parseSlippagePercent,
 } from "./router-swap";
-import { TESTNET_BOW_V3_ENTRYPOINT } from "./privacy-pools";
+import {
+  TESTNET_BOW_V3_ENTRYPOINT,
+  TESTNET_BOW_V3_ETH_DENOMINATION,
+  TESTNET_BOW_V3_VEIL_TOKEN,
+} from "./privacy-pools";
 
 // ---------------------------------------------------------------------------
 // VeilZkRouter full-flow wiring (Robinhood Testnet 46630).
@@ -38,6 +42,83 @@ export const TESTNET_ZK_ROUTER_ADDRESS =
 
 // Fresh suite entrypoint (deployments/suite-v3-testnet-latest.json).
 export const TESTNET_ZK_ROUTER_ENTRYPOINT = TESTNET_BOW_V3_ENTRYPOINT;
+
+// Live multi-note router from deployments/zkrouter-multi-46630.json.
+// Same env-override pattern as the single-flow router above.
+export const TESTNET_ZK_ROUTER_MULTI_ADDRESS =
+  (process.env.NEXT_PUBLIC_TESTNET_VEIL_ZK_ROUTER_MULTI as Address | undefined) ||
+  ("0xc009197da4c4e7134ab8d8969d9442a5c8afb220" as Address);
+
+/** Shielded-swap direction: source asset determines the swap leg. */
+export type ZkShieldedSwapDirection = "ETH_TO_VEIL" | "VEIL_TO_ETH";
+
+/**
+ * Bind the shielded-swap direction from the source note asset.
+ * ETH notes swap ETH -> VEIL (zeroForOne true); VEIL notes swap
+ * VEIL -> ETH (zeroForOne false). Anything else fails closed.
+ */
+export function resolveZkShieldedSwapAssets(args: {
+  sourceAsset: string;
+  veilToken?: Address;
+}): {
+  withdrawAsset: Address;
+  depositAsset: Address;
+  zeroForOne: boolean;
+  direction: ZkShieldedSwapDirection;
+} {
+  const source = args.sourceAsset.toLowerCase();
+  const veil = (args.veilToken ?? TESTNET_BOW_V3_VEIL_TOKEN).toLowerCase();
+  const ethZero = (ZK_ETH_ZERO_ADDRESS as string).toLowerCase();
+  if (source === ethZero) {
+    return {
+      withdrawAsset: ZK_ETH_ZERO_ADDRESS as Address,
+      depositAsset: (args.veilToken ?? TESTNET_BOW_V3_VEIL_TOKEN) as Address,
+      zeroForOne: true,
+      direction: "ETH_TO_VEIL",
+    };
+  }
+  if (source === veil) {
+    return {
+      withdrawAsset: (args.veilToken ?? TESTNET_BOW_V3_VEIL_TOKEN) as Address,
+      depositAsset: ZK_ETH_ZERO_ADDRESS as Address,
+      zeroForOne: false,
+      direction: "VEIL_TO_ETH",
+    };
+  }
+  throw new Error(
+    "Unsupported shielded-swap source asset: only 0xbow ETH notes and VEIL notes can be swapped. No transaction was sent."
+  );
+}
+
+/**
+ * Fixed destination for the shielded-swap tab.
+ * VEIL -> 0.001 ETH note (fixed denomination); ETH -> VEIL per the live
+ * minimum (never hardcoded). Fails closed when the live minimum is missing.
+ */
+export function resolveZkShieldedSwapDeposit(args: {
+  withdrawAsset: string;
+  ethDenomination?: bigint;
+  veilMinimum?: bigint | null;
+}): bigint {
+  const withdraw = args.withdrawAsset.toLowerCase();
+  const ethZero = (ZK_ETH_ZERO_ADDRESS as string).toLowerCase();
+  const veil = TESTNET_BOW_V3_VEIL_TOKEN.toLowerCase();
+  if (withdraw === veil) {
+    return args.ethDenomination ?? TESTNET_BOW_V3_ETH_DENOMINATION;
+  }
+  if (withdraw === ethZero) {
+    const minimum = args.veilMinimum ?? null;
+    if (minimum === null || minimum <= 0n) {
+      throw new Error(
+        "The live VEIL minimum is still loading. Wait for it to load and try again. Nothing was simulated."
+      );
+    }
+    return minimum;
+  }
+  throw new Error(
+    "Unsupported shielded-swap source asset: only 0xbow ETH notes and VEIL notes can be swapped. No transaction was sent."
+  );
+}
 
 export const TESTNET_ZK_EXPLORER_TX_BASE =
   "https://explorer.testnet.chain.robinhood.com/tx/";
@@ -294,6 +375,12 @@ export function mapZkRouterError(error: unknown, slippagePercent?: number): stri
     return "Full-ZK flow hit an unexpected swap-callback state (OnlyPoolManager). Aborted with no funds moved. Try again later.";
   if (name === "EthReceiveNotInFlow" || /EthReceiveNotInFlow/i.test(msg))
     return "Full-ZK flow hit an unexpected native-asset state (EthReceiveNotInFlow). Aborted with no funds moved.";
+  if (name === "EmptyWithdrawals" || /EmptyWithdrawals/i.test(msg))
+    return "Full-ZK flow reverted: no source notes were provided (EmptyWithdrawals). Select at least one 0xbow note. No transaction was sent.";
+  if (name === "TooManyWithdrawals" || /TooManyWithdrawals/i.test(msg))
+    return "Full-ZK flow reverted: too many source notes in one batch (TooManyWithdrawals, max 8). Split into smaller batches. No transaction was sent.";
+  if (name === "ArrayLengthMismatch" || /ArrayLengthMismatch/i.test(msg))
+    return "Full-ZK flow reverted: withdrawal, proof and scope counts must match (ArrayLengthMismatch). Rebuild the flow and try again.";
   if (/insufficient funds for gas/i.test(msg)) {
     const funds = /have (\d+) want (\d+)/i.exec(msg);
     const toEth = (w: string): string => {
@@ -518,6 +605,279 @@ export function findFullZkFlowExecuted(
     }
   }
   return null;
+}
+
+export interface ZkMultiFlowBase {
+  withdrawals: ZkWithdrawalStruct[];
+  proofs: ZkWithdrawProofStruct[];
+  scopes: bigint[];
+  withdrawAsset: Address;
+  depositAsset: Address;
+  depositValue: bigint;
+  precommitment: bigint;
+  zeroForOne?: boolean;
+}
+
+export interface MultiFullZkFlowArgs extends ZkMultiFlowBase {
+  recipient: Address;
+  swapLeg: ZkSwapLegStruct;
+  minSwapOut: bigint;
+}
+
+export interface BuildMultiFullZkFlowInput extends ZkMultiFlowBase {
+  quotedSwapOut: bigint;
+  slippagePercent: number;
+  recipient?: Address;
+}
+
+function checkMultiBatchLengths(
+  withdrawals: unknown[],
+  proofs: unknown[],
+  scopes: unknown[]
+): void {
+  const count = withdrawals.length;
+  if (count === 0) {
+    const err = new Error("Full-ZK flow reverted: empty batch (EmptyWithdrawals).") as Error & {
+      errorName: string;
+    };
+    err.errorName = "EmptyWithdrawals";
+    throw err;
+  }
+  if (proofs.length !== count || scopes.length !== count) {
+    const err = new Error("Full-ZK flow reverted: length mismatch (ArrayLengthMismatch).") as Error & {
+      errorName: string;
+    };
+    err.errorName = "ArrayLengthMismatch";
+    throw err;
+  }
+  if (count > 8) {
+    const err = new Error("Full-ZK flow reverted: too many withdrawals (TooManyWithdrawals).") as Error & {
+      errorName: string;
+    };
+    err.errorName = "TooManyWithdrawals";
+    throw err;
+  }
+}
+
+function checkMultiEntrypoint(withdrawals: ZkWithdrawalStruct[]): void {
+  for (const w of withdrawals) {
+    if (w.processooor.toLowerCase() !== TESTNET_ZK_ROUTER_ENTRYPOINT.toLowerCase()) {
+      throw new Error(
+        `Invalid withdrawal: processooor must be the fresh suite entrypoint (${TESTNET_ZK_ROUTER_ENTRYPOINT}).`
+      );
+    }
+  }
+}
+
+/**
+ * Pure builder for executeMultiFullZkFlow params. minSwapOut is ALWAYS derived
+ * from the live quote and slippage, never hardcoded. Fails closed on any
+ * mismatch (recipient, assets, zero values, batch shape).
+ */
+export function buildMultiFullZkFlowArgs(input: BuildMultiFullZkFlowInput): MultiFullZkFlowArgs {
+  const zeroForOne = input.zeroForOne ?? false;
+  const recipient = input.recipient ?? TESTNET_ZK_ROUTER_MULTI_ADDRESS;
+  if (recipient.toLowerCase() !== TESTNET_ZK_ROUTER_MULTI_ADDRESS.toLowerCase()) {
+    throw new Error(
+      `RecipientMismatch: the relay recipient must equal the multi-note ZK router (${TESTNET_ZK_ROUTER_MULTI_ADDRESS}) so the relay exits chain into the swap input.`
+    );
+  }
+  checkMultiBatchLengths(input.withdrawals, input.proofs, input.scopes);
+  checkMultiEntrypoint(input.withdrawals);
+  if (input.depositValue <= 0n) throw new Error("Deposit value must be greater than zero.");
+  if (input.precommitment === 0n) throw new Error("InvalidPrecommitment: precommitment must be non-zero.");
+  const swapLeg = buildZkSwapLeg({ zeroForOne });
+  checkSwapLegBinding(swapLeg, input.withdrawAsset, input.depositAsset);
+  const minSwapOut = deriveZkMinSwapOut(input.quotedSwapOut, input.slippagePercent);
+  return {
+    withdrawals: input.withdrawals,
+    proofs: input.proofs,
+    scopes: input.scopes,
+    withdrawAsset: input.withdrawAsset,
+    depositAsset: input.depositAsset,
+    depositValue: input.depositValue,
+    precommitment: input.precommitment,
+    zeroForOne,
+    recipient,
+    swapLeg,
+    minSwapOut,
+  };
+}
+
+type MultiFullZkFlowCallArgs = readonly [
+  ZkWithdrawalStruct[],
+  ZkWithdrawProofStruct[],
+  bigint[],
+  Address,
+  Address,
+  Address,
+  bigint,
+  bigint,
+  ZkSwapLegStruct,
+  bigint
+];
+
+function toMultiCallArgs(args: MultiFullZkFlowArgs): MultiFullZkFlowCallArgs {
+  return [
+    args.withdrawals,
+    args.proofs,
+    args.scopes,
+    args.recipient,
+    args.withdrawAsset,
+    args.depositAsset,
+    args.depositValue,
+    args.precommitment,
+    args.swapLeg,
+    args.minSwapOut,
+  ];
+}
+
+/** Read-only eth_call of the exact multi-note calldata (no tx). */
+export async function simulateMultiFullZkFlow(
+  client: PublicClient,
+  params: { account: Address; args: MultiFullZkFlowArgs }
+): Promise<bigint> {
+  const { result } = (await client.simulateContract({
+    address: TESTNET_ZK_ROUTER_MULTI_ADDRESS,
+    abi: VEIL_ZK_ROUTER_ABI,
+    functionName: "executeMultiFullZkFlow",
+    args: toMultiCallArgs(params.args) as never,
+    account: params.account,
+  })) as unknown as { result: bigint };
+  return result as bigint;
+}
+
+function resolveMultiBase(base: ZkMultiFlowBase, minSwapOut: bigint): MultiFullZkFlowArgs {
+  const zeroForOne = base.zeroForOne ?? false;
+  checkMultiBatchLengths(base.withdrawals, base.proofs, base.scopes);
+  checkMultiEntrypoint(base.withdrawals);
+  if (base.depositValue <= 0n) throw new Error("Deposit value must be greater than zero.");
+  if (base.precommitment === 0n) throw new Error("InvalidPrecommitment: precommitment must be non-zero.");
+  const swapLeg = buildZkSwapLeg({ zeroForOne });
+  checkSwapLegBinding(swapLeg, base.withdrawAsset, base.depositAsset);
+  return {
+    ...base,
+    zeroForOne,
+    recipient: TESTNET_ZK_ROUTER_MULTI_ADDRESS,
+    swapLeg,
+    minSwapOut,
+  };
+}
+
+async function probeMultiSucceeds(
+  client: PublicClient,
+  account: Address,
+  args: MultiFullZkFlowArgs
+): Promise<{ ok: true } | { ok: false; error: unknown }> {
+  try {
+    await simulateMultiFullZkFlow(client, { account, args });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/**
+ * Bracket the live multi-note swap output with free exact-calldata
+ * simulations (no tx). Mirrors discoverZkSwapOut for the batched entry
+ * point. Fails closed on any unexpected revert or spent probe budget.
+ */
+export async function discoverZkMultiSwapOut(
+  client: PublicClient,
+  params: { account: Address; base: ZkMultiFlowBase; maxProbes?: number }
+): Promise<{ floor: bigint; probes: number }> {
+  const maxProbes = params.maxProbes ?? ZK_FLOW_MAX_PROBES;
+  let probes = 0;
+  const runProbe = async (minSwapOut: bigint) => {
+    if (probes >= maxProbes) {
+      throw new Error(
+        `Could not bracket the live swap output within ${maxProbes} free simulations. No transaction was sent.`
+      );
+    }
+    probes += 1;
+    return probeMultiSucceeds(client, params.account, resolveMultiBase(params.base, minSwapOut));
+  };
+  const preflight = await runProbe(0n);
+  if (!preflight.ok) throw new Error(mapZkRouterError(preflight.error));
+  const cover = await runProbe(params.base.depositValue);
+  if (!cover.ok) {
+    const name = findErrorName(cover.error);
+    if (
+      name === "SlippageExceeded" ||
+      name === "InsufficientOutputForDenomination" ||
+      /SlippageExceeded|InsufficientOutputForDenomination/i.test(messageOf(cover.error))
+    ) {
+      throw new Error(
+        "Full-ZK flow reverted: the live swap output is below the deposit amount (InsufficientOutputForDenomination). Pick a smaller deposit or try again later. No transaction was sent."
+      );
+    }
+    throw new Error(mapZkRouterError(cover.error));
+  }
+  let floor = params.base.depositValue;
+  let ceiling = params.base.depositValue * 2n;
+  const UINT256_CAP = 1n << 200n;
+  for (;;) {
+    if (ceiling > UINT256_CAP) {
+      throw new Error(
+        "Could not bracket the live swap output: it exceeds the probe range. No transaction was sent."
+      );
+    }
+    const probe = await runProbe(ceiling);
+    if (!probe.ok) {
+      const name = findErrorName(probe.error);
+      if (name === "SlippageExceeded" || /SlippageExceeded/i.test(messageOf(probe.error))) break;
+      throw new Error(mapZkRouterError(probe.error));
+    }
+    floor = ceiling;
+    ceiling *= 2n;
+  }
+  while (probes < maxProbes && ceiling - floor > 1n) {
+    const mid = (floor + ceiling) / 2n;
+    if (mid === floor || mid === ceiling) break;
+    const probe = await runProbe(mid);
+    if (probe.ok) {
+      floor = mid;
+    } else {
+      const name = findErrorName(probe.error);
+      if (name === "SlippageExceeded" || /SlippageExceeded/i.test(messageOf(probe.error))) {
+        ceiling = mid;
+      } else {
+        throw new Error(mapZkRouterError(probe.error));
+      }
+    }
+  }
+  return { floor, probes };
+}
+
+export interface ZkMultiQuoteResult {
+  args: MultiFullZkFlowArgs;
+  quotedSwapOut: bigint;
+  minSwapOut: bigint;
+  probes: number;
+}
+
+/**
+ * Multi-note quote-then-execute builder: zero-min preflight, live bracket,
+ * slippage derivation, then a final exact-calldata simulation with the
+ * derived min (pre-send check). Simulation only.
+ */
+export async function quoteAndBuildMultiFullZkFlow(
+  client: PublicClient,
+  params: { account: Address; base: ZkMultiFlowBase; slippagePercent: number; maxProbes?: number }
+): Promise<ZkMultiQuoteResult> {
+  const { floor, probes } = await discoverZkMultiSwapOut(client, {
+    account: params.account,
+    base: params.base,
+    maxProbes: params.maxProbes,
+  });
+  const minSwapOut = deriveZkMinSwapOut(floor, params.slippagePercent);
+  const args = resolveMultiBase(params.base, minSwapOut);
+  try {
+    await simulateMultiFullZkFlow(client, { account: params.account, args });
+  } catch (error) {
+    throw new Error(mapZkRouterError(error, params.slippagePercent));
+  }
+  return { args, quotedSwapOut: floor, minSwapOut, probes: probes + 1 };
 }
 
 /**
