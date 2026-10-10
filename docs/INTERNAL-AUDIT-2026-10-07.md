@@ -70,3 +70,4 @@
 
 - Single-note full-ZK flow LIVE (2026-10-10, price recovered ~2154 VEIL/ETH): 1x relay + swap + 0.001 VEIL deposit in one atomic tx via router  x80b1…, tx  xe598fd32e7ee4f6efe9198defbe8676b3ac8c364622cf606251c9f286f020b49.
 
+- Direct-payout mode LIVE x2 (2026-10-10): executeFullZkFlowDirect on router 0x9ccf (ETH->VEIL payout 1.124 VEIL, tx 0xfac73f43b2bd918a6d20ca3bf997a4ce52866bd1f980f0f719b14c9b4e880236) and VEIL dust -> direct ETH payout 988122138717 wei (tx 0xa0d89f785a39d0c5ebaa1e22040a270b8195ab8e64673758fd131f09e4edd495). Dust direction now completes instead of reverting. Invariant holds.
