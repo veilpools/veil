@@ -135,7 +135,7 @@ import {
 import { ZkSwapToShieldPanel } from "../../components/trade/ZkSwapToShieldPanel";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
 import { AccountService, type AccountCommitment } from "@0xbow/privacy-pools-core-sdk";
-import { hashPrecommitment as bowHashPrecommitment } from "@0xbow/privacy-pools-core-sdk";
+import { hashPrecommitment as bowHashPrecommitment, getCommitment as bowGetCommitment } from "@0xbow/privacy-pools-core-sdk";
 import { generateMnemonic, english } from "viem/accounts";
 
 const LOCAL_STORAGE_KEY = "veil_shielded_notes_v1";
@@ -1950,6 +1950,25 @@ export default function SwapToShieldPage() {
         if (localPrecommitment !== BigInt((ownDeposit.args as { _precommitmentHash: bigint })._precommitmentHash)) {
           throw new Error(
             "Saved note secrets do not match the onchain deposit (precommitment mismatch). This note is corrupted and can never produce a valid proof — do not retry proving. Deposit fresh and back it up. No transaction was sent."
+          );
+        }
+
+        // Commitment recompute check (withdraw-verify incident): the saved
+        // secrets + label + denomination must reproduce the stored
+        // commitmentHash. Precommitment match alone does not prove this, and
+        // a mismatched commitment yields a witness that fails local
+        // verification after minutes of proving.
+        const recomputed = bowGetCommitment(denomination, label, nullifier as never, secret as never) as
+          | { hash?: unknown }
+          | bigint;
+        const recomputedHash = BigInt(
+          (typeof recomputed === "object" && recomputed !== null && "hash" in recomputed
+            ? (recomputed as { hash?: unknown }).hash
+            : recomputed) as bigint | number | string
+        );
+        if (recomputedHash !== commitmentHash) {
+          throw new Error(
+            "Saved note does not reproduce its own commitment (commitment mismatch). The vault entry mixes data from different deposits and can never produce a valid proof — do not retry proving. Restore the correct backup for this note, or deposit fresh. No transaction was sent."
           );
         }
 
