@@ -2070,6 +2070,26 @@ export default function SwapToShieldPage() {
 
         const secretPair = accountService.createWithdrawalSecrets(commitmentObj);
 
+        // TEMP-DIAG (remove after withdraw-verify incident): non-sensitive
+        // witness summary only — never secrets, keys, or mnemonics.
+        console.log(
+          "[diag-withdraw]",
+          JSON.stringify({
+            stateRoot: stateTree.root.toString(),
+            aspRoot: aspSet.root.toString(),
+            onchainAspRoot: BigInt(onchainAspRoot).toString(),
+            context: context.toString(),
+            leaves: orderedCommitments.length,
+            labels: aspSet.labels.length,
+            denomination: denomination.toString(),
+            scope: scope.toString(),
+            commitment: commitmentHash.toString(),
+            label: label.toString(),
+            pool: bowRelayContext.pool,
+            entrypoint: bowEntrypoint,
+          })
+        );
+
         const withdrawalProof = await sdk.proveWithdrawal(commitmentObj, {
           withdrawalAmount: denomination,
           stateMerkleProof,
