@@ -903,7 +903,9 @@ export async function runShieldedSwapPreSendSequence(params: {
   singleArgs?: FullZkFlowArgs;
   multiArgs?: MultiFullZkFlowArgs;
 }): Promise<Hash> {
+  console.log("[trace-exec] revalidate start");
   await params.revalidate();
+  console.log("[trace-exec] revalidate done");
   if (params.flowKind === "multi") {
     if (!params.multiArgs) throw new Error("Refresh the live quote first. No transaction was sent.");
     await simulateMultiFullZkFlow(params.publicClient, {
@@ -929,10 +931,12 @@ export async function runShieldedSwapPreSendSequence(params: {
     } as never);
   }
   if (!params.singleArgs) throw new Error("Refresh the live quote first. No transaction was sent.");
+  console.log("[trace-exec] simulate start");
   await simulateFullZkFlow(params.publicClient, {
     account: params.account,
     args: params.singleArgs,
   });
+  console.log("[trace-exec] simulate done, requesting wallet signature");
   return params.walletClient.writeContract({
     address: TESTNET_ZK_ROUTER_ADDRESS,
     abi: VEIL_ZK_ROUTER_ABI,

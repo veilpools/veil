@@ -2260,6 +2260,7 @@ export default function SwapToShieldPage() {
       });
       let fullHash: `0x${string}`;
       try {
+        console.log("[trace-exec] pre-send sequence start");
         fullHash = await runShieldedSwapPreSendSequence({
           flowKind: "single",
           account: connectedAddress,
@@ -2269,6 +2270,7 @@ export default function SwapToShieldPage() {
             revalidateWallet(activeProvider, connectedAddress as string, connectedChainId),
           singleArgs: rebuilt,
         });
+        console.log("[trace-exec] pre-send sequence done, submitting tx");
       } catch (e: unknown) {
         throw new Error(mapZkRouterError(e, slip));
       }
