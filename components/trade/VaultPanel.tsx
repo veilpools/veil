@@ -10,11 +10,16 @@ export interface VaultPanelProps {
   onBackup: () => void;
   onBackupNote: (nullifier: string) => void;
   onWithdrawNote: (nullifier: string) => void;
+  onRemoveNote: (nullifier: string) => void;
 }
 
 /** Vault tab: local encrypted-note list with copy + withdraw shortcuts. */
-export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBackupNote, onWithdrawNote }) => {
+export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBackupNote, onWithdrawNote, onRemoveNote }) => {
   const [copiedCommitment, setCopiedCommitment] = useState<string | null>(null);
+  // Two-step remove: first click arms, second click removes. Guards against
+  // fat-finger loss (the encrypted backup lives separately, but re-adding
+  // needs a manual restore).
+  const [armedRemove, setArmedRemove] = useState<string | null>(null);
 
   function handleCopyCommitment(text: string) {
     navigator.clipboard.writeText(text);
@@ -224,6 +229,36 @@ export const VaultPanel: React.FC<VaultPanelProps> = ({ notes, onBackup, onBacku
                   }}
                 >
                     <span>Withdraw Note ➔</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (armedRemove === note.nullifier) {
+                        setArmedRemove(null);
+                        onRemoveNote(note.nullifier);
+                      } else {
+                        setArmedRemove(note.nullifier);
+                      }
+                    }}
+                    title="Remove a spent or duplicate note from this vault (back up first)"
+                    aria-label={`Remove note ${index + 1} from vault`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "5px 12px",
+                      minHeight: "24px",
+                      borderRadius: "var(--radius-sm)",
+                      backgroundColor: armedRemove === note.nullifier ? "rgba(180, 35, 24, 0.08)" : "transparent",
+                      border: "1px solid var(--color-border)",
+                      color: armedRemove === note.nullifier ? "#b42318" : "var(--color-muted)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all var(--duration-fast)",
+                    }}
+                  >
+                    <span>{armedRemove === note.nullifier ? "Confirm remove" : "Remove"}</span>
                   </button>
                 </div>
               </div>

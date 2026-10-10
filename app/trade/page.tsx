@@ -4038,6 +4038,19 @@ export default function SwapToShieldPage() {
                 setSelectedNoteNullifier(nullifier);
                 switchTab("withdraw");
               }}
+              onRemoveNote={(nullifier) => {
+                // Manual vault pruning (spent/duplicate notes). Onchain funds
+                // are untouched — this only drops the local entry. Back up
+                // before pruning anything unspent.
+                const remaining = notes.filter((n) => n.nullifier !== nullifier);
+                setNotes(remaining);
+                if (selectedNoteNullifier === nullifier) {
+                  setSelectedNoteNullifier(remaining[0]?.nullifier ?? null);
+                }
+                if (typeof window !== "undefined") {
+                  localStorage.setItem(LOCAL_STORAGE_KEY, serializeNotesList(remaining));
+                }
+              }}
             />
           )}
           {/* Vault tab lives in components/trade/VaultPanel.tsx */}
