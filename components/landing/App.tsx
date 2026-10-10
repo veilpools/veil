@@ -18,7 +18,12 @@ import { ContractsSecuritySection } from "./components/ContractsSecuritySection"
 import { FaqSection } from "./components/FaqSection";
 import { CtaSection } from "./components/CtaSection";
 import { Footer } from "./components/Footer";
-import { ParticleFollower } from "./components/ParticleFollower";
+import dynamic from "next/dynamic";
+
+const ParticleFollower = dynamic(
+  () => import("./components/ParticleFollower").then((mod) => mod.ParticleFollower),
+  { ssr: false }
+);
 import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
 
