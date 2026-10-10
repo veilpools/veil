@@ -77,7 +77,7 @@ describe("zk shielded swap tab (full-ZK router)", () => {
     expect(() => resolve({ sourceAsset: "0x000000000000000000000000000000000000dEaD" })).toThrow();
   });
 
-  it("fixes destination: VEIL->0.001 ETH note, ETH->VEIL per live minimum", async () => {
+  it("fixes destination: 0.001 both ways (pool fixed denomination, never the entrypoint minimum)", async () => {
     const mod = await import("../lib/zk-router");
     const fn = (
       mod as unknown as {
@@ -90,10 +90,10 @@ describe("zk shielded swap tab (full-ZK router)", () => {
     ).resolveZkShieldedSwapDeposit;
     expect(typeof fn).toBe("function");
     expect(fn({ withdrawAsset: VEIL })).toBe(ETH_DENOM);
-    const liveMin = parseEther("0.7");
-    expect(fn({ withdrawAsset: ETH_ZERO, veilMinimum: liveMin })).toBe(liveMin);
-    expect(() => fn({ withdrawAsset: ETH_ZERO, veilMinimum: null })).toThrow();
-    expect(() => fn({ withdrawAsset: ETH_ZERO, veilMinimum: 0n })).toThrow();
+    // Live minimum is accepted but IGNORED: the pool demands exactly 0.001.
+    expect(fn({ withdrawAsset: ETH_ZERO, veilMinimum: parseEther("0.7") })).toBe(parseEther("0.001"));
+    expect(fn({ withdrawAsset: ETH_ZERO, veilMinimum: null })).toBe(parseEther("0.001"));
+    expect(fn({ withdrawAsset: ETH_ZERO, veilMinimum: 0n })).toBe(parseEther("0.001"));
   });
 
   it("derives multi minSwapOut from live quote x slippage (never hardcoded)", async () => {

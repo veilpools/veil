@@ -122,6 +122,15 @@ export const TESTNET_BOW_V3_NATIVE_ASSET =
   ("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as Address);
 // ETH-pool registration minimum (parseEther("0.001") at deploy).
 export const TESTNET_BOW_V3_ETH_DENOMINATION = 1000000000000000n;
+// VEIL-pool FIXED denomination: identical 0.001 constant in the audited
+// contracts. This is the exact deposit value, NOT the entrypoint
+// minimumDeposit anti-dust floor (currently 0.0001) — confusing the two
+// reverts every flow with InvalidDenomination.
+export const TESTNET_BOW_V3_VEIL_DENOMINATION = 1000000000000000n;
+// VEIL-pool FIXED denomination (0xbow DEPOSIT_DENOMINATION constant, both
+// pools). This is the exact deposit value, NOT the entrypoint minimumDeposit
+// anti-dust floor — confusing the two reverts every flow with
+// InvalidDenomination.
 
 /** True when every v3 suite address is a valid non-zero hex address. */
 export function isTestnetBowV3Configured(): boolean {

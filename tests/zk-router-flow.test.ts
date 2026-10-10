@@ -324,10 +324,13 @@ describe("zk router flow wiring (full-ZK UI)", () => {
     expect(revalidateIdx).toBeGreaterThan(-1);
     expect(simIdx).toBeGreaterThan(revalidateIdx);
     expect(sendIdx).toBeGreaterThan(simIdx);
-    // C1: the live-drifting ETH->VEIL deposit leg is re-checked; VEIL->ETH is
-    // not permanently blocked. Both directions must quote.
-    expect(src).toContain("zkIsEthIn && veilMinimum !== zkBundle.depositValue");
-    expect(src).not.toContain("!zkIsEthIn && veilMinimum !== zkBundle.depositValue");
+    // C1 (fixed-denomination update): the quoted bundle must carry the pool
+    // fixed 0.001 note on both legs (minimum-vs-denomination confusion
+    // caused InvalidDenomination on every flow). Neither direction may be
+    // permanently blocked and the stale minimum-comparison must be gone.
+    expect(src).toContain("fixedDepositValue");
+    expect(src).toMatch(/depositValue !== \(zkIsEthIn \? TESTNET_BOW_V3_VEIL_DENOMINATION : TESTNET_BOW_V3_ETH_DENOMINATION\)/);
+    expect(src).not.toContain("zkIsEthIn && veilMinimum !==");
     // M1: in-flight guard precedes the prover modal in both ZK handlers.
     const quoteIdx = src.indexOf("handleZkQuote");
     const quoteSrc = src.slice(quoteIdx, quoteIdx + 6000);

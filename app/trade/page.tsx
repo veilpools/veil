@@ -102,6 +102,7 @@ import {
   TESTNET_BOW_V3_VEIL_POOL,
   TESTNET_BOW_V3_VEIL_TOKEN,
   TESTNET_BOW_V3_ETH_DENOMINATION,
+  TESTNET_BOW_V3_VEIL_DENOMINATION,
   isTestnetBowConfigured,
   isTestnetBowV3Configured,
   getBowSuite,
@@ -659,9 +660,10 @@ export default function SwapToShieldPage() {
     return Math.min(86400, Math.max(300, Math.floor(minutes * 60)));
   }
 
-  // 0xbow deposit input validity: the amount must parse to the exact live
-  // denomination (fixed 0.001 ETH, live VEIL minimum). Anything else
-  // disables execution with an honest message, never an alert().
+  // 0xbow deposit input validity: the amount must parse to the exact FIXED
+  // denomination (0.001 both assets — the pools' immutable DEPOSIT_DENOMINATION,
+  // never the entrypoint minimumDeposit floor). Anything else disables
+  // execution with an honest message, never an alert().
   const isBowEthDeposit = bowDepositAsset === "ETH";
   let parsedBowDeposit: bigint | null = null;
   try {
@@ -670,7 +672,7 @@ export default function SwapToShieldPage() {
   } catch {
     parsedBowDeposit = null;
   }
-  const bowExpectedDenomination = isBowEthDeposit ? TESTNET_BOW_V3_ETH_DENOMINATION : veilMinimum;
+  const bowExpectedDenomination = isBowEthDeposit ? TESTNET_BOW_V3_ETH_DENOMINATION : TESTNET_BOW_V3_VEIL_DENOMINATION;
   const bowDepositMatchesDenomination =
     parsedBowDeposit !== null &&
     bowExpectedDenomination !== null &&
@@ -710,7 +712,7 @@ export default function SwapToShieldPage() {
     zkIsEthIn ? TESTNET_BOW_V3_VEIL_TOKEN : ETH_ZERO_ADDRESS
   ) as Address;
   const zkDepositValue: bigint | null = zkIsEthIn
-    ? veilMinimum
+    ? TESTNET_BOW_V3_VEIL_DENOMINATION
     : TESTNET_BOW_V3_ETH_DENOMINATION;
   const zkNoteValid =
     zkNote !== null && zkDepositValue !== null && zkDepositValue > 0n;
@@ -742,9 +744,7 @@ export default function SwapToShieldPage() {
     hasQuote: zkShieldedSwapHasQuote,
   });
   const zkShieldedSwapDestinationLabel = zkIsEthIn
-    ? veilMinimum !== null
-      ? `${formatEther(veilMinimum)} VEIL note`
-      : "VEIL note (loading live minimum…)"
+    ? `${formatEther(TESTNET_BOW_V3_VEIL_DENOMINATION)} VEIL note`
     : `${formatEther(TESTNET_BOW_V3_ETH_DENOMINATION)} ETH note`;
   const zkShieldedSwapSourceLabel = zkNote
     ? `${formatEther(BigInt(zkNote.denomination))} ${zkIsEthIn ? "ETH" : "VEIL"} note`
@@ -1401,11 +1401,11 @@ export default function SwapToShieldPage() {
       setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
       return;
     }
-    // Deposit drift re-check: the ETH->VEIL leg deposits the live VEIL
-    // minimum, which drifts; VEIL->ETH deposits the fixed ETH denomination.
-    if (zkIsEthIn && veilMinimum !== zkBundle.depositValue) {
+    // Deposit drift re-check: both legs deposit fixed 0.001 notes. The bundle
+    // must carry the fixed denomination or the pool reverts InvalidDenomination.
+    if (zkBundle.depositValue !== (zkIsEthIn ? TESTNET_BOW_V3_VEIL_DENOMINATION : TESTNET_BOW_V3_ETH_DENOMINATION)) {
       setFlowError(
-        "The live VEIL minimum changed onchain since the quote. Refresh the live quote and try again. No transaction was sent."
+        "The quoted deposit no longer matches the pool fixed denomination. Refresh the live quote and try again. No transaction was sent."
       );
       return;
     }
@@ -2068,12 +2068,13 @@ export default function SwapToShieldPage() {
       setFlowError(e instanceof Error ? e.message : "Invalid slippage setting.");
       return;
     }
-    // Deposit drift re-check: the ETH->VEIL leg deposits the live VEIL
-    // minimum, which drifts; VEIL->ETH deposits the fixed ETH denomination.
+    // Deposit drift re-check: both legs deposit fixed 0.001 notes. The quoted
+    // bundle must carry the fixed denomination or the pool reverts.
     const activeDepositValue = zkMultiBundle?.depositValue ?? zkBundle?.depositValue;
-    if (zkIsEthIn && veilMinimum !== activeDepositValue) {
+    const fixedDepositValue = zkIsEthIn ? TESTNET_BOW_V3_VEIL_DENOMINATION : TESTNET_BOW_V3_ETH_DENOMINATION;
+    if (activeDepositValue !== fixedDepositValue) {
       setFlowError(
-        "The live VEIL minimum changed onchain since the quote. Refresh the live quote and try again. No transaction was sent."
+        "The quoted deposit no longer matches the pool fixed denomination. Refresh the live quote and try again. No transaction was sent."
       );
       return;
     }
@@ -2424,9 +2425,7 @@ export default function SwapToShieldPage() {
       setFlowError(
         isBowEthDeposit
           ? `Enter the exact 0xbow note denomination (${formatEther(TESTNET_BOW_V3_ETH_DENOMINATION)} ETH). No transaction was sent.`
-          : veilMinimum === null
-          ? "The live VEIL minimum is still loading. Wait for it to load and try again. No transaction was sent."
-          : `Enter the exact live VEIL minimum (${formatEther(veilMinimum)} VEIL). No transaction was sent.`
+          : `Enter the exact 0xbow note denomination (${formatEther(TESTNET_BOW_V3_VEIL_DENOMINATION)} VEIL). No transaction was sent.`
       );
       return;
     }
@@ -2549,12 +2548,12 @@ export default function SwapToShieldPage() {
             `Insufficient test VEIL balance. Shielding needs ${formatEther(depositValue)} test VEIL (${TESTNET_BOW_V3_VEIL_TOKEN}) already in your wallet — there is no onchain faucet. Fund test VEIL and try again. No transaction was sent.`
           );
         }
-        // Live-minimum drift re-check inside the send window: the deposit
-        // must equal the current onchain minimum, never a stale display.
+        // Floor re-check inside the send window: the fixed 0.001 deposit must
+        // still clear the live entrypoint minimum (anti-dust floor).
         const liveMinimum = liveConfig[1] as bigint;
-        if (liveMinimum !== depositValue) {
+        if (depositValue < liveMinimum) {
           throw new Error(
-            "The live VEIL minimum changed onchain since this screen loaded. Reload the minimum and try again. No transaction was sent."
+            "The live VEIL minimum rose above the fixed 0.001 note. Reload and try again. No transaction was sent."
           );
         }
         if (allow < depositValue) {

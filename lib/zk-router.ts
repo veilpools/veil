@@ -12,6 +12,7 @@ import {
 import {
   TESTNET_BOW_V3_ENTRYPOINT,
   TESTNET_BOW_V3_ETH_DENOMINATION,
+  TESTNET_BOW_V3_VEIL_DENOMINATION,
   TESTNET_BOW_V3_VEIL_TOKEN,
 } from "./privacy-pools";
 
@@ -96,8 +97,11 @@ export function resolveZkShieldedSwapAssets(args: {
 
 /**
  * Fixed destination for the shielded-swap tab.
- * VEIL -> 0.001 ETH note (fixed denomination); ETH -> VEIL per the live
- * minimum (never hardcoded). Fails closed when the live minimum is missing.
+ * VEIL -> 0.001 ETH note (fixed denomination); ETH -> 0.001 VEIL note
+ * (fixed denomination). These are the 0xbow pools' immutable
+ * DEPOSIT_DENOMINATION — NOT the entrypoint minimumDeposit anti-dust floor
+ * (currently 0.0001). Confusing the two bricks every flow with
+ * InvalidDenomination. Fails closed when called with an unknown asset.
  */
 export function resolveZkShieldedSwapDeposit(args: {
   withdrawAsset: string;
@@ -111,13 +115,9 @@ export function resolveZkShieldedSwapDeposit(args: {
     return args.ethDenomination ?? TESTNET_BOW_V3_ETH_DENOMINATION;
   }
   if (withdraw === ethZero) {
-    const minimum = args.veilMinimum ?? null;
-    if (minimum === null || minimum <= 0n) {
-      throw new Error(
-        "The live VEIL minimum is still loading. Wait for it to load and try again. Nothing was simulated."
-      );
-    }
-    return minimum;
+    // Fixed 0.001 — the veilMinimum arg is intentionally ignored for the
+    // deposit value (it is only the entrypoint anti-dust floor).
+    return TESTNET_BOW_V3_VEIL_DENOMINATION;
   }
   throw new Error(
     "Unsupported shielded-swap source asset: only 0xbow ETH notes and VEIL notes can be swapped. No transaction was sent."
@@ -368,6 +368,8 @@ export function mapZkRouterError(error: unknown, slippagePercent?: number): stri
     return `Full-ZK flow reverted: the relay recipient must equal the ZK router (${TESTNET_ZK_ROUTER_ADDRESS}) so the relay exit chains into the swap. Rebuild the flow and try again.`;
   if (name === "InvalidSwapLeg" || /InvalidSwapLeg/i.test(msg))
     return "Full-ZK flow reverted: the swap leg direction does not match the withdraw and deposit assets (InvalidSwapLeg). No transaction was sent.";
+  if (name === "InvalidDenomination" || /InvalidDenomination/i.test(msg))
+    return "Full-ZK flow reverted: a deposit amount does not equal the pool fixed 0.001 denomination (InvalidDenomination). 0xbow pools accept exactly 0.001 per note — refresh the quote so amounts re-derive live. No transaction was sent.";
   if (name === "InsufficientOutputForDenomination" || /InsufficientOutputForDenomination/i.test(msg))
     return "Full-ZK flow reverted: the live swap output is below the deposit amount (InsufficientOutputForDenomination). Pick a smaller deposit or try again later. No transaction was sent.";
   if (name === "InvalidPrecommitment" || /InvalidPrecommitment/i.test(msg))
