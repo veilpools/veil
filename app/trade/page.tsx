@@ -1882,6 +1882,10 @@ export default function SwapToShieldPage() {
         setZkQuoteNote(
           `Live quote locked after ${quoted.probes} free simulations: ${formatEther(quoted.quotedSwapOut)} ${zeroForOne ? "VEIL" : "ETH"} (min ${formatEther(quoted.minSwapOut)} at ${slip}% slippage, single note). Review and execute — execution re-simulates before sending.`
         );
+        // Quote success must SHOW success: without this the modal keeps
+        // step 2 "running" forever and looks exactly like a hang (no popup
+        // ever comes from quoting — the popup comes from Execute).
+        setProverSteps((prev) => prev.map((s) => ({ ...s, status: "completed" as const })));
         setIsProverOpen(true);
         return;
       } catch (singleErr: unknown) {
@@ -2058,10 +2062,12 @@ export default function SwapToShieldPage() {
       setZkFlowKind("multi");
       setZkQuoteOut(multiQuoted.quotedSwapOut);
       setZkMinOut(multiQuoted.minSwapOut);
-      setZkQuoteNote(
-        `Live batched quote locked after ${multiQuoted.probes} free simulations (${multiWithdrawals.length} notes): ${formatEther(multiQuoted.quotedSwapOut)} ${zeroForOne ? "VEIL" : "ETH"} (min ${formatEther(multiQuoted.minSwapOut)} at ${slip}% slippage). Review and execute — execution re-simulates before sending.`
-      );
-      setIsProverOpen(true);
+        setZkQuoteNote(
+          `Live batched quote locked after ${multiQuoted.probes} free simulations (${multiWithdrawals.length} notes): ${formatEther(multiQuoted.quotedSwapOut)} ${zeroForOne ? "VEIL" : "ETH"} (min ${formatEther(multiQuoted.minSwapOut)} at ${slip}% slippage). Review and execute — execution re-simulates before sending.`
+        );
+        // Same success-visibility rule as the single path above.
+        setProverSteps((prev) => prev.map((s) => ({ ...s, status: "completed" as const })));
+        setIsProverOpen(true);
     } catch (e: unknown) {
       console.error("Shielded Swap quote error:", e);
       setIsProverOpen(false);
