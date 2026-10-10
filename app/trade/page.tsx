@@ -1881,6 +1881,7 @@ export default function SwapToShieldPage() {
       }
 
       // Batched multi-note path: same-asset, same-scope notes from the vault.
+      const batchAsset = (bowNote.asset as string).toLowerCase() === TESTNET_BOW_V3_VEIL_TOKEN.toLowerCase() ? "VEIL" : "ETH";
       const batch = zkBowNotes
         .filter(
           (n) =>
@@ -1891,7 +1892,7 @@ export default function SwapToShieldPage() {
         .slice(0, 8);
       if (batch.length < 2) {
         throw new Error(
-          "Full-ZK flow reverted: the live swap output is below the deposit amount (InsufficientOutputForDenomination). One note cannot fund the destination and no same-asset batch is available. No transaction was sent."
+          `One ${batchAsset} note's swap output is below the 0.001 deposit note, and you hold ${batch.length} ${batchAsset} note(s) — batching needs at least 2. Deposit ${2 - batch.length} more 0.001 ${batchAsset} note(s) (same asset, back each one up), then Refresh Quote: the batch flow combines up to 8 notes into one atomic swap. No transaction was sent.`
         );
       }
       const multiWithdrawals: { processooor: Address; data: `0x${string}` }[] = [];
