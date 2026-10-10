@@ -3193,6 +3193,21 @@ export default function SwapToShieldPage() {
           transport: custom(activeProvider),
         });
 
+        // Pre-send spent check: a note withdrawn before (stale vault entry)
+        // reverts onchain every time (NullifierAlreadySpent). Fail here with
+        // an honest message instead of burning gas on a certain revert.
+        const alreadySpent = await testnetClient.readContract({
+          address: bowRelayContext.pool,
+          abi: parseAbi(["function nullifierHashes(uint256) view returns (bool)"]),
+          functionName: "nullifierHashes",
+          args: [proofStruct.pubSignals[1]],
+        });
+        if (alreadySpent) {
+          throw new Error(
+            "This note was already withdrawn onchain (nullifier spent). Remove it from the vault — retrying will revert every time. No transaction was sent."
+          );
+        }
+
         await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
         const relayHash = await walletClient.writeContract({
           address: bowEntrypoint,
