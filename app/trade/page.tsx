@@ -22,6 +22,7 @@ import {
   loadPendingNotes,
   type ShieldedNote,
   type AnyShieldedNote,
+  type BowShieldedNote,
 } from "../../lib/note";
 import { ShieldNoteBackupModal } from "../../components/ShieldNoteBackupModal";
 import { VaultPanel } from "../../components/trade/VaultPanel";
@@ -113,7 +114,6 @@ import {
   buildBowStateTree,
   fetchBowAspLabelsAllPools,
   fetchBowPoolEvents,
-  fetchBowAspSet,
   proveBowWithdrawal,
   assertVeilAllowanceForBowDeposit,
   BOW_V3_NATIVE_DEPOSIT_ABI,
@@ -203,6 +203,61 @@ const BOW_POOL_SCOPE_ABI = parseAbi([
 const BOW_POOL_STATE_ABI = parseAbi([
   "function currentRoot() view returns (uint256)",
 ]);
+
+// Audit-round-3 F-03: shared fail-fast integrity check for the ZK quote
+// paths. Same pattern and messages as the withdraw path: the saved secrets
+// must reproduce the onchain deposit precommitment and commitmentHash, or no
+// proof can ever verify. Runs before minutes of proving; every failure
+// throws before any simulation, and no transaction is sent.
+async function assertBowNoteIntegrity(
+  testnetClient: ReturnType<typeof createTestnetBowPublicClient>,
+  pool: Address,
+  bowNote: BowShieldedNote
+): Promise<void> {
+  const denomination = BigInt(bowNote.denomination);
+  const label = BigInt(bowNote.label);
+  const nullifier = BigInt(bowNote.nullifier);
+  const secret = BigInt(bowNote.secret);
+  const commitmentHash = BigInt(bowNote.commitmentHash);
+  const depositLogs = await testnetClient.getContractEvents({
+    address: pool,
+    abi: parseAbi([
+      "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
+    ]),
+    eventName: "Deposited",
+    fromBlock: BigInt(bowNote.blockNumber),
+    toBlock: BigInt(bowNote.blockNumber),
+  });
+  const ownDeposit = depositLogs.find(
+    (l) => l.transactionHash.toLowerCase() === (bowNote.txHash as string).toLowerCase()
+  );
+  if (!ownDeposit) {
+    throw new Error(
+      "Deposit event not found for this note's transaction. The note may belong to a different pool. No transaction was sent."
+    );
+  }
+  const localPrecommitment = BigInt(
+    bowHashPrecommitment(nullifier as never, secret as never) as bigint | number | string
+  );
+  if (localPrecommitment !== BigInt((ownDeposit.args as { _precommitmentHash: bigint })._precommitmentHash)) {
+    throw new Error(
+      "Saved note secrets do not match the onchain deposit (precommitment mismatch). This note is corrupted and can never produce a valid proof — do not retry proving. Deposit fresh and back it up. No transaction was sent."
+    );
+  }
+  const recomputed = bowGetCommitment(denomination, label, nullifier as never, secret as never) as
+    | { hash?: unknown }
+    | bigint;
+  const recomputedHash = BigInt(
+    (typeof recomputed === "object" && recomputed !== null && "hash" in recomputed
+      ? (recomputed as { hash?: unknown }).hash
+      : recomputed) as bigint | number | string
+  );
+  if (recomputedHash !== commitmentHash) {
+    throw new Error(
+      "Saved note does not reproduce its own commitment (commitment mismatch). The vault entry mixes data from different deposits and can never produce a valid proof — do not retry proving. Restore the correct backup for this note, or deposit fresh. No transaction was sent."
+    );
+  }
+}
 
 async function getConnectedChainId(provider: { request: (args: { method: string; params?: unknown }) => Promise<unknown> }): Promise<number | null> {
   try {
@@ -1114,6 +1169,9 @@ export default function SwapToShieldPage() {
       const secret = BigInt(bowNote.secret);
       const commitmentHash = BigInt(bowNote.commitmentHash);
 
+      // Fail fast on corrupted vault notes before minutes of proving (F-03).
+      await assertBowNoteIntegrity(testnetClient, sourcePool, bowNote);
+
       let { orderedCommitments, labels } = await fetchBowPoolEvents(testnetClient, sourcePool);
       if (!orderedCommitments.includes(commitmentHash)) {
         throw new Error(
@@ -1121,6 +1179,17 @@ export default function SwapToShieldPage() {
         );
       }
       let stateTree = buildBowStateTree(orderedCommitments);
+      // State-root freshness gate (F-02): never prove against a stale tree.
+      const liveZkStateRoot = await testnetClient.readContract({
+        address: sourcePool,
+        abi: BOW_POOL_STATE_ABI,
+        functionName: "currentRoot",
+      });
+      if (stateTree.root !== BigInt(liveZkStateRoot)) {
+        throw new Error(
+          "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
+        );
+      }
       // ASP is entrypoint-global: union labels across BOTH pools, or the set
       // permanently mismatches once a second pool holds deposits.
       labels = await fetchBowAspLabelsAllPools(testnetClient, [TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL]);
@@ -1639,6 +1708,9 @@ export default function SwapToShieldPage() {
       const secret = BigInt(bowNote.secret);
       const commitmentHash = BigInt(bowNote.commitmentHash);
 
+      // Fail fast on corrupted vault notes before minutes of proving (F-03).
+      await assertBowNoteIntegrity(testnetClient, sourcePool, bowNote);
+
       let { orderedCommitments, labels } = await fetchBowPoolEvents(testnetClient, sourcePool);
       if (!orderedCommitments.includes(commitmentHash)) {
         throw new Error(
@@ -1646,6 +1718,17 @@ export default function SwapToShieldPage() {
         );
       }
       let stateTree = buildBowStateTree(orderedCommitments);
+      // State-root freshness gate (F-02): never prove against a stale tree.
+      const liveShieldedSwapStateRoot = await testnetClient.readContract({
+        address: sourcePool,
+        abi: BOW_POOL_STATE_ABI,
+        functionName: "currentRoot",
+      });
+      if (stateTree.root !== BigInt(liveShieldedSwapStateRoot)) {
+        throw new Error(
+          "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
+        );
+      }
       labels = await fetchBowAspLabelsAllPools(testnetClient, [TESTNET_BOW_V3_ETH_POOL, TESTNET_BOW_V3_VEIL_POOL]);
       let aspSet = buildBowAssociationSet(labels);
       if (!aspSet.labels.includes(label)) {
@@ -1812,8 +1895,23 @@ export default function SwapToShieldPage() {
       const multiScopes: bigint[] = [];
       const multiSpent: bigint[] = [];
       const multiNullifiers: bigint[] = [];
+      // The batched proofs below reuse the single-path tree built above, but
+      // only after the single-flow quote simulations ran — re-gate freshness
+      // (F-02) so a stale tree fails fast instead of burning batch proving.
+      const liveBatchStateRoot = await testnetClient.readContract({
+        address: sourcePool,
+        abi: BOW_POOL_STATE_ABI,
+        functionName: "currentRoot",
+      });
+      if (stateTree.root !== BigInt(liveBatchStateRoot)) {
+        throw new Error(
+          "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
+        );
+      }
       for (const batchNote of batch) {
         if (!isBowNote(batchNote)) continue;
+        // Fail fast on corrupted vault notes before minutes of proving (F-03).
+        await assertBowNoteIntegrity(testnetClient, sourcePool, batchNote);
         const bCommitment = BigInt(batchNote.commitmentHash);
         if (!orderedCommitments.includes(bCommitment)) continue;
         const bStateProof = stateTree.proof(bCommitment);
@@ -2850,32 +2948,20 @@ export default function SwapToShieldPage() {
           );
         }
 
-      let stateTree = buildBowStateTree(orderedCommitments);
-      let aspSet = buildBowAssociationSet(labels);
-      // Same state-root freshness gate as the withdraw path: never prove
-      // against a stale tree.
-      const liveSwapStateRoot = await testnetClient.readContract({
-        address: bowRelayContext.pool,
-        abi: BOW_POOL_STATE_ABI,
-        functionName: "currentRoot",
-      });
-      if (stateTree.root !== BigInt(liveSwapStateRoot)) {
-        throw new Error(
-          "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
-        );
-      }
-
+        let stateTree = buildBowStateTree(orderedCommitments);
+        let aspSet = buildBowAssociationSet(labels);
         // State-root freshness gate: our rebuilt tree must equal the pool's
         // live currentRoot, or the proof targets a stale root and the relay
-        // dies with UnknownStateRoot after minutes of proving.
-        const liveStateRoot = await testnetClient.readContract({
+        // dies with UnknownStateRoot after minutes of proving. Never prove
+        // against a stale tree.
+        const liveSwapStateRoot = await testnetClient.readContract({
           address: bowRelayContext.pool,
           abi: BOW_POOL_STATE_ABI,
           functionName: "currentRoot",
         });
-        if (stateTree.root !== BigInt(liveStateRoot)) {
+        if (stateTree.root !== BigInt(liveSwapStateRoot)) {
           throw new Error(
-            "Onchain state changed while preparing (new deposit landed). Retry the withdrawal — no transaction was sent."
+            "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
           );
         }
 

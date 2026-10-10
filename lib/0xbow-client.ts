@@ -418,31 +418,3 @@ export async function fetchBowAspLabelsAllPools(
   }
   return [...seen].map(BigInt);
 }
-
-export async function fetchBowAspSet(
-  client: PublicClient,
-  entrypointAddress: Address = TESTNET_0XBOW.entrypointProxy,
-  poolAddress: Address = TESTNET_0XBOW.pool,
-  fromBlock: bigint = TESTNET_0XBOW_META.poolDeploymentBlock
-) {
-  const { labels } = await fetchBowPoolEvents(client, poolAddress, fromBlock);
-  const aspSet = buildBowAssociationSet(labels);
-  const onchainRoot = await client.readContract({
-    address: entrypointAddress,
-    abi: [
-      {
-        type: "function",
-        name: "latestRoot",
-        stateMutability: "view",
-        inputs: [],
-        outputs: [{ name: "", type: "uint256" }],
-      },
-    ],
-    functionName: "latestRoot",
-  });
-  return {
-    aspSet,
-    onchainRoot: BigInt(onchainRoot as bigint),
-    isConsistent: aspSet.root === BigInt(onchainRoot as bigint),
-  };
-}

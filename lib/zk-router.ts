@@ -49,6 +49,10 @@ export const TESTNET_ZK_ROUTER_MULTI_ADDRESS =
   (process.env.NEXT_PUBLIC_TESTNET_VEIL_ZK_ROUTER_MULTI as Address | undefined) ||
   ("0xc009197da4c4e7134ab8d8969d9442a5c8afb220" as Address);
 
+// Zero address shared by the shielded-swap resolvers below. Declared
+// before use so a future edit cannot introduce a TDZ slip (audit F-07).
+export const ZK_ETH_ZERO_ADDRESS = ETH_ZERO_ADDRESS;
+
 /** Shielded-swap direction: source asset determines the swap leg. */
 export type ZkShieldedSwapDirection = "ETH_TO_VEIL" | "VEIL_TO_ETH";
 
@@ -137,7 +141,6 @@ export const ZK_POOL_KEY = {
 export const ZK_SQRT_PRICE_LIMIT = TESTNET_ROUTER_SQRT_PRICE_LIMIT;
 export const ZK_SQRT_PRICE_LIMIT_ETH_IN = TESTNET_ROUTER_SQRT_PRICE_LIMIT_ETH_IN;
 export const ZK_HOOK_DATA = TESTNET_ROUTER_HOOK_DATA;
-export const ZK_ETH_ZERO_ADDRESS = ETH_ZERO_ADDRESS;
 
 /** Upper bound on free quote simulations per flow (fail closed past it). */
 export const ZK_FLOW_MAX_PROBES = 24;
@@ -951,7 +954,8 @@ export async function runShieldedSwapPreSendSequence(params: {
  * Single source of truth for whether the ZK Execute button stays disabled.
  * Disabled until a fresh live quote exists; when disconnected it stays
  * enabled so it can open the wallet modal.
- */export function isZkExecuteDisabled(args: {
+ */
+export function isZkExecuteDisabled(args: {
   isExecuting: boolean;
   connected: boolean;
   noteValid: boolean;
