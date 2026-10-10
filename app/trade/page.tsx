@@ -192,6 +192,10 @@ const BOW_POOL_SCOPE_ABI = parseAbi([
   "function nullifierHashes(uint256) view returns (bool)",
 ]);
 
+const BOW_POOL_STATE_ABI = parseAbi([
+  "function currentRoot() view returns (uint256)",
+]);
+
 async function getConnectedChainId(provider: { request: (args: { method: string; params?: unknown }) => Promise<unknown> }): Promise<number | null> {
   try {
     const raw = await provider.request({ method: "eth_chainId" });
@@ -2027,8 +2031,34 @@ export default function SwapToShieldPage() {
           );
         }
 
-        let stateTree = buildBowStateTree(orderedCommitments);
-        let aspSet = buildBowAssociationSet(labels);
+      let stateTree = buildBowStateTree(orderedCommitments);
+      let aspSet = buildBowAssociationSet(labels);
+      // Same state-root freshness gate as the withdraw path: never prove
+      // against a stale tree.
+      const liveSwapStateRoot = await testnetClient.readContract({
+        address: bowRelayContext.pool,
+        abi: BOW_POOL_STATE_ABI,
+        functionName: "currentRoot",
+      });
+      if (stateTree.root !== BigInt(liveSwapStateRoot)) {
+        throw new Error(
+          "Onchain state changed while preparing (new deposit landed). Retry — no transaction was sent."
+        );
+      }
+
+        // State-root freshness gate: our rebuilt tree must equal the pool's
+        // live currentRoot, or the proof targets a stale root and the relay
+        // dies with UnknownStateRoot after minutes of proving.
+        const liveStateRoot = await testnetClient.readContract({
+          address: bowRelayContext.pool,
+          abi: BOW_POOL_STATE_ABI,
+          functionName: "currentRoot",
+        });
+        if (stateTree.root !== BigInt(liveStateRoot)) {
+          throw new Error(
+            "Onchain state changed while preparing (new deposit landed). Retry the withdrawal — no transaction was sent."
+          );
+        }
 
         if (!aspSet.labels.includes(label)) {
           throw new Error("Deposit label not found in Association Set. Try syncing ASP.");
