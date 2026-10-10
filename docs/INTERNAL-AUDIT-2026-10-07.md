@@ -61,3 +61,6 @@
 
 - Operator-run full cycle (2026-10-10, fresh suite): deposit 0.001 ETH  x123076bf603fdacff767905512276c51cef59dc294e15d3a00f8df29ab5cfe26 + ASP publish  x3651fe218401aeae8c9acea4e74a234a184bcef3bd0fc7226d78aecbf40032cb + Groth16 relay  xa5da2a023b964ae1492f6a927af6b048f2184aac0bcfb4f0fd7adb10ea766f4b to fresh burner (+0.001 exact). Sim-gated before send; local verify true.
 
+
+- VEIL 0xbow full cycle LIVE (2026-10-10, fresh suite): deposit 0.001 VEIL  x8de91630c649… + ASP + Groth16 relay  x32ff754834406a1b0ac9a155b0b8aa40c7fbbc17aa0785ec677a945f531b4d19 to fresh burner (+0.001 VEIL exact).
+
