@@ -67,3 +67,6 @@
 
 - Multi-note full-ZK flow LIVE x2 (2026-10-10): 3x relay + swap + 0.001 VEIL deposit in one atomic tx, router  xc009…, tx  x1561ed45a7435a1db55556780ebd98c94c819ae7af5105d984af7bca89af44e1 (first:  xe14f…). Sim-gated, local-verify true, invariant holds.
 
+
+- Single-note full-ZK flow LIVE (2026-10-10, price recovered ~2154 VEIL/ETH): 1x relay + swap + 0.001 VEIL deposit in one atomic tx via router  x80b1…, tx  xe598fd32e7ee4f6efe9198defbe8676b3ac8c364622cf606251c9f286f020b49.
+
