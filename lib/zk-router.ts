@@ -124,6 +124,49 @@ export function resolveZkShieldedSwapDeposit(args: {
   );
 }
 
+/** Minimal StateView ABI for the pre-prove viability read (slot0 only). */
+export const ZK_V4_STATE_VIEW_ABI = [
+  {
+    type: "function",
+    name: "getSlot0",
+    stateMutability: "view",
+    inputs: [{ name: "poolId", type: "bytes32" }],
+    outputs: [
+      { name: "sqrtPriceX96", type: "uint160" },
+      { name: "tick", type: "int24" },
+      { name: "protocolFee", type: "uint24" },
+      { name: "lpFee", type: "uint24" },
+    ],
+  },
+] as const;
+
+/** Default 5% safety haircut: estimates must clear the note after fees + impact. */
+export const ZK_VIABILITY_HAIRCUT_BPS = 500;
+
+/**
+ * Optimistic v4 exact-input estimate from slot0 only (ignores concentrated
+ * impact, then applies a haircut). Used ONLY to fail fast before minutes of
+ * proving: when even this optimistic number cannot fund the fixed note, the
+ * real swap cannot either. Never used to approve a flow (bracketing does).
+ */
+export function estimateV4SwapOut(args: {
+  sqrtPriceX96: bigint;
+  amountIn: bigint;
+  zeroForOne: boolean;
+  haircutBps?: number;
+}): bigint {
+  if (args.amountIn <= 0n || args.sqrtPriceX96 <= 0n) return 0n;
+  const Q192 = 2n ** 192n;
+  const priceX192 = args.sqrtPriceX96 * args.sqrtPriceX96;
+  const gross = args.zeroForOne
+    ? (args.amountIn * priceX192) / Q192
+    : (args.amountIn * Q192) / priceX192;
+  const haircut = BigInt(args.haircutBps ?? ZK_VIABILITY_HAIRCUT_BPS);
+  if (haircut < 0n || haircut > 10000n) throw new Error("Haircut must be 0-10000 bps.");
+  return (gross * (10000n - haircut)) / 10000n;
+}
+
+
 export const TESTNET_ZK_EXPLORER_TX_BASE =
   "https://explorer.testnet.chain.robinhood.com/tx/";
 

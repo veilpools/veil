@@ -129,6 +129,7 @@ import {
   TESTNET_ZK_ROUTER_MULTI_ADDRESS,
   buildFullZkFlowArgs,
   buildMultiFullZkFlowArgs,
+  estimateV4SwapOut,
   findFullZkFlowExecuted,
   isZkExecuteDisabled,
   mapZkRouterError,
@@ -139,7 +140,12 @@ import {
   runShieldedSwapPreSendSequence,
   simulateFullZkFlow,
   simulateMultiFullZkFlow,
+  ZK_V4_STATE_VIEW_ABI,
 } from "../../lib/zk-router";
+import {
+  SHIELDED_SWAP_V4_POOL_ID,
+  SHIELDED_SWAP_V4_STATE_VIEW,
+} from "../../lib/shielded-swap-ui";
 import { ZkSwapToShieldPanel } from "../../components/trade/ZkSwapToShieldPanel";
 import { ZkShieldedSwapPanel } from "../../components/trade/ZkShieldedSwapPanel";
 import { buildBowAssociationSet, buildBowAssociationProof } from "../../lib/0xbow-association";
@@ -1659,6 +1665,35 @@ export default function SwapToShieldPage() {
     }
     const bowNote = zkNote;
     const { withdrawAsset, depositAsset, zeroForOne } = bound;
+
+    // Viability pre-check (seconds, before minutes of proving): estimate the
+    // swap output from live slot0. When even the optimistic estimate cannot
+    // fund the fixed note, proving would only end in InsufficientOutput.
+    try {
+      const viabilityClient = createTestnetBowPublicClient();
+      const slot0 = await viabilityClient.readContract({
+        address: SHIELDED_SWAP_V4_STATE_VIEW,
+        abi: ZK_V4_STATE_VIEW_ABI,
+        functionName: "getSlot0",
+        args: [SHIELDED_SWAP_V4_POOL_ID],
+      });
+      const estimated = estimateV4SwapOut({
+        sqrtPriceX96: BigInt(slot0[0]),
+        amountIn: BigInt(bowNote.denomination),
+        zeroForOne,
+      });
+      if (estimated < depositValue) {
+        setFlowError(
+          zeroForOne
+            ? "Live price cannot fund a 0.001 VEIL note from 0.001 ETH right now — the pool is short on VEIL. Try again after liquidity returns. Nothing was simulated."
+            : "A 0.001 VEIL note cannot fund a 0.001 ETH note at live prices (fixed denominations both sides) — no batch size clears it. Swap ETH notes instead, or withdraw this note. Nothing was simulated."
+        );
+        return;
+      }
+    } catch {
+      // Read trouble must not block a viable flow: only a proven-below
+      // estimate fails fast above. Bracketing re-checks everything anyway.
+    }
 
     if (txInFlight.current > 0) return;
     setIsExecuting(true);
