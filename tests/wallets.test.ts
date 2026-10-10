@@ -78,4 +78,14 @@ describe("veil wallets registry", () => {
     };
     await expect(revalidateWallet(locked, addr, 46630)).rejects.toThrow();
   });
+
+  it("fails fast (not hangs) when the wallet provider never responds", async () => {
+    const addr = "0x272568D25b9634Ad8A4e8E8CBB10b729f41C781d";
+    const hanging = {
+      request: (_args: { method: string }) => new Promise<never>(() => {}),
+    };
+    const start = Date.now();
+    await expect(revalidateWallet(hanging, addr, 46630)).rejects.toThrow(/timed out|timeout/);
+    expect(Date.now() - start).toBeLessThan(30000);
+  }, 40000);
 });

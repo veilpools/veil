@@ -336,9 +336,12 @@ export async function revalidateWallet(
   expectedAddress: string,
   expectedChainId: number | null
 ): Promise<{ chainId: number; account: string }> {
+  // Bounded: a hung wallet provider (conflicting extensions, locked
+  // wallet) must fail fast with wallet_timeout, never spin the prover
+  // modal forever with no popup and no error.
   const [chainHex, accounts] = await Promise.all([
-    provider.request({ method: "eth_chainId" }),
-    provider.request({ method: "eth_accounts" }),
+    withTimeout(provider.request({ method: "eth_chainId" }), 15000),
+    withTimeout(provider.request({ method: "eth_accounts" }), 15000),
   ]);
   const chainId = Number.parseInt(String(chainHex), 16);
   const account = Array.isArray(accounts) ? String(accounts[0] ?? "") : "";
