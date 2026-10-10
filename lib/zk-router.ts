@@ -363,6 +363,201 @@ export async function simulateFullZkFlow(
   return result as bigint;
 }
 
+export interface BuildDirectFullZkFlowInput {
+  withdrawal: ZkWithdrawalStruct;
+  proof: ZkWithdrawProofStruct;
+  scope: bigint;
+  withdrawAsset: Address;
+  /** Final payout destination (user's clean address). Never the router. */
+  outputRecipient: Address;
+  zeroForOne?: boolean;
+  recipient?: Address;
+  quotedSwapOut: bigint;
+  slippagePercent: number;
+}
+
+export interface DirectFullZkFlowArgs {
+  withdrawal: ZkWithdrawalStruct;
+  proof: ZkWithdrawProofStruct;
+  scope: bigint;
+  withdrawAsset: Address;
+  outputRecipient: Address;
+  zeroForOne: boolean;
+  recipient: Address;
+  swapLeg: ZkSwapLegStruct;
+  minSwapOut: bigint;
+  outputAsset: Address;
+}
+
+/**
+ * Pure builder for executeFullZkFlowDirect params. minSwapOut is ALWAYS
+ * derived from the live quote and slippage, never hardcoded. Fails closed on
+ * any mismatch. The output asset is derived from the swap direction (never
+ * trusted from the caller).
+ */
+export function buildDirectFullZkFlowArgs(input: BuildDirectFullZkFlowInput): DirectFullZkFlowArgs {
+  const zeroForOne = input.zeroForOne ?? false;
+  const recipient = input.recipient ?? TESTNET_ZK_ROUTER_ADDRESS;
+  if (recipient.toLowerCase() !== TESTNET_ZK_ROUTER_ADDRESS.toLowerCase()) {
+    throw new Error(
+      `RecipientMismatch: the relay recipient must equal the ZK router (${TESTNET_ZK_ROUTER_ADDRESS}) so the relay exit chains into the swap input.`
+    );
+  }
+  if (input.withdrawal.processooor.toLowerCase() !== TESTNET_ZK_ROUTER_ENTRYPOINT.toLowerCase()) {
+    throw new Error(
+      `Invalid withdrawal: processooor must be the fresh suite entrypoint (${TESTNET_ZK_ROUTER_ENTRYPOINT}).`
+    );
+  }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(input.outputRecipient) || input.outputRecipient === ETH_ZERO_ADDRESS) {
+    throw new Error("Direct payout needs a non-zero recipient address. No transaction was sent.");
+  }
+  if (input.quotedSwapOut <= 0n) throw new Error("Live swap quote must be greater than zero before building direct params.");
+  const swapLeg = buildZkSwapLeg({ zeroForOne });
+  const outputAsset = (zeroForOne ? swapLeg.key.currency1 : swapLeg.key.currency0) as Address;
+  checkSwapLegBinding(swapLeg, input.withdrawAsset, outputAsset);
+  const minSwapOut = deriveZkMinSwapOut(input.quotedSwapOut, input.slippagePercent);
+  return {
+    withdrawal: input.withdrawal,
+    proof: input.proof,
+    scope: input.scope,
+    withdrawAsset: input.withdrawAsset,
+    outputRecipient: input.outputRecipient,
+    zeroForOne,
+    recipient,
+    swapLeg,
+    minSwapOut,
+    outputAsset,
+  };
+}
+
+type DirectFullZkFlowCallArgs = readonly [
+  ZkWithdrawalStruct,
+  ZkWithdrawProofStruct,
+  bigint,
+  Address,
+  Address,
+  Address,
+  ZkSwapLegStruct,
+  bigint
+];
+
+function toDirectCallArgs(args: DirectFullZkFlowArgs): DirectFullZkFlowCallArgs {
+  return [
+    args.withdrawal,
+    args.proof,
+    args.scope,
+    args.recipient,
+    args.withdrawAsset,
+    args.outputRecipient,
+    args.swapLeg,
+    args.minSwapOut,
+  ];
+}
+
+/** Read-only eth_call of the exact direct calldata (no tx). Returns simulated payout. */
+export async function simulateDirectFullZkFlow(
+  client: PublicClient,
+  params: { account: Address; args: DirectFullZkFlowArgs }
+): Promise<bigint> {
+  const { result } = (await client.simulateContract({
+    address: TESTNET_ZK_ROUTER_ADDRESS,
+    abi: VEIL_ZK_ROUTER_ABI,
+    functionName: "executeFullZkFlowDirect",
+    args: toDirectCallArgs(params.args) as never,
+    account: params.account,
+  })) as unknown as { result: bigint };
+  return result as bigint;
+}
+
+export interface DirectZkQuoteResult {
+  args: DirectFullZkFlowArgs;
+  quotedSwapOut: bigint;
+  minSwapOut: bigint;
+}
+
+/**
+ * Direct-mode quote: ONE free exact-calldata simulation returns the exact
+ * payout (no bracketing ladder needed — there is no denomination floor).
+ * minSwapOut derives from live output x slippage, then a final exact-calldata
+ * simulation acts as the pre-send check. Simulation only.
+ */
+export async function quoteDirectFullZkFlow(
+  client: PublicClient,
+  params: {
+    account: Address;
+    withdrawal: ZkWithdrawalStruct;
+    proof: ZkWithdrawProofStruct;
+    scope: bigint;
+    withdrawAsset: Address;
+    outputRecipient: Address;
+    zeroForOne?: boolean;
+    slippagePercent: number;
+  }
+): Promise<DirectZkQuoteResult> {
+  const probeBase = {
+    withdrawal: params.withdrawal,
+    proof: params.proof,
+    scope: params.scope,
+    withdrawAsset: params.withdrawAsset,
+    outputRecipient: params.outputRecipient,
+    zeroForOne: params.zeroForOne,
+    quotedSwapOut: 1n,
+    slippagePercent: 0,
+  };
+  const probeArgs = buildDirectFullZkFlowArgs(probeBase);
+  const quotedSwapOut = await simulateDirectFullZkFlow(client, {
+    account: params.account,
+    args: { ...probeArgs, minSwapOut: 0n },
+  });
+  if (quotedSwapOut <= 0n) throw new Error("Direct swap quote must be greater than zero. No transaction was sent.");
+  const args = buildDirectFullZkFlowArgs({ ...probeBase, quotedSwapOut, slippagePercent: params.slippagePercent });
+  await simulateDirectFullZkFlow(client, { account: params.account, args });
+  return { args, quotedSwapOut, minSwapOut: args.minSwapOut };
+}
+
+export interface DirectPayoutExecuted {
+  relayer: Address;
+  outputRecipient: Address;
+  outputAsset: Address;
+  amountOut: bigint;
+  txHash: Hash;
+}
+
+/**
+ * Assert the ZkDirectPayoutExecuted event for our recipient exists in the
+ * mined receipt logs. Returns null when absent (caller fails closed).
+ */
+export function findDirectPayoutExecuted(
+  logs: readonly {
+    data: `0x${string}`;
+    topics: readonly `0x${string}`[];
+  }[],
+  outputRecipient: Address
+): Omit<DirectPayoutExecuted, "txHash"> | null {
+  for (const log of logs) {
+    try {
+      const decoded = decodeEventLog({
+        abi: VEIL_ZK_ROUTER_ABI,
+        data: log.data,
+        topics: log.topics as [`0x${string}`, ...`0x${string}`[]],
+      });
+      if (decoded.eventName !== "ZkDirectPayoutExecuted") continue;
+      const evt = decoded.args as unknown as DirectPayoutExecuted;
+      if (evt.outputRecipient.toLowerCase() === outputRecipient.toLowerCase()) {
+        return {
+          relayer: evt.relayer,
+          outputRecipient: evt.outputRecipient,
+          outputAsset: evt.outputAsset,
+          amountOut: evt.amountOut,
+        };
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 function findErrorName(error: unknown, depth = 0): string | null {
   if (!error || typeof error !== "object" || depth > 4) return null;
   const record = error as Record<string, unknown>;

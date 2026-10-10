@@ -127,14 +127,18 @@ import {
   TESTNET_ZK_ROUTER_ADDRESS,
   TESTNET_ZK_ROUTER_CHAIN_ID,
   TESTNET_ZK_ROUTER_MULTI_ADDRESS,
+  buildDirectFullZkFlowArgs,
   buildFullZkFlowArgs,
   buildMultiFullZkFlowArgs,
+  findDirectPayoutExecuted,
   estimateV4SwapOut,
   findFullZkFlowExecuted,
   isZkExecuteDisabled,
   mapZkRouterError,
   quoteAndBuildFullZkFlow,
   quoteAndBuildMultiFullZkFlow,
+  quoteDirectFullZkFlow,
+  simulateDirectFullZkFlow,
   resolveZkShieldedSwapAssets,
   resolveZkShieldedSwapDeposit,
   runShieldedSwapPreSendSequence,
@@ -392,7 +396,7 @@ export default function SwapToShieldPage() {
   // Shielded Swap tab: single-note flow uses zkBundle above; the batched
   // multi-note flow (executeMultiFullZkFlow) is quoted only when one note
   // cannot fund the destination note, otherwise the single-note flow runs.
-  const [zkFlowKind, setZkFlowKind] = useState<"single" | "multi" | null>(null);
+  const [zkFlowKind, setZkFlowKind] = useState<"single" | "multi" | "direct" | null>(null);
   const [zkMultiBundle, setZkMultiBundle] = useState<{
     withdrawals: { processooor: Address; data: `0x${string}` }[];
     proofs: {
@@ -413,6 +417,25 @@ export default function SwapToShieldPage() {
     nullifiers: bigint[];
     newNullifier: bigint;
     newSecret: bigint;
+    quotedSwapOut: bigint;
+    minSwapOut: bigint;
+  } | null>(null);
+  // Direct-payout fallback (executeFullZkFlowDirect): below-denomination
+  // swap outputs settle visibly to the recipient instead of reverting. No
+  // deposit fields — the payout needs none. Recipient resolves at execute.
+  const [zkDirectBundle, setZkDirectBundle] = useState<{
+    withdrawal: { processooor: Address; data: `0x${string}` };
+    proof: {
+      pA: [bigint, bigint];
+      pB: [[bigint, bigint], [bigint, bigint]];
+      pC: [bigint, bigint];
+      pubSignals: [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    };
+    scope: bigint;
+    withdrawAsset: Address;
+    zeroForOne: boolean;
+    sourcePool: Address;
+    nullifier: bigint;
     quotedSwapOut: bigint;
     minSwapOut: bigint;
   } | null>(null);
@@ -762,7 +785,9 @@ export default function SwapToShieldPage() {
     };
   });
   const zkShieldedSwapHasQuote =
-    (zkBundle !== null || zkMultiBundle !== null) && zkQuoteOut !== null && zkMinOut !== null;
+    (zkBundle !== null || zkMultiBundle !== null || zkDirectBundle !== null) &&
+    zkQuoteOut !== null &&
+    zkMinOut !== null;
   const zkShieldedSwapExecuteDisabled = isZkExecuteDisabled({
     isExecuting,
     connected: Boolean(connectedAddress),
@@ -1928,6 +1953,7 @@ export default function SwapToShieldPage() {
           minSwapOut: quoted.minSwapOut,
         });
         setZkMultiBundle(null);
+        setZkDirectBundle(null);
         setZkFlowKind("single");
         setZkQuoteOut(quoted.quotedSwapOut);
         setZkMinOut(quoted.minSwapOut);
@@ -1947,8 +1973,50 @@ export default function SwapToShieldPage() {
         // batched multi-note flow below (same asset and scope, max 8).
       }
 
+      // Terminal direct-payout fallback: the already-proven single note is
+      // reused — no second proving run. Used when one note cannot fund a note
+      // AND no batch is available, or when the batch itself cannot fund one.
+      const runDirectFallback = async () => {
+        const directQuoted = await quoteDirectFullZkFlow(testnetClient, {
+          account: connectedAddress,
+          withdrawal: {
+            processooor: singleContext.withdrawal.processooor as Address,
+            data: singleContext.withdrawal.data as `0x${string}`,
+          },
+          proof,
+          scope,
+          withdrawAsset,
+          outputRecipient: connectedAddress,
+          zeroForOne,
+          slippagePercent: slip,
+        });
+        setZkDirectBundle({
+          withdrawal: {
+            processooor: singleContext.withdrawal.processooor as Address,
+            data: singleContext.withdrawal.data as `0x${string}`,
+          },
+          proof,
+          scope,
+          withdrawAsset,
+          zeroForOne,
+          sourcePool,
+          nullifier,
+          quotedSwapOut: directQuoted.quotedSwapOut,
+          minSwapOut: directQuoted.minSwapOut,
+        });
+        setZkBundle(null);
+        setZkMultiBundle(null);
+        setZkFlowKind("direct");
+        setZkQuoteOut(directQuoted.quotedSwapOut);
+        setZkMinOut(directQuoted.minSwapOut);
+        setZkQuoteNote(
+          `Live direct-payout quote: ${formatEther(directQuoted.quotedSwapOut)} ${zeroForOne ? "VEIL" : "ETH"} (min ${formatEther(directQuoted.minSwapOut)} at ${slip}% slippage). Below the pool note size, so it pays straight to your payout address instead of a note — visible onchain. Review and execute — execution re-simulates before sending.`
+        );
+        setProverSteps((prev) => prev.map((s) => ({ ...s, status: "completed" as const })));
+        setIsProverOpen(true);
+      };
+
       // Batched multi-note path: same-asset, same-scope notes from the vault.
-      const batchAsset = (bowNote.asset as string).toLowerCase() === TESTNET_BOW_V3_VEIL_TOKEN.toLowerCase() ? "VEIL" : "ETH";
       const batch = zkBowNotes
         .filter(
           (n) =>
@@ -1958,9 +2026,9 @@ export default function SwapToShieldPage() {
         )
         .slice(0, 8);
       if (batch.length < 2) {
-        throw new Error(
-          `One ${batchAsset} note's swap output is below the 0.001 deposit note, and you hold ${batch.length} ${batchAsset} note(s) — batching needs at least 2. Deposit ${2 - batch.length} more 0.001 ${batchAsset} note(s) (same asset, back each one up), then Refresh Quote: the batch flow combines up to 8 notes into one atomic swap. No transaction was sent.`
-        );
+        // No batch possible: terminal direct fallback on the proven note.
+        await runDirectFallback();
+        return;
       }
       const multiWithdrawals: { processooor: Address; data: `0x${string}` }[] = [];
       const multiProofs: {
@@ -2094,11 +2162,20 @@ export default function SwapToShieldPage() {
         precommitment: newSecrets.precommitment,
         zeroForOne,
       };
-      const multiQuoted = await quoteAndBuildMultiFullZkFlow(testnetClient, {
-        account: connectedAddress,
-        base: multiBase,
-        slippagePercent: slip,
-      });
+      let multiQuoted: Awaited<ReturnType<typeof quoteAndBuildMultiFullZkFlow>>;
+      try {
+        multiQuoted = await quoteAndBuildMultiFullZkFlow(testnetClient, {
+          account: connectedAddress,
+          base: multiBase,
+          slippagePercent: slip,
+        });
+      } catch (multiErr: unknown) {
+        const m = multiErr instanceof Error ? multiErr.message : String(multiErr);
+        if (!/InsufficientOutputForDenomination/i.test(m)) throw multiErr;
+        // Batch cannot fund a note either: terminal direct fallback.
+        await runDirectFallback();
+        return;
+      }
       setZkMultiBundle({
         ...multiBase,
         destPool,
@@ -2111,6 +2188,7 @@ export default function SwapToShieldPage() {
         minSwapOut: multiQuoted.minSwapOut,
       });
       setZkBundle(null);
+      setZkDirectBundle(null);
       setZkFlowKind("multi");
       setZkQuoteOut(multiQuoted.quotedSwapOut);
       setZkMinOut(multiQuoted.minSwapOut);
@@ -2125,6 +2203,7 @@ export default function SwapToShieldPage() {
       setIsProverOpen(false);
       setZkBundle(null);
       setZkMultiBundle(null);
+      setZkDirectBundle(null);
       setZkFlowKind(null);
       setZkQuoteOut(null);
       setZkMinOut(null);
@@ -2154,7 +2233,7 @@ export default function SwapToShieldPage() {
       );
       return;
     }
-    if (!zkBundle && !zkMultiBundle) {
+    if (!zkBundle && !zkMultiBundle && !zkDirectBundle) {
       setFlowError("Refresh the live quote first. No transaction was sent.");
       return;
     }
@@ -2167,13 +2246,16 @@ export default function SwapToShieldPage() {
     }
     // Deposit drift re-check: both legs deposit fixed 0.001 notes. The quoted
     // bundle must carry the fixed denomination or the pool reverts.
-    const activeDepositValue = zkMultiBundle?.depositValue ?? zkBundle?.depositValue;
-    const fixedDepositValue = zkIsEthIn ? TESTNET_BOW_V3_VEIL_DENOMINATION : TESTNET_BOW_V3_ETH_DENOMINATION;
-    if (activeDepositValue !== fixedDepositValue) {
-      setFlowError(
-        "The quoted deposit no longer matches the pool fixed denomination. Refresh the live quote and try again. No transaction was sent."
-      );
-      return;
+    // Direct-payout flows carry no deposit — skip this gate for them.
+    if (zkFlowKind !== "direct") {
+      const activeDepositValue = zkMultiBundle?.depositValue ?? zkBundle?.depositValue;
+      const fixedDepositValue = zkIsEthIn ? TESTNET_BOW_V3_VEIL_DENOMINATION : TESTNET_BOW_V3_ETH_DENOMINATION;
+      if (activeDepositValue !== fixedDepositValue) {
+        setFlowError(
+          "The quoted deposit no longer matches the pool fixed denomination. Refresh the live quote and try again. No transaction was sent."
+        );
+        return;
+      }
     }
 
     if (txInFlight.current > 0) return;
@@ -2186,6 +2268,15 @@ export default function SwapToShieldPage() {
       zkProverSteps()[3],
       zkProverSteps()[4],
     ]);
+    if (zkFlowKind === "direct") {
+      setProverSteps((prev) =>
+        prev.map((s, i) =>
+          i === 3
+            ? { ...s, detail: "Direct payout to your address — below-denomination output cannot become a note" }
+            : s
+        )
+      );
+    }
     setIsProverOpen(true);
 
     try {
@@ -2321,10 +2412,109 @@ export default function SwapToShieldPage() {
         setProverCommitted(true);
         setZkBundle(null);
         setZkMultiBundle(null);
+        setZkDirectBundle(null);
         setZkFlowKind(null);
         setZkQuoteOut(null);
         setZkMinOut(null);
         setZkQuoteNote("Shielded Swap confirmed onchain. Refresh the live quote for the next flow.");
+        setProverSteps((prev) => [
+          prev[0],
+          prev[1],
+          prev[2],
+          prev[3],
+          { ...prev[4], status: "completed" },
+        ]);
+        setIsProverOpen(true);
+        return;
+      }
+
+      if (zkFlowKind === "direct" && zkDirectBundle) {
+        // Direct-payout path: relay -> swap -> visible payout, no note.
+        // The payout address is read live (it may change after quoting).
+        if (!isAddress(cleanRecipient)) {
+          setFlowError(
+            "Enter the payout wallet address first (direct output pays visibly onchain, not into a note). No transaction was sent."
+          );
+          return;
+        }
+        const directFinal = buildDirectFullZkFlowArgs({
+          withdrawal: zkDirectBundle.withdrawal,
+          proof: zkDirectBundle.proof,
+          scope: zkDirectBundle.scope,
+          withdrawAsset: zkDirectBundle.withdrawAsset,
+          outputRecipient: cleanRecipient as Address,
+          zeroForOne: zkDirectBundle.zeroForOne,
+          quotedSwapOut: zkDirectBundle.quotedSwapOut,
+          slippagePercent: slip,
+        });
+        let directHash: `0x${string}`;
+        try {
+          await revalidateWallet(activeProvider, connectedAddress as string, connectedChainId);
+          await simulateDirectFullZkFlow(testnetClient, { account: connectedAddress, args: directFinal });
+          directHash = await walletClient.writeContract({
+            address: TESTNET_ZK_ROUTER_ADDRESS,
+            abi: VEIL_ZK_ROUTER_ABI,
+            functionName: "executeFullZkFlowDirect",
+            args: [
+              directFinal.withdrawal,
+              directFinal.proof,
+              directFinal.scope,
+              directFinal.recipient,
+              directFinal.withdrawAsset,
+              directFinal.outputRecipient,
+              directFinal.swapLeg,
+              directFinal.minSwapOut,
+            ],
+          });
+        } catch (e: unknown) {
+          throw new Error(mapZkRouterError(e, slip));
+        }
+        setProverTxHash(directHash);
+        setZkTxHash(directHash);
+        const directReceipt = await waitForTransactionReceipt(testnetClient, { hash: directHash });
+        if (directReceipt.status !== "success") throw new Error("Shielded Swap transaction reverted onchain.");
+        setProverSteps((prev) => [
+          prev[0],
+          { ...prev[1], status: "completed" },
+          { ...prev[2], status: "completed" },
+          { ...prev[3], status: "completed" },
+          { ...prev[4], status: "running" },
+        ]);
+        const payoutEvent = findDirectPayoutExecuted(
+          directReceipt.logs.map((l) => ({ data: l.data as `0x${string}`, topics: [...l.topics] as `0x${string}`[] })),
+          cleanRecipient as Address
+        );
+        if (!payoutEvent) {
+          throw new Error(
+            "Flow confirmed but no matching direct-payout event for this address was found. Verify on the explorer before retrying."
+          );
+        }
+        const directSpent = BigInt(zkDirectBundle.proof.pubSignals[1]);
+        const directSpentOnchain = await testnetClient.readContract({
+          address: zkDirectBundle.sourcePool,
+          abi: parseAbi(["function nullifierHashes(uint256) view returns (bool)"]),
+          functionName: "nullifierHashes",
+          args: [directSpent],
+        });
+        if (!directSpentOnchain) {
+          throw new Error(
+            "Flow confirmed but the nullifier does not read as spent onchain. The source note was NOT removed — verify on the explorer before retrying."
+          );
+        }
+        const directRemaining = notes.filter(
+          (n) => (isBowNote(n) ? BigInt(n.nullifier).toString() !== zkDirectBundle.nullifier.toString() : true)
+        );
+        setNotes(directRemaining);
+        setSelectedNoteNullifier(directRemaining[0]?.nullifier ?? "");
+        setZkBundle(null);
+        setZkMultiBundle(null);
+        setZkDirectBundle(null);
+        setZkFlowKind(null);
+        setZkQuoteOut(null);
+        setZkMinOut(null);
+        setZkQuoteNote(
+          `Direct payout confirmed onchain: ${formatEther(payoutEvent.amountOut)} to ${cleanRecipient}. No note was created (below-denomination output). Refresh the live quote for the next flow.`
+        );
         setProverSteps((prev) => [
           prev[0],
           prev[1],
@@ -2458,6 +2648,7 @@ export default function SwapToShieldPage() {
       setProverCommitted(true);
       setZkBundle(null);
       setZkMultiBundle(null);
+      setZkDirectBundle(null);
       setZkFlowKind(null);
       setZkQuoteOut(null);
       setZkMinOut(null);
@@ -3981,13 +4172,16 @@ export default function SwapToShieldPage() {
                   setFlowError(null);
                   setZkBundle(null);
                   setZkMultiBundle(null);
+                  setZkDirectBundle(null);
                   setZkFlowKind(null);
                   setZkQuoteOut(null);
                   setZkMinOut(null);
                   setZkQuoteNote(null);
                 }}
                 sourceLabel={zkShieldedSwapSourceLabel}
-                destinationLabel={zkShieldedSwapDestinationLabel}
+                destinationLabel={
+                  zkFlowKind === "direct" ? "Direct payout (visible onchain)" : zkShieldedSwapDestinationLabel
+                }
                 routeLabel={
                   zkIsEthIn ? "ETH -> VEIL via shared v4 pool" : "VEIL -> ETH via shared v4 pool"
                 }
