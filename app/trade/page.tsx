@@ -3144,6 +3144,22 @@ export default function SwapToShieldPage() {
         const isValid = await sdk.verifyWithdrawal(withdrawalProof);
         if (!isValid) throw new Error("Local verification of Groth16 withdrawal proof failed.");
 
+        // Pre-send ASP freshness gate: the pool enforces proof.ASPRoot ==
+        // latestRoot() EXACTLY (IncorrectASPRoot, no history). Proving takes
+        // minutes in browser while publishes land every few minutes on a busy
+        // chain — sending against a moved root burns gas on a certain revert.
+        // Re-check now; on mismatch abort BEFORE the wallet popup, honestly.
+        const preSendAspRoot = await testnetClient.readContract({
+          address: bowEntrypoint,
+          abi: BOW_ENTRYPOINT_RELAY_ABI,
+          functionName: "latestRoot",
+        });
+        if (BigInt(preSendAspRoot) !== aspSet.root) {
+          throw new Error(
+            "Association root moved onchain while proving (a new deposit was published). This proof can no longer be relayed — re-run withdraw to re-prove against the fresh root. No gas spent, no transaction was sent."
+          );
+        }
+
         setProverSteps((prev) => [
           prev[0],
           prev[1],

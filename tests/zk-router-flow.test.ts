@@ -222,6 +222,9 @@ describe("zk router flow wiring (full-ZK UI)", () => {
     expect(
       mapZkRouterError({ cause: { errorName: "NonZeroBalanceInvariantFailed" } })
     ).toMatch(/NonZeroBalanceInvariantFailed/);
+    expect(mapZkRouterError({ errorName: "IncorrectASPRoot" })).toMatch(
+      /moved onchain while proving|re-prove|fresh root/i
+    );
     const huge = mapZkRouterError(new Error(`boom ${"0xab".repeat(500)}`));
     expect(huge.length).toBeLessThanOrEqual(321);
     expect(huge).not.toMatch(/0xababab/);

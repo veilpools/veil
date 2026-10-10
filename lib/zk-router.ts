@@ -376,6 +376,12 @@ export function mapZkRouterError(error: unknown, slippagePercent?: number): stri
     return "Full-ZK flow reverted: the deposit precommitment must be non-zero (InvalidPrecommitment). Regenerate the note and try again.";
   if (name === "NonZeroBalanceInvariantFailed" || /NonZeroBalanceInvariantFailed/i.test(msg))
     return "Router safety invariant failed: the router would retain dust after settlement (NonZeroBalanceInvariantFailed). Aborted with no funds moved. Try again later.";
+  if (name === "IncorrectASPRoot" || /IncorrectASPRoot/i.test(msg))
+    return (
+      "Full-ZK flow reverted: the Association root moved onchain while proving (a new deposit was published). " +
+      "This proof can no longer be relayed — refresh the quote to re-prove against the fresh root." +
+      slip
+    );
   if (name === "OnlyPoolManager" || /OnlyPoolManager/i.test(msg))
     return "Full-ZK flow hit an unexpected swap-callback state (OnlyPoolManager). Aborted with no funds moved. Try again later.";
   if (name === "EthReceiveNotInFlow" || /EthReceiveNotInFlow/i.test(msg))
