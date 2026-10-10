@@ -2429,19 +2429,15 @@ export default function SwapToShieldPage() {
 
       if (zkFlowKind === "direct" && zkDirectBundle) {
         // Direct-payout path: relay -> swap -> visible payout, no note.
-        // The payout address is read live (it may change after quoting).
-        if (!isAddress(cleanRecipient)) {
-          setFlowError(
-            "Enter the payout wallet address first (direct output pays visibly onchain, not into a note). No transaction was sent."
-          );
-          return;
-        }
+        // Empty payout field falls back to the connected wallet (same address
+        // the quote previewed) — never blocked, never surprising.
+        const payoutTo = isAddress(cleanRecipient) ? (cleanRecipient as Address) : connectedAddress;
         const directFinal = buildDirectFullZkFlowArgs({
           withdrawal: zkDirectBundle.withdrawal,
           proof: zkDirectBundle.proof,
           scope: zkDirectBundle.scope,
           withdrawAsset: zkDirectBundle.withdrawAsset,
-          outputRecipient: cleanRecipient as Address,
+          outputRecipient: payoutTo,
           zeroForOne: zkDirectBundle.zeroForOne,
           quotedSwapOut: zkDirectBundle.quotedSwapOut,
           slippagePercent: slip,
@@ -2481,7 +2477,7 @@ export default function SwapToShieldPage() {
         ]);
         const payoutEvent = findDirectPayoutExecuted(
           directReceipt.logs.map((l) => ({ data: l.data as `0x${string}`, topics: [...l.topics] as `0x${string}`[] })),
-          cleanRecipient as Address
+          payoutTo
         );
         if (!payoutEvent) {
           throw new Error(
@@ -2512,7 +2508,7 @@ export default function SwapToShieldPage() {
         setZkQuoteOut(null);
         setZkMinOut(null);
         setZkQuoteNote(
-          `Direct payout confirmed onchain: ${formatEther(payoutEvent.amountOut)} to ${cleanRecipient}. No note was created (below-denomination output). Refresh the live quote for the next flow.`
+          `Direct payout confirmed onchain: ${formatEther(payoutEvent.amountOut)} to ${payoutTo}. No note was created (below-denomination output). Refresh the live quote for the next flow.`
         );
         setProverSteps((prev) => [
           prev[0],

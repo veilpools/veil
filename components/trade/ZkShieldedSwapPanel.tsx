@@ -230,7 +230,7 @@ export const ZkShieldedSwapPanel: React.FC<ZkShieldedSwapPanelProps> = ({
             }}
           />
           <span style={{ fontSize: "11px", color: "var(--color-muted)" }}>
-            Only used when the output is too small for a note (direct payout) — ignored otherwise. Use a fresh address.
+            Optional — only used for Direct payout. Empty means your connected wallet.
           </span>
         </div>
 
