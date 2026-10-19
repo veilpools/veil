@@ -1,0 +1,4 @@
+# The pinned SHA-256 hashes in lib/0xbow-artifacts.ts are taken over the
+# CRLF form of the verification keys. Check them out with CRLF everywhere so
+# every clone serves the exact pinned bytes.
+public/shield-artifacts/**/*.vkey text eol=crlf
